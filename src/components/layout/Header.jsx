@@ -6,7 +6,7 @@ import ManageClientsModal from '../modals/ManageClientsModal';
 import TemplatesModal from '../modals/TemplatesModal';
 import SmsSettingsModal from '../modals/SmsSettingsModal';
 
-export default function Header({ onAddContact, onImport, onExport }) {
+export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
   const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts } = useApp();
   const [dropOpen, setDropOpen]           = useState(false);
   const [clientDropOpen, setClientDropOpen] = useState(false);
@@ -123,6 +123,10 @@ export default function Header({ onAddContact, onImport, onExport }) {
             <button className="btn-primary" onClick={onAddContact}>+ Add Contact</button>
             <button onClick={onImport}>Import CSV</button>
             <button onClick={onExport}>Export All</button>
+            <button onClick={onDashboard}
+              style={dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}}>
+              📊 Dashboard
+            </button>
             <div ref={dropRef} className="settings-dropdown-wrap">
               <button onClick={() => setDropOpen(o => !o)}>⚙ Settings ▾</button>
               {dropOpen && (

@@ -7,6 +7,7 @@ import ContactList from './components/contacts/ContactList';
 import ContactDetail from './components/contacts/ContactDetail';
 import AddContactModal from './components/modals/AddContactModal';
 import ImportModal from './components/modals/ImportModal';
+import Dashboard from './components/Dashboard';
 import Toast from './components/shared/Toast';
 import { mapDbContact } from './lib/utils';
 
@@ -15,6 +16,7 @@ function CRM() {
   const [authReady, setAuthReady]     = useState(false);
   const [showAdd, setShowAdd]         = useState(false);
   const [showImport, setShowImport]   = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
 
   useEffect(() => {
     // Apply saved theme
@@ -84,11 +86,19 @@ function CRM() {
             setShowImport(true);
           }}
           onExport={handleExport}
+          onDashboard={() => {
+            if (!currentClientId) { alert('Select a client first.'); return; }
+            setShowDashboard(d => !d);
+          }}
+          dashboardActive={showDashboard}
         />
-        <ContactList onView={id => {
-          const c = contacts.find(c => c.id == id);
-          if (c) setCurrentContact(c);
-        }} />
+        {showDashboard
+          ? <Dashboard onClose={() => setShowDashboard(false)} />
+          : <ContactList onView={id => {
+              const c = contacts.find(c => c.id == id);
+              if (c) setCurrentContact(c);
+            }} />
+        }
       </div>
       <AddContactModal open={showAdd} onClose={() => setShowAdd(false)} />
       <ImportModal open={showImport} onClose={() => setShowImport(false)} />
