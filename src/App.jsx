@@ -6,6 +6,7 @@ import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
 import ContactDetail from './components/contacts/ContactDetail';
 import AddContactModal from './components/modals/AddContactModal';
+import ImportModal from './components/modals/ImportModal';
 import Toast from './components/shared/Toast';
 import { mapDbContact } from './lib/utils';
 
@@ -13,12 +14,15 @@ function CRM() {
   const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId } = useApp();
   const [authReady, setAuthReady]     = useState(false);
   const [showAdd, setShowAdd]         = useState(false);
+  const [showImport, setShowImport]   = useState(false);
 
   useEffect(() => {
     // Apply saved theme
     const saved = localStorage.getItem('taraform_theme') || 'dark';
     setTheme(saved);
-    document.documentElement.setAttribute('data-theme', saved);
+    document.body.classList.remove('theme-dim', 'theme-light');
+    if (saved === 'dim') document.body.classList.add('theme-dim');
+    if (saved === 'light') document.body.classList.add('theme-light');
 
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user || null);
@@ -75,7 +79,10 @@ function CRM() {
             if (!currentClientId) { alert('Select a client first.'); return; }
             setShowAdd(true);
           }}
-          onImport={() => {}} // TODO: ImportModal
+          onImport={() => {
+            if (!currentClientId) { alert('Select a client first.'); return; }
+            setShowImport(true);
+          }}
           onExport={handleExport}
         />
         <ContactList onView={id => {
@@ -84,6 +91,7 @@ function CRM() {
         }} />
       </div>
       <AddContactModal open={showAdd} onClose={() => setShowAdd(false)} />
+      <ImportModal open={showImport} onClose={() => setShowImport(false)} />
       <Toast />
     </div>
   );

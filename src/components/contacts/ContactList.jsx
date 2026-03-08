@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
+import VirtualList from './VirtualList';
 
 const ALL_STATUSES = ['New Lead','Contacted','Offer Made','Offer Rejected/NFS','UC','Closed','Dead/Pass'];
 
@@ -210,22 +211,27 @@ export default function ContactList({ onView }) {
         </label>
       </div>
 
-      {/* Contact list */}
-      <div className="contact-list" style={{ padding: '0 2rem' }}>
+      {/* Contact list - virtualized for performance */}
+      <div style={{ padding: '0 2rem' }}>
         {filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>
             <p>{contacts.length === 0 ? 'Add your first contact or import a CSV' : 'No contacts match your filters'}</p>
           </div>
-        ) : filtered.map(c => (
-          <ContactCard
-            key={c.id}
-            contact={c}
-            selected={selected.has(c.id)}
-            onSelect={toggleSelect}
-            onClick={onView}
+        ) : (
+          <VirtualList
+            items={filtered}
+            renderItem={(c) => (
+              <ContactCard
+                key={c.id}
+                contact={c}
+                selected={selected.has(c.id)}
+                onSelect={toggleSelect}
+                onClick={onView}
+              />
+            )}
           />
-        ))}
+        )}
       </div>
     </>
   );

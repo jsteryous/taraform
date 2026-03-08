@@ -5,9 +5,24 @@ import { normalizeCounty } from '../../lib/utils';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
 
+function findDuplicates(contact, existing) {
+  return existing.filter(c => {
+    if (c.id === contact.id) return false;
+    const nameMatch = contact.firstName && contact.lastName &&
+      c.firstName?.toLowerCase() === contact.firstName.toLowerCase() &&
+      c.lastName?.toLowerCase() === contact.lastName.toLowerCase();
+    const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
+      contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
+    const taxMatch = contact.taxMapIds?.length && c.taxMapIds?.length &&
+      contact.taxMapIds.some(t1 => c.taxMapIds.some(t2 => t1.toLowerCase() === t2.toLowerCase()));
+    return nameMatch || addressMatch || taxMatch;
+  });
+}
+
 export default function AddContactModal({ open, onClose }) {
   const { saveContact, currentClientId, contacts, currentClient } = useApp();
   const [form, setForm] = useState(defaultForm());
+  const [dupeWarning, setDupeWarning] = useState(null);
   const fieldDefs = currentClient?.custom_field_definitions || [];
   const visibleFields = currentClient?.visible_fields || ['county','taxMapIds','ownerAddress','propertyAddresses'];
 
@@ -35,8 +50,24 @@ export default function AddContactModal({ open, onClose }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    const dupes = findDuplicates(contact, contacts);
+    if (dupes.length > 0 && !dupeWarning) {
+      setDupeWarning({ contact, dupes });
+      return;
+    }
+
     await saveContact(contact);
     setForm(defaultForm());
+    setDupeWarning(null);
+    onClose();
+  }
+
+  async function confirmSaveDespiteDupe() {
+    if (!dupeWarning) return;
+    await saveContact(dupeWarning.contact);
+    setForm(defaultForm());
+    setDupeWarning(null);
     onClose();
   }
 
@@ -45,8 +76,29 @@ export default function AddContactModal({ open, onClose }) {
   function addArr(field) { setForm(f => ({ ...f, [field]: [...f[field], ''] })); }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add Contact" width="600px"
-      footer={<><button onClick={onClose}>Cancel</button><button className="btn-primary" onClick={handleSave}>Save Contact</button></>}>
+    <Modal open={open} onClose={() => { setDupeWarning(null); onClose(); }} title="Add Contact" width="600px"
+      footer={
+        dupeWarning ? (
+          <><button onClick={() => setDupeWarning(null)}>← Edit</button><button className="btn-primary" onClick={confirmSaveDespiteDupe}>Save Anyway</button></>
+        ) : (
+          <><button onClick={onClose}>Cancel</button><button className="btn-primary" onClick={handleSave}>Save Contact</button></>
+        )
+      }>
+
+      {/* Duplicate warning */}
+      {dupeWarning && (
+        <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem' }}>
+          <div style={{ fontWeight: 600, color: '#fbbf24', marginBottom: '0.5rem' }}>⚠ Possible duplicate detected</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>This contact may already exist:</div>
+          {dupeWarning.dupes.map(d => (
+            <div key={d.id} style={{ fontSize: '0.875rem', padding: '0.4rem 0.6rem', background: 'var(--surface)', borderRadius: '5px', marginBottom: '0.35rem' }}>
+              <strong>{d.firstName} {d.lastName}</strong>
+              {d.county && <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>{d.county}</span>}
+              {d.taxMapIds?.[0] && <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--mono)', fontSize: '0.8rem' }}>{d.taxMapIds[0]}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="form-grid">
         <div className="form-group">
           <label>First Name</label>
