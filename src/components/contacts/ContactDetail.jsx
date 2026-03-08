@@ -1,109 +1,218 @@
-export function formatPhone(raw) {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
-    if (digits.length === 11 && digits[0] === '1') return `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
-    return raw;
+import { useState, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
+import { formatPhone, getStatusClass } from '../../lib/utils';
+import NotesTab from './NotesTab';
+import SmsTab from './SmsTab';
+import OffersTab from './OffersTab';
+
+const STATUSES = ['New Lead','Contacted','Offer Made','Offer Rejected/NFS','UC','Closed','Dead/Pass'];
+
+export default function ContactDetail({ onClose }) {
+  const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
+  const [tab, setTab]   = useState('notes');
+  const [draft, setDraft] = useState(null);
+
+  const fieldDefs = currentClient?.custom_field_definitions || [];
+
+  // Show land fields unless client explicitly hides them via visible_fields config
+  const ALL_LAND_FIELDS = ['county', 'taxMapIds', 'ownerAddress', 'propertyAddresses'];
+  const visibleFields = currentClient?.visible_fields || ALL_LAND_FIELDS;
+
+  useEffect(() => {
+    if (currentContact) setDraft({ ...currentContact });
+  }, [currentContact?.id]);
+
+  if (!currentContact || !draft) return null;
+
+  function update(field, value) {
+    const updated = { ...draft, [field]: value, updatedAt: new Date().toISOString() };
+    setDraft(updated);
+    setCurrentContact(updated);
+    saveContact(updated);
   }
-  
-  export function normalizePhone(phone) {
-    return phone.replace(/\D/g, '').slice(-10);
-  }
-  
-  const COUNTY_ALIASES = {
-    'gvl': 'Greenville', 'greer': 'Greenville', 'greenville': 'Greenville', 'greenville county': 'Greenville',
-    'sptbg': 'Spartanburg', 'spartanburg': 'Spartanburg', 'spartanburg county': 'Spartanburg',
-    'anderson': 'Anderson', 'anderson county': 'Anderson',
-    'pickens': 'Pickens', 'pickens county': 'Pickens',
-    'cherokee': 'Cherokee', 'cherokee county': 'Cherokee',
-    'laurens': 'Laurens', 'laurens county': 'Laurens',
-    'union': 'Union', 'union county': 'Union',
-    'york': 'York', 'york county': 'York',
-    'chester': 'Chester', 'chester county': 'Chester',
-    'oconee': 'Oconee', 'oconee county': 'Oconee',
-  };
-  
-  export function normalizeCounty(county) {
-    if (!county) return county;
-    const key = county.trim().toLowerCase();
-    return COUNTY_ALIASES[key] || county.trim().replace(/\b\w/g, l => l.toUpperCase());
-  }
-  
-  export function toTitleCase(str) {
-    if (!str) return str;
-    return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  }
-  
-  export function getStatusClass(status) {
-    const map = {
-      'New Lead': 'status-new-lead',
-      'Contacted': 'status-contacted',
-      'Offer Made': 'status-offer-made',
-      'Offer Rejected/NFS': 'status-offer-rejected',
-      'UC': 'status-uc',
-      'Closed': 'status-closed',
-      'Dead/Pass': 'status-dead-pass',
+
+  function updateCustomField(key, value) {
+    const updated = {
+      ...draft,
+      customFields: { ...draft.customFields, [key]: value },
+      updatedAt: new Date().toISOString(),
     };
-    return map[status] || 'status-new-lead';
+    setDraft(updated);
+    setCurrentContact(updated);
+    saveContact(updated);
   }
-  
-  export function mapDbContact(d) {
-    return {
-      id: d.id,
-      firstName: d.first_name,
-      lastName: d.last_name,
-      phones: d.phones || [],
-      ownerAddress: d.owner_address,
-      propertyAddresses: d.property_addresses || [],
-      county: normalizeCounty(d.county),
-      taxMapIds: d.tax_map_ids || [],
-      status: d.status,
-      smsStatus: d.sms_status || 'eligible',
-      notes: d.notes,
-      offers: d.offers || [],
-      activityLog: d.activity_log || [],
-      customFields: d.custom_fields || {},
-      createdAt: d.created_at,
-      updatedAt: d.updated_at,
-    };
+
+  async function handleDelete() {
+    if (!confirm('Delete this contact?')) return;
+    await deleteContact(currentContact.id);
+    onClose();
   }
-  
-  export function mapContactToDb(contact, userId, clientId) {
-    return {
-      id: contact.id,
-      user_id: userId,
-      client_id: clientId,
-      first_name: contact.firstName,
-      last_name: contact.lastName,
-      phones: contact.phones,
-      owner_address: contact.ownerAddress,
-      property_addresses: contact.propertyAddresses,
-      county: contact.county,
-      tax_map_ids: contact.taxMapIds,
-      status: contact.status,
-      notes: contact.notes,
-      offers: contact.offers,
-      activity_log: contact.activityLog,
-      custom_fields: contact.customFields || {},
-      created_at: contact.createdAt,
-      updated_at: contact.updatedAt,
-    };
+
+  function updatePhone(idx, val) {
+    const phones = [...(draft.phones || [])];
+    phones[idx] = val;
+    update('phones', phones.filter((p, i) => p || i < phones.length - 1));
   }
-  
-  export function parseCSV(text) {
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    return {
-      headers,
-      rows: lines.slice(1).map(line => {
-        const values = [];
-        let current = '', inQuotes = false;
-        for (const char of line) {
-          if (char === '"') { inQuotes = !inQuotes; }
-          else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
-          else { current += char; }
-        }
-        values.push(current.trim());
-        return headers.reduce((obj, h, i) => ({ ...obj, [h]: values[i] || '' }), {});
-      }),
-    };
+
+  function addPhone() { update('phones', [...(draft.phones || []), '']); }
+  function removePhone(idx) { update('phones', (draft.phones || []).filter((_, i) => i !== idx)); }
+
+  function updateMultiField(field, idx, val) {
+    const arr = [...(draft[field] || [])];
+    arr[idx] = val;
+    update(field, arr.filter((v, i) => v || i < arr.length - 1));
   }
+  function addToMultiField(field) { update(field, [...(draft[field] || []), '']); }
+  function removeFromMultiField(field, idx) { update(field, (draft[field] || []).filter((_, i) => i !== idx)); }
+
+  const smsStatus = currentContact.smsStatus || 'eligible';
+
+  return (
+    <div id="contactDetailPage" className="active">
+      <div className="detail-page-header">
+        <button className="back-button" onClick={onClose}>← Back</button>
+        <div id="pageStatusBadge">
+          <div className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</div>
+        </div>
+        <button className="btn-small btn-danger" onClick={handleDelete}>Delete</button>
+      </div>
+
+      <div className="detail-page-content">
+        {/* ── Sidebar ── */}
+        <div className="contact-info-sidebar">
+          {/* Name */}
+          <div className="contact-name-header" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
+            <input
+              value={draft.firstName || ''}
+              onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))}
+              onBlur={e => update('firstName', e.target.value)}
+              placeholder="First name"
+              style={{ background: 'transparent', border: 'none', borderBottom: '1px solid transparent', color: 'var(--text)', fontSize: '1.25rem', fontWeight: 600, padding: '0.1rem 0', width: '100%', outline: 'none' }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+            />
+            <input
+              value={draft.lastName || ''}
+              onChange={e => setDraft(d => ({ ...d, lastName: e.target.value }))}
+              onBlur={e => update('lastName', e.target.value)}
+              placeholder="Last name"
+              style={{ background: 'transparent', border: 'none', borderBottom: '1px solid transparent', color: 'var(--text)', fontSize: '1.25rem', fontWeight: 600, padding: '0.1rem 0', width: '100%', outline: 'none' }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+            />
+          </div>
+
+          {/* SMS badge */}
+          {smsStatus !== 'eligible' && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <span className={`sms-badge sms-${smsStatus}`}>SMS: {smsStatus.replace('_', ' ')}</span>
+            </div>
+          )}
+
+          {/* Core fields */}
+          <div className="info-section" style={{ marginTop: 0 }}>
+            <div className="info-item">
+              <div className="info-label">Status</div>
+              <select className="detail-input" value={draft.status || 'New Lead'} onChange={e => update('status', e.target.value)}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="info-item">
+              <div className="info-label">Phones</div>
+              {(draft.phones?.length ? draft.phones : ['']).map((p, i) => (
+                <div key={i} style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem', alignItems: 'center' }}>
+                  <input
+                    type="tel"
+                    value={p}
+                    placeholder="(864) 555-1234"
+                    style={{ flex: 1, padding: '0.2rem 0', background: 'transparent', border: 'none', borderBottom: '1px solid transparent', color: 'var(--text)', fontSize: '0.875rem' }}
+                    onChange={e => updatePhone(i, e.target.value)}
+                  />
+                  {p && <button className="btn-small" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ padding: '0.3rem 0.5rem' }}>📋</button>}
+                  <button className="btn-small btn-danger" onClick={() => removePhone(i)} style={{ padding: '0.3rem 0.5rem' }}>×</button>
+                </div>
+              ))}
+              <button className="btn-small" onClick={addPhone} style={{ marginTop: '0.5rem', width: '100%' }}>+ Add Phone</button>
+            </div>
+
+            {/* Land fields — shown based on client config */}
+            {visibleFields.includes('county') && (
+              <div className="info-item">
+                <div className="info-label">County</div>
+                <input className="detail-input" value={draft.county || ''} onChange={e => setDraft(d => ({ ...d, county: e.target.value }))} onBlur={e => update('county', e.target.value)} />
+              </div>
+            )}
+            {visibleFields.includes('taxMapIds') && (
+              <div className="info-item">
+                <div className="info-label">Tax Map IDs</div>
+                {(draft.taxMapIds?.length ? draft.taxMapIds : ['']).map((t, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                    <input value={t} onChange={e => updateMultiField('taxMapIds', i, e.target.value)} style={{ flex: 1, padding: '0.2rem 0', background: 'transparent', border: 'none', borderBottom: '1px solid transparent', color: 'var(--text)', fontSize: '0.875rem' }} />
+                    <button className="btn-small btn-danger" onClick={() => removeFromMultiField('taxMapIds', i)} style={{ padding: '0.3rem 0.5rem' }}>×</button>
+                  </div>
+                ))}
+                <button className="btn-small" onClick={() => addToMultiField('taxMapIds')} style={{ marginTop: '0.5rem', width: '100%' }}>+ Add Tax ID</button>
+              </div>
+            )}
+          </div>
+
+          {/* Addresses */}
+          {(visibleFields.includes('ownerAddress') || visibleFields.includes('propertyAddresses')) && (
+            <div className="info-section">
+              <div className="info-section-title">Addresses</div>
+              {visibleFields.includes('ownerAddress') && (
+                <div className="info-item">
+                  <div className="info-label">Owner Address</div>
+                  <input className="detail-input" value={draft.ownerAddress || ''} onChange={e => setDraft(d => ({ ...d, ownerAddress: e.target.value }))} onBlur={e => update('ownerAddress', e.target.value)} />
+                </div>
+              )}
+              {visibleFields.includes('propertyAddresses') && (
+                <div className="info-item">
+                  <div className="info-label">Property Addresses</div>
+                  {(draft.propertyAddresses?.length ? draft.propertyAddresses : ['']).map((a, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                      <input value={a} onChange={e => updateMultiField('propertyAddresses', i, e.target.value)} style={{ flex: 1, padding: '0.2rem 0', background: 'transparent', border: 'none', borderBottom: '1px solid transparent', color: 'var(--text)', fontSize: '0.875rem' }} />
+                      <button className="btn-small btn-danger" onClick={() => removeFromMultiField('propertyAddresses', i)} style={{ padding: '0.3rem 0.5rem' }}>×</button>
+                    </div>
+                  ))}
+                  <button className="btn-small" onClick={() => addToMultiField('propertyAddresses')} style={{ marginTop: '0.5rem', width: '100%' }}>+ Add Property</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Custom fields */}
+          {fieldDefs.length > 0 && (
+            <div className="info-section">
+              <div className="info-section-title">Custom Fields</div>
+              {fieldDefs.map(def => (
+                <div key={def.key} className="info-item">
+                  <div className="info-label">{def.label}</div>
+                  <input
+                    className="detail-input"
+                    value={draft.customFields?.[def.key] || ''}
+                    placeholder="—"
+                    onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [def.key]: e.target.value } }))}
+                    onBlur={e => updateCustomField(def.key, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Main area ── */}
+        <div className="notes-main-area">
+          <div className="detail-tabs">
+            {['notes', 'sms', 'offers'].map(t => (
+              <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : 'Offers'}
+              </button>
+            ))}
+          </div>
+          {tab === 'notes'  && <NotesTab  contact={draft} onChange={update} />}
+          {tab === 'sms'    && <SmsTab    contact={draft} />}
+          {tab === 'offers' && <OffersTab contact={draft} onChange={update} />}
+        </div>
+      </div>
+    </div>
+  );
+}
