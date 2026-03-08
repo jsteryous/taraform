@@ -35,20 +35,15 @@ export function formatPhone(raw) {
   
   export function getStatusClass(status) {
     const map = {
-      'New Lead': 'status-new', 'Contacted': 'status-contacted',
-      'Offer Made': 'status-offer', 'Offer Rejected/NFS': 'status-rejected',
-      'UC': 'status-uc', 'Closed': 'status-closed', 'Dead/Pass': 'status-dead',
+      'New Lead': 'status-new-lead',
+      'Contacted': 'status-contacted',
+      'Offer Made': 'status-offer-made',
+      'Offer Rejected/NFS': 'status-offer-rejected',
+      'UC': 'status-uc',
+      'Closed': 'status-closed',
+      'Dead/Pass': 'status-dead-pass',
     };
-    return map[status] || 'status-new';
-  }
-  
-  export function getSmsStatusColor(status) {
-    const map = {
-      eligible: 'var(--text-muted)', contacted: 'var(--accent)',
-      interested: 'var(--success)', not_interested: 'var(--text-muted)',
-      do_not_contact: 'var(--danger)', unclear: 'var(--warning)',
-    };
-    return map[status] || 'var(--text-muted)';
+    return map[status] || 'status-new-lead';
   }
   
   export function mapDbContact(d) {

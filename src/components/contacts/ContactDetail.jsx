@@ -70,16 +70,16 @@ export default function ContactDetail({ onClose }) {
   return (
     <div id="contactDetailPage" className="active">
       <div className="detail-page-header">
-        <button className="back-btn" onClick={onClose}>← Back</button>
+        <button className="back-button" onClick={onClose}>← Back</button>
         <div id="pageStatusBadge">
           <div className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</div>
         </div>
         <button className="btn-small btn-danger" onClick={handleDelete}>Delete</button>
       </div>
 
-      <div className="detail-layout">
+      <div className="detail-page-content">
         {/* ── Sidebar ── */}
-        <div className="detail-sidebar">
+        <div className="contact-info-sidebar">
           {/* Name */}
           <div className="contact-name-header">
             <input

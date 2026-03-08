@@ -7,13 +7,11 @@ const SMS_LABELS = {
 };
 
 export default function ContactCard({ contact, selected, onSelect, onClick }) {
-  const { currentClient } = useApp();
-  const fieldDefs = currentClient?.custom_field_definitions || [];
   const smsLabel = SMS_LABELS[contact.smsStatus];
 
   return (
     <div
-      className={`contact-card${selected ? ' selected' : ''}`}
+      className={`contact-item${selected ? ' selected' : ''}`}
       onClick={e => {
         if (e.metaKey || e.ctrlKey) {
           const url = new URL(window.location.href);
@@ -24,6 +22,7 @@ export default function ContactCard({ contact, selected, onSelect, onClick }) {
         }
       }}
     >
+      <div className={`status-bar ${getStatusClass(contact.status)}`} />
       <input
         type="checkbox"
         className="contact-checkbox"
@@ -31,24 +30,12 @@ export default function ContactCard({ contact, selected, onSelect, onClick }) {
         onClick={e => e.stopPropagation()}
         onChange={() => onSelect(contact.id)}
       />
-      <div className="contact-info">
-        <div className="contact-name">
-          {contact.firstName} {contact.lastName}
-        </div>
-        <div className="contact-meta">
-          {contact.phones[0] && <span>{contact.phones[0]}</span>}
-          {contact.county && <span className="contact-county">{contact.county}</span>}
-        </div>
-        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
-          <span className={`status-badge ${getStatusClass(contact.status)}`} style={{ fontSize: '0.6rem' }}>
-            {contact.status}
-          </span>
-          {smsLabel && (
-            <span className={`sms-badge sms-${contact.smsStatus}`} style={{ fontSize: '0.6rem' }}>
-              SMS: {smsLabel}
-            </span>
-          )}
-        </div>
+      <div className="contact-name">{contact.firstName} {contact.lastName}</div>
+      <div className="contact-phones">{contact.phones?.[0] || '—'}</div>
+      <div className="contact-county">{contact.county || '—'}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+        <span className={`status-badge ${getStatusClass(contact.status)}`}>{contact.status}</span>
+        {smsLabel && <span className={`sms-badge sms-${contact.smsStatus}`}>SMS: {smsLabel}</span>}
       </div>
     </div>
   );
