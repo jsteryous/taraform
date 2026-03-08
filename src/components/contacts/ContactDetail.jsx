@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getStatusClass } from '../../lib/utils';
+import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import SmsTab from './SmsTab';
 import OffersTab from './OffersTab';
-
-const STATUSES = ['New Lead','Contacted','Offer Made','Offer Rejected/NFS','UC','Closed','Dead/Pass'];
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -25,7 +24,9 @@ const fieldValue = {
 
 export default function ContactDetail({ onClose }) {
   const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
-  const [tab, setTab]     = useState('notes');
+  const cfg = resolveConfig(currentClient);
+  const STATUSES = cfg.statuses.map(s => s.value);
+  const [tab, setTab]     = useState(cfg.tabs[0] || 'notes');
   const [draft, setDraft] = useState(null);
 
   const fieldDefs = currentClient?.custom_field_definitions || [];
@@ -252,7 +253,7 @@ export default function ContactDetail({ onClose }) {
         {/* ── Main area ── */}
         <div className="notes-main-area">
           <div className="detail-tabs">
-            {['notes', 'sms', 'offers'].map(t => (
+            {cfg.tabs.map(t => (
               <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
                 {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : 'Offers'}
               </button>

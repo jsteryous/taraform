@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { normalizeCounty } from '../../lib/utils';
+import { resolveConfig } from '../../lib/clientConfig';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
 
@@ -21,13 +22,17 @@ function findDuplicates(contact, existing) {
 
 export default function AddContactModal({ open, onClose }) {
   const { saveContact, currentClientId, contacts, currentClient } = useApp();
-  const [form, setForm] = useState(defaultForm());
-  const [dupeWarning, setDupeWarning] = useState(null);
+  const cfg = resolveConfig(currentClient);
+  const visibleFields = cfg.visibleFields;
+  const statuses = cfg.statuses.map(s => s.value);
+  const term = cfg.terminology?.contact || 'Contact';
   const fieldDefs = currentClient?.custom_field_definitions || [];
-  const visibleFields = currentClient?.visible_fields || ['county','taxMapIds','ownerAddress','propertyAddresses'];
 
-  function defaultForm() {
-    return { firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status:'New Lead', notes:'' };
+  const [form, setForm] = useState(defaultForm(statuses));
+  const [dupeWarning, setDupeWarning] = useState(null);
+
+  function defaultForm(sts) {
+    return { firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: sts?.[0] || 'New Lead', notes:'' };
   }
 
   async function handleSave(e) {
@@ -76,7 +81,7 @@ export default function AddContactModal({ open, onClose }) {
   function addArr(field) { setForm(f => ({ ...f, [field]: [...f[field], ''] })); }
 
   return (
-    <Modal open={open} onClose={() => { setDupeWarning(null); onClose(); }} title="Add Contact" width="600px"
+    <Modal open={open} onClose={() => { setDupeWarning(null); onClose(); }} title={`Add ${term}`} width="600px"
       footer={
         dupeWarning ? (
           <><button onClick={() => setDupeWarning(null)}>← Edit</button><button className="btn-primary" onClick={confirmSaveDespiteDupe}>Save Anyway</button></>
@@ -119,7 +124,7 @@ export default function AddContactModal({ open, onClose }) {
         <div className="form-group">
           <label>Status</label>
           <select value={form.status} onChange={e => update('status', e.target.value)}>
-            {['New Lead','Contacted','Offer Made','Offer Rejected/NFS','UC','Closed','Dead/Pass'].map(s => <option key={s}>{s}</option>)}
+            {statuses.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
         {visibleFields.includes('county') && (

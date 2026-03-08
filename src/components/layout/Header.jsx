@@ -9,6 +9,7 @@ import SmsSettingsModal from '../modals/SmsSettingsModal';
 export default function Header({ onAddContact, onImport, onExport }) {
   const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts } = useApp();
   const [dropOpen, setDropOpen]           = useState(false);
+  const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
   const [showClients, setShowClients]     = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -16,6 +17,7 @@ export default function Header({ onAddContact, onImport, onExport }) {
   const [paused, setPaused]              = useState(false);
   const dropRef = useRef(null);
   const themeRef = useRef(null);
+  const clientDropRef = useRef(null);
 
   useEffect(() => {
     getClients().then(clients => {
@@ -39,6 +41,7 @@ export default function Header({ onAddContact, onImport, onExport }) {
     function handler(e) {
       if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
       if (themeRef.current && !themeRef.current.contains(e.target)) setThemeOpen(false);
+      if (clientDropRef.current && !clientDropRef.current.contains(e.target)) setClientDropOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -67,10 +70,30 @@ export default function Header({ onAddContact, onImport, onExport }) {
             <h1>Taraform</h1>
             <div className="client-switcher">
               <div className={`sms-status-dot${paused ? ' paused' : ''}`} />
-              <select value={currentClientId || ''} onChange={e => handleClientSwitch(e.target.value)}>
-                <option value="">— Select Client —</option>
-                {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div ref={clientDropRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setClientDropOpen(o => !o)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', color: 'var(--text)', fontSize: '0.875rem', fontWeight: 500, fontFamily: 'var(--sans)', minWidth: '160px', justifyContent: 'space-between' }}
+                >
+                  <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
+                  <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>▾</span>
+                </button>
+                {clientDropOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: '200px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 600, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+                    <div style={{ padding: '0.35rem 0.75rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', userSelect: 'none' }}>— Select Client —</div>
+                    {clientsList.map(c => (
+                      <div key={c.id}
+                        onClick={() => { handleClientSwitch(c.id); setClientDropOpen(false); }}
+                        style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', color: c.id === currentClientId ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', fontWeight: c.id === currentClientId ? 600 : 400, background: c.id === currentClientId ? 'rgba(59,130,246,0.08)' : 'transparent' }}
+                        onMouseEnter={e => { if (c.id !== currentClientId) e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = c.id === currentClientId ? 'rgba(59,130,246,0.08)' : 'transparent'; }}
+                      >
+                        {c.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Manage clients">⚙</button>
             </div>
           </div>

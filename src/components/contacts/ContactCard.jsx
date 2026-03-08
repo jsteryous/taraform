@@ -1,4 +1,6 @@
-import { getStatusClass, getBarClass } from '../../lib/utils';
+import { useApp } from '../../context/AppContext';
+import { getStatusClass } from '../../lib/utils';
+import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
 
 const SMS_LABELS = {
   eligible: null, contacted: 'SMS', interested: 'interested',
@@ -6,7 +8,11 @@ const SMS_LABELS = {
 };
 
 export default function ContactCard({ contact, selected, onSelect, onClick }) {
+  const { currentClient } = useApp();
+  const cfg = resolveConfig(currentClient);
   const smsLabel = SMS_LABELS[contact.smsStatus];
+  const barColor = getStatusColor(cfg, contact.status);
+  const showCounty = cfg.listColumns?.includes('county');
 
   return (
     <div
@@ -21,8 +27,8 @@ export default function ContactCard({ contact, selected, onSelect, onClick }) {
         }
       }}
     >
-      {/* Colored status bar on left edge */}
-      <div className={`contact-status-bar ${getBarClass(contact.status)}`} />
+      {/* Dynamic color status bar */}
+      <div style={{ width: '4px', alignSelf: 'stretch', borderRadius: '0 2px 2px 0', flexShrink: 0, background: barColor }} />
 
       <input
         type="checkbox"
@@ -34,10 +40,13 @@ export default function ContactCard({ contact, selected, onSelect, onClick }) {
 
       <div className="contact-name">{contact.firstName} {contact.lastName}</div>
       <div className="contact-phones">{contact.phones?.[0] || '—'}</div>
-      <div className="contact-county">{contact.county || '—'}</div>
+      {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
-        <span className={`status-badge ${getStatusClass(contact.status)}`}>{contact.status}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', gridColumn: showCounty ? 'auto' : 'span 1' }}>
+        <span className={`status-badge ${getStatusClass(contact.status)}`}
+          style={{ background: `${barColor}22`, color: barColor, borderColor: `${barColor}44` }}>
+          {contact.status}
+        </span>
         {smsLabel && <span className={`sms-badge sms-${contact.smsStatus}`}>{smsLabel}</span>}
       </div>
     </div>

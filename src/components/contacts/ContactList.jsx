@@ -3,11 +3,12 @@ import { useApp } from '../../context/AppContext';
 import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
-
-const ALL_STATUSES = ['New Lead','Contacted','Offer Made','Offer Rejected/NFS','UC','Closed','Dead/Pass'];
+import { resolveConfig } from '../../lib/clientConfig';
 
 export default function ContactList({ onView }) {
-  const { contacts, currentClientId, deleteContact, showToast } = useApp();
+  const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
+  const cfg = resolveConfig(currentClient);
+  const ALL_STATUSES = cfg.statuses.map(s => s.value);
   const [search, setSearch]           = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState(new Set(ALL_STATUSES));
   const [selectedCounties, setSelectedCounties] = useState(new Set());
