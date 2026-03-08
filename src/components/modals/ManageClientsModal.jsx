@@ -36,10 +36,15 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
 
   async function handleDelete(id, name) {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    await deleteClient(id);
-    if (activeEditor === id) setActiveEditor(null);
-    await refresh();
-    showToast('Client deleted');
+    try {
+      await deleteClient(id);
+      if (activeEditor === id) setActiveEditor(null);
+      await refresh();
+      showToast('Client deleted');
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Delete failed — check console');
+    }
   }
 
   async function saveClientConfig(clientId, patch) {
