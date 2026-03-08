@@ -1,21 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-const ROW_HEIGHT = 80; // px per contact card
-const BUFFER = 10;     // extra rows above/below viewport
+const ROW_HEIGHT = 57; // matches contact-item actual height
+const BUFFER = 8;
 
 export default function VirtualList({ items, renderItem }) {
   const containerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [height, setHeight] = useState(600);
+  const [height, setHeight] = useState(window.innerHeight - 320);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      setHeight(entries[0].contentRect.height);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    function updateHeight() {
+      setHeight(window.innerHeight - 320);
+    }
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
   }, []);
 
   const onScroll = useCallback(e => setScrollTop(e.currentTarget.scrollTop), []);
@@ -31,7 +29,11 @@ export default function VirtualList({ items, renderItem }) {
     <div
       ref={containerRef}
       onScroll={onScroll}
-      style={{ height: 'calc(100vh - 280px)', overflowY: 'auto', position: 'relative' }}
+      style={{
+        height,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }}
     >
       <div style={{ height: totalHeight, position: 'relative' }}>
         <div style={{ position: 'absolute', top: offsetY, width: '100%' }}>

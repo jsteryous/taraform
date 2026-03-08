@@ -33,6 +33,19 @@ export function formatPhone(raw) {
     return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   }
   
+  export function getBarClass(status) {
+    const map = {
+      'New Lead': 'bar-new-lead',
+      'Contacted': 'bar-contacted',
+      'Offer Made': 'bar-offer-made',
+      'Offer Rejected/NFS': 'bar-offer-rejected',
+      'UC': 'bar-uc',
+      'Closed': 'bar-closed',
+      'Dead/Pass': 'bar-dead-pass',
+    };
+    return map[status] || 'bar-new-lead';
+  }
+  
   export function getStatusClass(status) {
     const map = {
       'New Lead': 'status-new-lead',

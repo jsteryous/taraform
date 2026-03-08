@@ -180,7 +180,7 @@ export default function ContactDetail({ onClose }) {
           {visibleFields.includes('taxMapIds') && (
             <div style={{ marginBottom: '1rem' }}>
               <div style={fieldLabel}>Tax Map IDs</div>
-              {(draft.taxMapIds?.length ? draft.taxMapIds : ['']).map((t, i) => (
+              {(draft.taxMapIds || []).filter(Boolean).map((t, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                   <input value={t} style={{ ...inlineInput, flex: 1, ...fieldValue }}
                     onChange={e => updateMultiField('taxMapIds', i, e.target.value)}
@@ -198,7 +198,6 @@ export default function ContactDetail({ onClose }) {
           {/* Addresses section */}
           {(visibleFields.includes('ownerAddress') || visibleFields.includes('propertyAddresses')) && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
-              <div style={{ ...fieldLabel, fontSize: '0.65rem', marginBottom: '0.75rem' }}>Addresses</div>
 
               {visibleFields.includes('ownerAddress') && (
                 <div style={{ marginBottom: '1rem' }}>
@@ -215,7 +214,7 @@ export default function ContactDetail({ onClose }) {
               {visibleFields.includes('propertyAddresses') && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={fieldLabel}>Property Addresses</div>
-                  {(draft.propertyAddresses?.length ? draft.propertyAddresses : ['']).map((a, i) => (
+                  {(draft.propertyAddresses || []).filter(Boolean).map((a, i) => (
                     <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <input value={a} style={{ ...inlineInput, flex: 1, ...fieldValue }}
                         onChange={e => updateMultiField('propertyAddresses', i, e.target.value)}
@@ -235,7 +234,6 @@ export default function ContactDetail({ onClose }) {
           {/* Custom fields */}
           {fieldDefs.length > 0 && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
-              <div style={{ ...fieldLabel, fontSize: '0.65rem', marginBottom: '0.75rem' }}>Custom Fields</div>
               {fieldDefs.map(def => (
                 <div key={def.key} style={{ marginBottom: '1rem' }}>
                   <div style={fieldLabel}>{def.label}</div>
