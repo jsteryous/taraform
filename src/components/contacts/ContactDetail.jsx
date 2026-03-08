@@ -14,7 +14,7 @@ const SMS_STATUS_COLORS = {
 };
 
 const fieldLabel = {
-  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+  fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
   letterSpacing: '0.6px', color: 'var(--text-muted)', marginBottom: '0.3rem',
   fontFamily: 'var(--mono)',
 };
