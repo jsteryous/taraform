@@ -1334,3 +1334,9 @@ input[type="file"] {
         top: 0;
     }
 }
+/* React fixes */
+input:not([type="checkbox"]):not([type="radio"]) {
+color: var(--text);
+background: var(--surface);
+}
+input::placeholder { color: var(--text-muted); }

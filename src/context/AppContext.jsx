@@ -23,7 +23,9 @@ export function AppProvider({ children }) {
   function setTheme(name) {
     setThemeState(name);
     localStorage.setItem('taraform_theme', name);
-    document.documentElement.setAttribute('data-theme', name);
+    document.body.classList.remove('theme-dim', 'theme-light');
+    if (name === 'dim') document.body.classList.add('theme-dim');
+    if (name === 'light') document.body.classList.add('theme-light');
   }
 
   const loadContacts = useCallback(async (clientId) => {

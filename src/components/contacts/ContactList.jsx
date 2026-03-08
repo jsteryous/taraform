@@ -14,6 +14,11 @@ export default function ContactList({ onView }) {
   const [statusOpen, setStatusOpen]   = useState(false);
   const [countyOpen, setCountyOpen]   = useState(false);
 
+  function handleStatPillFilter(status) {
+    if (status === null) setSelectedStatuses(new Set(ALL_STATUSES));
+    else setSelectedStatuses(new Set([status]));
+  }
+
   const counties = useMemo(() => [...new Set(contacts.map(c => c.county).filter(Boolean))].sort(), [contacts]);
 
   const filtered = useMemo(() => {
@@ -79,7 +84,7 @@ export default function ContactList({ onView }) {
 
   return (
     <>
-      <StatsBar filtered={filtered} />
+      <StatsBar filtered={filtered} onFilterStatus={handleStatPillFilter} />
       <div className="controls">
         <div className="search-row">
           <div className="search-wrapper">
