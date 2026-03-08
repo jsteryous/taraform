@@ -30,8 +30,7 @@ export default function ContactDetail({ onClose }) {
   const [draft, setDraft] = useState(null);
 
   const fieldDefs = currentClient?.custom_field_definitions || [];
-  const ALL_LAND_FIELDS = ['county', 'taxMapIds', 'ownerAddress', 'propertyAddresses'];
-  const visibleFields = currentClient?.visible_fields || ALL_LAND_FIELDS;
+  const visibleFields = cfg.visibleFields;
 
   useEffect(() => {
     if (currentContact) setDraft({ ...currentContact });
