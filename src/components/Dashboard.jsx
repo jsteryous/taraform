@@ -88,7 +88,7 @@ export default function Dashboard({ onClose, onViewContact }) {
     });
     const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
-    return { all: periodOffers, allTime: allOffers, count: periodOffers.length, totalValue, byStatus, acceptedValue };
+    return { all: periodOffers, allTime: allOffers, count: new Set(periodOffers.map(o => o.contactName)).size, totalCount: periodOffers.length, totalValue, byStatus, acceptedValue };
   }, [contacts, period]);
 
   const load = useCallback(async (p) => {
@@ -277,8 +277,9 @@ export default function Dashboard({ onClose, onViewContact }) {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: offerStats.all.length ? '1.25rem' : 0 }}>
                 <div>
-                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Offers</div>
+                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
                   <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats.count}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats.totalCount} total offer{offerStats.totalCount !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
@@ -345,11 +346,14 @@ export default function Dashboard({ onClose, onViewContact }) {
                   .map(([status, count]) => {
                     const cfgStatus = cfg.statuses.find(s => s.value === status);
                     const color = cfgStatus?.color || '#6b7280';
+                    // For "Offer Made", use unique contacts with offer records for consistency
+                    const uniqueContactsWithOffers = new Set(offerStats.allTime.map(o => o.contactName)).size;
+                    const displayCount = status === 'Offer Made' ? uniqueContactsWithOffers : count;
                     return (
                       <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '20px', background: `${color}18`, border: `1px solid ${color}33` }}>
                         <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
                         <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{status}</span>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{count}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{displayCount}</span>
                       </div>
                     );
                   })}
