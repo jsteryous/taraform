@@ -9,6 +9,7 @@ export default function NotesTab({ contact, onChange }) {
       id: Date.now(),
       text: newNote.trim(),
       timestamp: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       type: 'note',
     };
     const log = [entry, ...(contact.activityLog || [])];

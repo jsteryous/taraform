@@ -98,10 +98,15 @@ export default function ContactList({ onView }) {
       if (activityFilter) {
         const [type, period] = activityFilter.split('_');
         if (type === 'note') {
-          const lastNote = c.activityLog?.filter(e => e.type === 'note').sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+          // Support both old format (createdAt, no type) and new format (timestamp, type:'note')
+          const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
+          const lastNote = notes
+            .map(e => new Date(e.timestamp || e.createdAt))
+            .filter(d => !isNaN(d))
+            .sort((a, b) => b - a)[0];
           if (period === 'never' && lastNote) return false;
-          if (period === '7'  && (!lastNote || new Date(lastNote.timestamp) < daysAgo(7)))  return false;
-          if (period === '30' && (!lastNote || new Date(lastNote.timestamp) < daysAgo(30))) return false;
+          if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
+          if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
         }
         if (type === 'sms') {
           const lastSms = c.lastSmsAt ? new Date(c.lastSmsAt) : null;
