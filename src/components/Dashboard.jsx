@@ -76,7 +76,7 @@ export default function Dashboard({ onClose, onViewContact }) {
     const cutoff = cutoffs[period] || cutoffs.week;
 
     const allOffers = contacts.flatMap(c =>
-      (c.offers || []).map(o => ({ ...o, contactName: `${c.firstName} ${c.lastName}`.trim() }))
+      (c.offers || []).map(o => ({ ...o, contactName: `${c.firstName} ${c.lastName}`.trim(), contactId: c.id }))
     );
     const periodOffers = allOffers.filter(o => o.createdAt && new Date(o.createdAt).getTime() >= cutoff);
 
@@ -87,8 +87,9 @@ export default function Dashboard({ onClose, onViewContact }) {
       byStatus[s] = (byStatus[s] || 0) + 1;
     });
     const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+    const uniqueContactCount = new Set(periodOffers.map(o => o.contactId)).size;
 
-    return { all: periodOffers, allTime: allOffers, count: new Set(periodOffers.map(o => o.contactName)).size, totalCount: periodOffers.length, totalValue, byStatus, acceptedValue };
+    return { all: periodOffers, allTime: allOffers, count: uniqueContactCount, totalCount: periodOffers.length, totalValue, byStatus, acceptedValue };
   }, [contacts, period]);
 
   const load = useCallback(async (p) => {
@@ -347,7 +348,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                     const cfgStatus = cfg.statuses.find(s => s.value === status);
                     const color = cfgStatus?.color || '#6b7280';
                     // For "Offer Made", use unique contacts with offer records for consistency
-                    const uniqueContactsWithOffers = new Set(offerStats.allTime.map(o => o.contactName)).size;
+                    const uniqueContactsWithOffers = new Set(offerStats.allTime.map(o => o.contactId)).size;
                     const displayCount = status === 'Offer Made' ? uniqueContactsWithOffers : count;
                     return (
                       <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '20px', background: `${color}18`, border: `1px solid ${color}33` }}>
