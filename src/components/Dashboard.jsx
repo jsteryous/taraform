@@ -20,6 +20,42 @@ const INTENT_LABELS = {
   unknown:         { label: 'Other',         color: '#6b7280' },
 };
 
+function downloadOffersReport(periodOffers, contacts, period) {
+  // Build a lookup map for contact details
+  const contactMap = {};
+  contacts.forEach(c => { contactMap[`${c.firstName} ${c.lastName}`.trim()] = c; });
+
+  const rows = periodOffers
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(o => {
+      // Find contact by name match (offers store contactName)
+      const c = contacts.find(c => `${c.firstName} ${c.lastName}`.trim() === o.contactName);
+      return [
+        o.contactName || '',
+        c?.county || '',
+        (c?.taxMapIds || []).join(' | '),
+        Number(o.amount) || 0,
+        o.status || '',
+        o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '',
+        o.notes || '',
+      ];
+    });
+
+  const headers = ['Contact', 'County', 'Tax Map IDs', 'Amount', 'Status', 'Date', 'Notes'];
+  const csv = [headers, ...rows]
+    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `offers-${period}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Dashboard({ onClose }) {
   const { currentClientId, currentClient, contacts } = useApp();
   const cfg = resolveConfig(currentClient);
@@ -227,7 +263,17 @@ export default function Dashboard({ onClose }) {
           {/* ── Offers ── */}
           {offerStats.count > 0 || contacts.some(c => c.offers?.length) ? (
             <div style={card}>
-              <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
+                {offerStats.all.length > 0 && (
+                  <button
+                    onClick={() => downloadOffersReport(offerStats.all, contacts, period)}
+                    style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    ↓ Download Report
+                  </button>
+                )}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: offerStats.all.length ? '1.25rem' : 0 }}>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Offers</div>
