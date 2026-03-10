@@ -56,7 +56,7 @@ function downloadOffersReport(periodOffers, contacts, period) {
   URL.revokeObjectURL(url);
 }
 
-export default function Dashboard({ onClose }) {
+export default function Dashboard({ onClose, onViewContact }) {
   const { currentClientId, currentClient, contacts } = useApp();
   const cfg = resolveConfig(currentClient);
   const [period, setPeriod] = useState('week');
@@ -317,7 +317,13 @@ export default function Dashboard({ onClose }) {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: i < Math.min(offerStats.all.length, 10) - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{o.contactName}</span>
+                        <span
+                          onClick={() => {
+                            const c = contacts.find(c => `${c.firstName} ${c.lastName}`.trim() === o.contactName);
+                            if (c && onViewContact) onViewContact(c);
+                          }}
+                          style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
+                        >{o.contactName}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>${Number(o.amount).toLocaleString()}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: colors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</span>

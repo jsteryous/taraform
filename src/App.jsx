@@ -93,7 +93,7 @@ function CRM() {
           dashboardActive={showDashboard}
         />
         {showDashboard
-          ? <Dashboard onClose={() => setShowDashboard(false)} />
+          ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={c => { setShowDashboard(false); setCurrentContact(c); }} />
           : <ContactList onView={id => {
               const c = contacts.find(c => c.id == id);
               if (c) setCurrentContact(c);
