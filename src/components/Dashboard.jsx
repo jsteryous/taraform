@@ -78,7 +78,9 @@ export default function Dashboard({ onClose, onViewContact }) {
     const allOffers = contacts.flatMap(c =>
       (c.offers || []).map(o => ({ ...o, contactName: `${c.firstName} ${c.lastName}`.trim(), contactId: c.id }))
     );
-    const periodOffers = allOffers.filter(o => o.createdAt && new Date(o.createdAt).getTime() >= cutoff);
+    const periodOffers = period === 'alltime'
+      ? allOffers
+      : allOffers.filter(o => o.createdAt && new Date(o.createdAt).getTime() >= cutoff);
 
     const totalValue    = periodOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
     const byStatus      = {};
@@ -315,10 +317,10 @@ export default function Dashboard({ onClose, onViewContact }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
                     <span>Contact</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
-                  {offerStats.all.slice(0, 10).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((o, i) => {
+                  {offerStats.all.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: i < Math.min(offerStats.all.length, 10) - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                         <span
                           onClick={() => {
                             const c = contacts.find(c => `${c.firstName} ${c.lastName}`.trim() === o.contactName);
