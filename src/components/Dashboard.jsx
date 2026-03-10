@@ -82,7 +82,10 @@ export default function Dashboard({ onClose }) {
 
     const totalValue    = periodOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
     const byStatus      = {};
-    periodOffers.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
+    periodOffers.forEach(o => {
+      const s = o.status || 'Pending';
+      byStatus[s] = (byStatus[s] || 0) + 1;
+    });
     const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
     return { all: periodOffers, allTime: allOffers, count: periodOffers.length, totalValue, byStatus, acceptedValue };
@@ -316,7 +319,7 @@ export default function Dashboard({ onClose }) {
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: i < Math.min(offerStats.all.length, 10) - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{o.contactName}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>${Number(o.amount).toLocaleString()}</span>
-                        <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: colors[o.status] || 'var(--text-muted)' }}>{o.status}</span>
+                        <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: colors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</span>
                       </div>
                     );
