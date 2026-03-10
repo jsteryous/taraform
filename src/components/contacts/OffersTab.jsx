@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Modal from '../shared/Modal';
 
-export default function OffersTab({ contact, onChange }) {
+export default function OffersTab({ contact, onChange, onChangeMultiple }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
   const [form, setForm]           = useState({ amount: '', status: 'Pending', notes: '' });
@@ -26,11 +26,11 @@ export default function OffersTab({ contact, onChange }) {
       ? offers.map(o => o.id === editing ? { ...o, ...form } : o)
       : [...offers, { id: Date.now(), ...form, createdAt: new Date().toISOString() }];
 
-    onChange('offers', updatedOffers);
-
-    // Auto-set contact status to "Offer Made" when adding a new offer
-    if (!editing) {
-      onChange('status', 'Offer Made');
+    if (!editing && onChangeMultiple) {
+      // Update offers + status in one save to avoid clobbering
+      onChangeMultiple({ offers: updatedOffers, status: 'Offer Made' });
+    } else {
+      onChange('offers', updatedOffers);
     }
 
     setShowModal(false);

@@ -45,6 +45,13 @@ export default function ContactDetail({ onClose }) {
     saveContact(updated);
   }
 
+  function updateMultiple(fields) {
+    const updated = { ...draft, ...fields, updatedAt: new Date().toISOString() };
+    setDraft(updated);
+    setCurrentContact(updated);
+    saveContact(updated);
+  }
+
   function updateCustomField(key, value) {
     const updated = { ...draft, customFields: { ...draft.customFields, [key]: value }, updatedAt: new Date().toISOString() };
     setDraft(updated);
@@ -260,7 +267,7 @@ export default function ContactDetail({ onClose }) {
           </div>
           {tab === 'notes'  && <NotesTab  contact={draft} onChange={update} />}
           {tab === 'sms'    && <SmsTab    contact={draft} />}
-          {tab === 'offers' && <OffersTab contact={draft} onChange={update} />}
+          {tab === 'offers' && <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />}
         </div>
       </div>
     </div>
