@@ -80,12 +80,12 @@ export default function Dashboard({ onClose }) {
     );
     const periodOffers = allOffers.filter(o => o.createdAt && new Date(o.createdAt).getTime() >= cutoff);
 
-    const totalValue   = periodOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
-    const byStatus     = {};
+    const totalValue    = periodOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+    const byStatus      = {};
     periodOffers.forEach(o => { byStatus[o.status] = (byStatus[o.status] || 0) + 1; });
     const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
-    return { all: periodOffers, count: periodOffers.length, totalValue, byStatus, acceptedValue };
+    return { all: periodOffers, allTime: allOffers, count: periodOffers.length, totalValue, byStatus, acceptedValue };
   }, [contacts, period]);
 
   const load = useCallback(async (p) => {
@@ -261,18 +261,16 @@ export default function Dashboard({ onClose }) {
           )}
 
           {/* ── Offers ── */}
-          {offerStats.count > 0 || contacts.some(c => c.offers?.length) ? (
+          {offerStats.allTime.length > 0 ? (
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
-                {offerStats.all.length > 0 && (
-                  <button
-                    onClick={() => downloadOffersReport(offerStats.all, contacts, period)}
-                    style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    ↓ Download Report
-                  </button>
-                )}
+                <button
+                  onClick={() => downloadOffersReport(offerStats.allTime, contacts, period)}
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  ↓ Download Report
+                </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: offerStats.all.length ? '1.25rem' : 0 }}>
                 <div>
