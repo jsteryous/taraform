@@ -22,11 +22,17 @@ export default function OffersTab({ contact, onChange }) {
 
   function save() {
     if (!form.amount) return;
-    if (editing) {
-      onChange('offers', offers.map(o => o.id === editing ? { ...o, ...form } : o));
-    } else {
-      onChange('offers', [...offers, { id: Date.now(), ...form, createdAt: new Date().toISOString() }]);
+    const updatedOffers = editing
+      ? offers.map(o => o.id === editing ? { ...o, ...form } : o)
+      : [...offers, { id: Date.now(), ...form, createdAt: new Date().toISOString() }];
+
+    onChange('offers', updatedOffers);
+
+    // Auto-set contact status to "Offer Made" when adding a new offer
+    if (!editing) {
+      onChange('status', 'Offer Made');
     }
+
     setShowModal(false);
   }
 
@@ -35,7 +41,12 @@ export default function OffersTab({ contact, onChange }) {
     onChange('offers', offers.filter(o => o.id !== id));
   }
 
-  const statusColors = { Pending: 'var(--warning)', Accepted: 'var(--success)', Rejected: 'var(--danger)', Countered: 'var(--accent)' };
+  const statusColors = {
+    Pending:   '#fbbf24',
+    Accepted:  '#10b981',
+    Rejected:  '#f87171',
+    Countered: '#60a5fa',
+  };
 
   return (
     <div id="detailTabOffers">
@@ -47,13 +58,22 @@ export default function OffersTab({ contact, onChange }) {
         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No offers yet.</div>
       ) : offers.map(offer => (
         <div key={offer.id} className="offer-item">
-          <div className="offer-header">
+          <div className="offer-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span className="offer-amount">${Number(offer.amount).toLocaleString()}</span>
-            <span style={{ fontSize: '0.75rem', color: statusColors[offer.status] || 'var(--text-muted)' }}>{offer.status}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>{new Date(offer.createdAt).toLocaleDateString()}</span>
+            <span style={{
+              fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--mono)',
+              textTransform: 'uppercase', letterSpacing: '0.5px',
+              color: statusColors[offer.status] || 'var(--text-muted)',
+              background: `${statusColors[offer.status]}18` || 'transparent',
+              border: `1px solid ${statusColors[offer.status]}44` || 'transparent',
+              padding: '0.15rem 0.5rem', borderRadius: '10px',
+            }}>{offer.status}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+              {offer.createdAt ? new Date(offer.createdAt).toLocaleDateString() : ''}
+            </span>
           </div>
-          {offer.notes && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offer.notes}</div>}
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          {offer.notes && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{offer.notes}</div>}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
             <button className="btn-small" onClick={() => openEdit(offer)}>Edit</button>
             <button className="btn-small btn-danger" onClick={() => remove(offer.id)}>Remove</button>
           </div>
