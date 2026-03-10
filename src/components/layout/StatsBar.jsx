@@ -8,9 +8,15 @@ export default function StatsBar({ filtered, onFilterStatus }) {
   return (
     <div style={{ padding: '0.75rem 2rem 0', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
       {cfg.statsPills.map(({ label, status, color }) => {
-        const count = status === null
-          ? contacts.length
-          : contacts.filter(c => c.status === status).length;
+        let count;
+        if (status === null) {
+          count = contacts.length;
+        } else if (label === 'offers') {
+          // Count contacts with at least one offer record (source of truth)
+          count = contacts.filter(c => c.offers?.length > 0).length;
+        } else {
+          count = contacts.filter(c => c.status === status).length;
+        }
         return (
           <div key={label}
             onClick={() => onFilterStatus(status)}

@@ -349,14 +349,11 @@ export default function Dashboard({ onClose, onViewContact }) {
                   .map(([status, count]) => {
                     const cfgStatus = cfg.statuses.find(s => s.value === status);
                     const color = cfgStatus?.color || '#6b7280';
-                    // For "Offer Made", use unique contacts with offer records for consistency
-                    const uniqueContactsWithOffers = new Set(offerStats.allTime.map(o => o.contactId)).size;
-                    const displayCount = status === 'Offer Made' ? uniqueContactsWithOffers : count;
                     return (
                       <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '20px', background: `${color}18`, border: `1px solid ${color}33` }}>
                         <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
                         <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{status}</span>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{displayCount}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{count}</span>
                       </div>
                     );
                   })}
