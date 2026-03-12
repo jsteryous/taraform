@@ -46,8 +46,9 @@ function CRM() {
     }
   }, [contacts]);
 
-  function handleExport() {
-    const rows = contacts.map(c => [
+  function handleExport(selectedContacts) {
+    const source = selectedContacts?.length ? selectedContacts : contacts;
+    const rows = source.map(c => [
       c.firstName, c.lastName, (c.phones||[]).join(';'), c.county,
       c.ownerAddress, (c.propertyAddresses||[]).join(';'),
       (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
@@ -56,7 +57,7 @@ function CRM() {
     const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'taraform-contacts.csv';
+    a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
     a.click();
   }
 
@@ -97,7 +98,7 @@ function CRM() {
           : <ContactList onView={id => {
               const c = contacts.find(c => c.id == id);
               if (c) setCurrentContact(c);
-            }} />
+            }} onExport={handleExport} />
         }
       </div>
       <AddContactModal open={showAdd} onClose={() => setShowAdd(false)} />

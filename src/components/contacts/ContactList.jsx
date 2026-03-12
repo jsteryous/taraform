@@ -25,7 +25,7 @@ function daysAgo(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-export default function ContactList({ onView }) {
+export default function ContactList({ onView, onExport }) {
   const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
   const cfg        = resolveConfig(currentClient);
   const ALL_STATUSES = cfg.statuses.map(s => s.value);
@@ -305,6 +305,10 @@ export default function ContactList({ onView }) {
       {selected.size > 0 && (
         <div style={{ padding: '0.5rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.2)' }}>
           <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 500 }}>{selected.size} selected</span>
+          <button className="btn-small" onClick={() => {
+            const selectedContacts = filtered.filter(c => selected.has(c.id));
+            onExport(selectedContacts);
+          }}>Export Selected</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
           <button className="btn-small" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
