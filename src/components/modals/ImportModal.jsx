@@ -4,10 +4,10 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact } from '../../lib/utils';
 
-const FIELDS = ['firstName','lastName','phone','county','ownerAddress','propertyAddress','taxMapId'];
+const FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId'];
 const FIELD_LABELS = {
   firstName: 'First Name', lastName: 'Last Name', phone: 'Phone',
-  county: 'County', ownerAddress: 'Owner Address',
+  email: 'Email', county: 'County', ownerAddress: 'Owner Address',
   propertyAddress: 'Property Address', taxMapId: 'Tax Map ID',
 };
 
@@ -35,6 +35,7 @@ function autoMap(headers) {
     firstName: ['first name','firstname','first','fname'],
     lastName:  ['last name','lastname','last','lname'],
     phone:     ['phone','phone number','cell','mobile','telephone'],
+    email:     ['email','email address','e-mail'],
     county:    ['county'],
     ownerAddress: ['owner address','owner addr','mailing address','mailing'],
     propertyAddress: ['property address','property addr','situs','address'],
@@ -97,6 +98,7 @@ export default function ImportModal({ open, onClose }) {
       firstName: mapping.firstName !== undefined ? (row[mapping.firstName] || '').trim() : '',
       lastName:  mapping.lastName  !== undefined ? (row[mapping.lastName]  || '').trim() : '',
       phones:    mapping.phone !== undefined && row[mapping.phone] ? [row[mapping.phone].trim()] : [],
+      email:     mapping.email !== undefined ? (row[mapping.email] || '').trim() : '',
       county:    normalizeCounty(mapping.county !== undefined ? (row[mapping.county] || '').trim() : ''),
       ownerAddress: mapping.ownerAddress !== undefined ? (row[mapping.ownerAddress] || '').trim() : '',
       propertyAddresses: mapping.propertyAddress !== undefined && row[mapping.propertyAddress] ? [row[mapping.propertyAddress].trim()] : [],
@@ -142,6 +144,7 @@ export default function ImportModal({ open, onClose }) {
           first_name: c.firstName,
           last_name: c.lastName,
           phones: c.phones,
+          email: c.email || null,
           owner_address: c.ownerAddress,
           property_addresses: c.propertyAddresses,
           county: c.county,

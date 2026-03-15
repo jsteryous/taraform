@@ -49,11 +49,11 @@ function CRM() {
   function handleExport(selectedContacts) {
     const source = selectedContacts?.length ? selectedContacts : contacts;
     const rows = source.map(c => [
-      c.firstName, c.lastName, (c.phones||[]).join(';'), c.county,
-      c.ownerAddress, (c.propertyAddresses||[]).join(';'),
+      c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
+      c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
       (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
     ]);
-    const header = 'First Name,Last Name,Phones,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
+    const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
     const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

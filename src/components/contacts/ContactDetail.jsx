@@ -170,6 +170,23 @@ export default function ContactDetail({ onClose }) {
             <button style={addBtn} onClick={addPhone}>+ Add Phone</button>
           </div>
 
+          {/* Email */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={fieldLabel}>Email</div>
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <input type="email" value={draft.email || ''} placeholder="—"
+                style={{ ...inlineInput, flex: 1 }}
+                onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+                onBlur={e => update('email', e.target.value)}
+                onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+              />
+              {draft.email && (
+                <button onClick={() => { navigator.clipboard.writeText(draft.email); showToast('Copied!'); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem' }}>📋</button>
+              )}
+            </div>
+          </div>
+
           {/* County */}
           {visibleFields.includes('county') && (
             <div style={{ marginBottom: '1rem' }}>
