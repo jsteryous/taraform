@@ -1167,7 +1167,7 @@ input[type="file"] {
     width: 100%;
     padding: 1.5rem 2rem;
     display: grid;
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 300px 1fr 320px;
     gap: 1.5rem;
     box-sizing: border-box;
 }

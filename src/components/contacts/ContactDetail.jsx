@@ -274,32 +274,28 @@ export default function ContactDetail({ onClose }) {
         </div>
 
         {/* ── Main area ── */}
-        <div className="notes-main-area" style={{ display: 'flex', gap: 0, minWidth: 0 }}>
-
-          {/* Notes / SMS column */}
-          <div style={{ flex: 1, minWidth: 0, borderRight: cfg.tabs.includes('offers') ? '1px solid var(--border)' : 'none', paddingRight: cfg.tabs.includes('offers') ? '1.5rem' : 0 }}>
-            <div className="detail-tabs">
-              {cfg.tabs.filter(t => t !== 'offers').map(t => (
-                <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-                  {t === 'notes' ? 'Notes & Activity' : '💬 SMS'}
-                </button>
-              ))}
-            </div>
-            {tab === 'notes' && <NotesTab  contact={draft} onChange={update} />}
-            {tab === 'sms'   && <SmsTab    contact={draft} />}
+        <div className="notes-main-area">
+          <div className="detail-tabs">
+            {cfg.tabs.filter(t => t !== 'offers').map(t => (
+              <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+                {t === 'notes' ? 'Notes & Activity' : '💬 SMS'}
+              </button>
+            ))}
           </div>
-
-          {/* Offers column — always visible */}
-          {cfg.tabs.includes('offers') && (
-            <div style={{ width: '300px', flexShrink: 0, paddingLeft: '1.5rem' }}>
-              <div style={{ height: '41px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Offers</span>
-              </div>
-              <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />
-            </div>
-          )}
-
+          {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
+          {tab === 'sms'   && <SmsTab   contact={draft} />}
         </div>
+
+        {/* ── Offers — 3rd grid column, always visible ── */}
+        {cfg.tabs.includes('offers') && (
+          <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.5rem', minWidth: 0 }}>
+            <div style={{ height: '41px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Offers</span>
+            </div>
+            <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />
+          </div>
+        )}
+
       </div>
     </div>
   );
