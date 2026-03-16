@@ -288,9 +288,29 @@ export default function ContactDetail({ onClose }) {
 
         {/* ── Offers — 3rd grid column, always visible ── */}
         {cfg.tabs.includes('offers') && (
-          <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.5rem', minWidth: 0 }}>
-            <div style={{ height: '41px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Offers</span>
+          <div style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            padding: '1.25rem',
+            height: 'fit-content',
+            position: 'sticky',
+            top: '1.5rem',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '1rem', paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <span style={{
+                fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)',
+              }}>Offers</span>
+              {(draft.offers || []).length > 0 && (
+                <span style={{
+                  fontSize: '0.7rem', fontFamily: 'var(--mono)', color: 'var(--text-muted)',
+                }}>{(draft.offers || []).length} offer{(draft.offers || []).length !== 1 ? 's' : ''}</span>
+              )}
             </div>
             <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />
           </div>

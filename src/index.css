@@ -714,11 +714,11 @@ select.detail-input {
 }
 
 .offer-item, .note-item {
-    background: var(--surface);
+    background: var(--bg);
     border: 1px solid var(--border);
-    padding: 1rem;
+    padding: 0.75rem;
     border-radius: 6px;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.625rem;
 }
 
 .note-item {
