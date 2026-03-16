@@ -26,7 +26,7 @@ export default function ContactDetail({ onClose }) {
   const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const STATUSES = cfg.statuses.map(s => s.value);
-  const [tab, setTab]     = useState(cfg.tabs[0] || 'notes');
+  const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
   const [draft, setDraft] = useState(null);
 
   const fieldDefs = currentClient?.custom_field_definitions || [];
@@ -274,17 +274,31 @@ export default function ContactDetail({ onClose }) {
         </div>
 
         {/* ── Main area ── */}
-        <div className="notes-main-area">
-          <div className="detail-tabs">
-            {cfg.tabs.map(t => (
-              <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : 'Offers'}
-              </button>
-            ))}
+        <div className="notes-main-area" style={{ display: 'flex', gap: 0, minWidth: 0 }}>
+
+          {/* Notes / SMS column */}
+          <div style={{ flex: 1, minWidth: 0, borderRight: cfg.tabs.includes('offers') ? '1px solid var(--border)' : 'none', paddingRight: cfg.tabs.includes('offers') ? '1.5rem' : 0 }}>
+            <div className="detail-tabs">
+              {cfg.tabs.filter(t => t !== 'offers').map(t => (
+                <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+                  {t === 'notes' ? 'Notes & Activity' : '💬 SMS'}
+                </button>
+              ))}
+            </div>
+            {tab === 'notes' && <NotesTab  contact={draft} onChange={update} />}
+            {tab === 'sms'   && <SmsTab    contact={draft} />}
           </div>
-          {tab === 'notes'  && <NotesTab  contact={draft} onChange={update} />}
-          {tab === 'sms'    && <SmsTab    contact={draft} />}
-          {tab === 'offers' && <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />}
+
+          {/* Offers column — always visible */}
+          {cfg.tabs.includes('offers') && (
+            <div style={{ width: '300px', flexShrink: 0, paddingLeft: '1.5rem' }}>
+              <div style={{ height: '41px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Offers</span>
+              </div>
+              <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple} />
+            </div>
+          )}
+
         </div>
       </div>
     </div>
