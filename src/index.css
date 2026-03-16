@@ -714,7 +714,7 @@ select.detail-input {
 }
 
 .offer-item, .note-item {
-    background: var(--bg);
+    background: var(--surface);
     border: 1px solid var(--border);
     padding: 0.75rem;
     border-radius: 6px;
@@ -1167,7 +1167,7 @@ input[type="file"] {
     width: 100%;
     padding: 1.5rem 2rem;
     display: grid;
-    grid-template-columns: 300px 1fr 320px;
+    grid-template-columns: 300px 1fr 1fr;
     gap: 1.5rem;
     box-sizing: border-box;
 }
