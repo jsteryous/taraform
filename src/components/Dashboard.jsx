@@ -100,7 +100,22 @@ export default function Dashboard({ onClose, onViewContact }) {
     try {
       const res = await fetch(`${BASE}/api/stats?client_id=${currentClientId}&period=${p}`);
       if (!res.ok) throw new Error(await res.text());
-      setData(await res.json());
+      const raw = await res.json();
+      // Normalize to prevent Object.keys(null) crashes
+      setData({
+        period:              raw.period              || period,
+        sentThisPeriod:      raw.sentThisPeriod      || 0,
+        repliesThisPeriod:   raw.repliesThisPeriod   || 0,
+        replyRate:           raw.replyRate           ?? null,
+        intentBreakdown:     raw.intentBreakdown     || {},
+        totalSent:           raw.totalSent           || 0,
+        deliveryRate:        raw.deliveryRate        ?? null,
+        smsStatusCounts:     raw.smsStatusCounts     || {},
+        contactStatusCounts: raw.contactStatusCounts || {},
+        pendingFollowUps:    raw.pendingFollowUps    || 0,
+        totalContacts:       raw.totalContacts       || 0,
+        templatePerformance: raw.templatePerformance || [],
+      });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -185,7 +200,7 @@ export default function Dashboard({ onClose, onViewContact }) {
             {/* SMS status breakdown */}
             <div style={card}>
               <div style={sectionTitle}>SMS Status Breakdown</div>
-              {Object.keys(data.smsStatusCounts).length === 0 ? (
+              {Object.keys(data.smsStatusCounts || {}).length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No data yet</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -217,7 +232,7 @@ export default function Dashboard({ onClose, onViewContact }) {
             {/* Reply intent breakdown */}
             <div style={card}>
               <div style={sectionTitle}>Reply Intent — {PERIODS.find(p => p.value === period)?.label}</div>
-              {Object.keys(data.intentBreakdown).length === 0 ? (
+              {Object.keys(data.intentBreakdown || {}).length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No replies in this period</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -340,7 +355,7 @@ export default function Dashboard({ onClose, onViewContact }) {
           ) : null}
 
           {/* ── Contact status breakdown ── */}
-          {Object.keys(data.contactStatusCounts).length > 0 && (
+          {Object.keys(data.contactStatusCounts || {}).length > 0 && (
             <div style={card}>
               <div style={sectionTitle}>Pipeline — {term}</div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
