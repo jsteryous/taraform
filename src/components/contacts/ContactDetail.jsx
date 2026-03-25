@@ -5,6 +5,7 @@ import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import SmsTab from './SmsTab';
 import OffersTab from './OffersTab';
+import EmailTab from './EmailTab';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -278,12 +279,13 @@ export default function ContactDetail({ onClose }) {
           <div className="detail-tabs">
             {cfg.tabs.filter(t => t !== 'offers').map(t => (
               <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-                {t === 'notes' ? 'Notes & Activity' : '💬 SMS'}
+                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : '✉ Email'}
               </button>
             ))}
           </div>
           {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
           {tab === 'sms'   && <SmsTab   contact={draft} />}
+          {tab === 'email' && <EmailTab contact={draft} />}
         </div>
 
         {/* ── Offers — equal split right column ── */}
