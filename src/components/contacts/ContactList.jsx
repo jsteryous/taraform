@@ -4,6 +4,7 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
+import SendEmailModal from '../modals/SendEmailModal';
 
 const ACTIVITY_OPTIONS = [
   { value: '',          label: 'Any Activity' },
@@ -39,6 +40,7 @@ export default function ContactList({ onView, onExport }) {
   const [statusOpen,       setStatusOpen]       = useState(false);
   const [countyOpen,       setCountyOpen]       = useState(false);
   const [moreOpen,         setMoreOpen]         = useState(false);
+  const [showSendEmail,    setShowSendEmail]    = useState(false);
 
   const statusRef = useRef(null);
   const countyRef = useRef(null);
@@ -309,10 +311,17 @@ export default function ContactList({ onView, onExport }) {
             const selectedContacts = filtered.filter(c => selected.has(c.id));
             onExport(selectedContacts);
           }}>Export Selected</button>
+          <button className="btn-small" onClick={() => setShowSendEmail(true)}>✉ Send Emails</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
           <button className="btn-small" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
+
+      <SendEmailModal
+        open={showSendEmail}
+        onClose={() => setShowSendEmail(false)}
+        selectedContacts={filtered.filter(c => selected.has(c.id))}
+      />
 
       {/* Select all */}
       <div style={{ padding: '0.5rem 2rem', borderBottom: '1px solid var(--border)' }}>

@@ -5,6 +5,7 @@ import { getClients, putSetting, getSetting } from '../../lib/api';
 import ManageClientsModal from '../modals/ManageClientsModal';
 import TemplatesModal from '../modals/TemplatesModal';
 import SmsSettingsModal from '../modals/SmsSettingsModal';
+import EmailSettingsModal from '../modals/EmailSettingsModal';
 
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
   const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts } = useApp();
@@ -14,6 +15,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   const [showClients, setShowClients]     = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSchedule, setShowSchedule]  = useState(false);
+  const [showEmail, setShowEmail]        = useState(false);
   const [paused, setPaused]              = useState(false);
   const dropRef = useRef(null);
   const themeRef = useRef(null);
@@ -131,8 +133,9 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
               <button onClick={() => setDropOpen(o => !o)}>⚙ Settings ▾</button>
               {dropOpen && (
                 <div className="settings-dropdown-menu open">
-                  <button onClick={() => { setShowTemplates(true); setDropOpen(false); }}>✉ &nbsp;Templates</button>
+                  <button onClick={() => { setShowTemplates(true); setDropOpen(false); }}>✉ &nbsp;SMS Templates</button>
                   <button onClick={() => { setShowSchedule(true); setDropOpen(false); }}>⏱ &nbsp;SMS Schedule</button>
+                  <button onClick={() => { setShowEmail(true); setDropOpen(false); }}>📧 &nbsp;Email Settings</button>
                   <hr className="menu-divider" />
                   <button onClick={async () => {
                     const next = !paused;
@@ -162,6 +165,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
       />
       <TemplatesModal open={showTemplates} onClose={() => setShowTemplates(false)} />
       <SmsSettingsModal open={showSchedule} onClose={() => setShowSchedule(false)} />
+      <EmailSettingsModal open={showEmail} onClose={() => setShowEmail(false)} />
     </>
   );
 }
