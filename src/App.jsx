@@ -69,20 +69,19 @@ function CRM() {
   }
 
   if (!authReady) return null;
-
   if (!user) return <LoginScreen />;
-
-  if (currentContact) {
-    return (
-      <>
-        <ContactDetail onClose={() => setCurrentContact(null)} />
-        <Toast />
-      </>
-    );
-  }
 
   return (
     <div id="app" style={{ display: 'block' }}>
+      {/* ContactDetail — shown on top when a contact is selected */}
+      {currentContact && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg)', overflowY: 'auto' }}>
+          <ContactDetail onClose={() => setCurrentContact(null)} />
+          <Toast />
+        </div>
+      )}
+
+      {/* Main list — always mounted so filters persist */}
       <div className="container">
         <Header
           onAddContact={() => {
