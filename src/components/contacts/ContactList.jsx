@@ -28,20 +28,35 @@ function daysAgo(n) {
 
 export default function ContactList({ onView, onExport, filterSearch, setFilterSearch, filterStatuses, setFilterStatuses, filterCounties, setFilterCounties, filterPhone, setFilterPhone, filterActivity, setFilterActivity }) {
   const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
-  const cfg        = resolveConfig(currentClient);
+  const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = cfg.statuses.map(s => s.value);
 
-  // Use persisted filter state from App, fall back to defaults
-  const search           = filterSearch   ?? '';
-  const setSearch        = setFilterSearch;
-  const selectedStatuses = filterStatuses ?? new Set(ALL_STATUSES);
-  const setSelectedStatuses = setFilterStatuses;
-  const selectedCounties = filterCounties ?? new Set();
-  const setSelectedCounties = setFilterCounties;
-  const phoneFilter      = filterPhone    ?? '';
-  const setPhoneFilter   = setFilterPhone;
-  const activityFilter   = filterActivity ?? '';
+  // Derive working Sets from persisted arrays (arrays serialize reliably, Sets don't)
+  const search            = filterSearch   ?? '';
+  const setSearch         = setFilterSearch;
+  const selectedStatuses  = new Set(filterStatuses ?? ALL_STATUSES);
+  const selectedCounties  = new Set(filterCounties ?? []);
+  const phoneFilter       = filterPhone    ?? '';
+  const setPhoneFilter    = setFilterPhone;
+  const activityFilter    = filterActivity ?? '';
   const setActivityFilter = setFilterActivity;
+
+  function setSelectedStatuses(val) {
+    // Accept Set or function, store as array
+    if (typeof val === 'function') {
+      setFilterStatuses(prev => [...val(new Set(prev ?? ALL_STATUSES))]);
+    } else {
+      setFilterStatuses(val === null ? null : [...val]);
+    }
+  }
+
+  function setSelectedCounties(val) {
+    if (typeof val === 'function') {
+      setFilterCounties(prev => [...val(new Set(prev ?? []))]);
+    } else {
+      setFilterCounties([...val]);
+    }
+  }
   const [selected,         setSelected]         = useState(new Set());
   const [statusOpen,       setStatusOpen]       = useState(false);
   const [countyOpen,       setCountyOpen]       = useState(false);
@@ -65,11 +80,11 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
 
   // Reset filters when client changes
   useEffect(() => {
-    setSelectedStatuses(null);
-    setSelectedCounties(new Set());
-    setSearch('');
-    setPhoneFilter('');
-    setActivityFilter('');
+    setFilterStatuses(null);
+    setFilterCounties([]);
+    setFilterSearch('');
+    setFilterPhone('');
+    setFilterActivity('');
   }, [currentClientId]); // eslint-disable-line
 
   function handleStatPillFilter(status) {
@@ -85,11 +100,11 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     search !== '';
 
   function clearAllFilters() {
-    setSearch('');
-    setSelectedStatuses(new Set(ALL_STATUSES));
-    setSelectedCounties(new Set());
-    setPhoneFilter('');
-    setActivityFilter('');
+    setFilterSearch('');
+    setFilterStatuses(null);
+    setFilterCounties([]);
+    setFilterPhone('');
+    setFilterActivity('');
   }
 
   const counties = useMemo(() =>

@@ -20,8 +20,8 @@ function CRM() {
 
   // Persistent filter state — survives contact navigation
   const [filterSearch,   setFilterSearch]   = useState('');
-  const [filterStatuses, setFilterStatuses] = useState(null); // null = use ALL_STATUSES default
-  const [filterCounties, setFilterCounties] = useState(new Set());
+  const [filterStatuses, setFilterStatuses] = useState(null); // null = all statuses
+  const [filterCounties, setFilterCounties] = useState([]);
   const [filterPhone,    setFilterPhone]    = useState('');
   const [filterActivity, setFilterActivity] = useState('');
 
