@@ -27,8 +27,11 @@ export default function OffersTab({ contact, onChange, onChangeMultiple }) {
       : [...offers, { id: Date.now(), ...form, createdAt: new Date().toISOString() }];
 
     if (!editing && onChangeMultiple) {
-      // Update offers + status in one save to avoid clobbering
+      // New offer — set contact status to Offer Made
       onChangeMultiple({ offers: updatedOffers, status: 'Offer Made' });
+    } else if (editing && form.status === 'Rejected' && onChangeMultiple) {
+      // Edited to Rejected — set contact status to Offer Rejected/NFS
+      onChangeMultiple({ offers: updatedOffers, status: 'Offer Rejected/NFS' });
     } else {
       onChange('offers', updatedOffers);
     }
