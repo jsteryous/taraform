@@ -154,6 +154,29 @@ export default function ContactDetail({ onClose }) {
             </select>
           </div>
 
+          {/* Lead Source */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={fieldLabel}>Lead Source</div>
+            <select value={draft.leadSource || ''} onChange={e => update('leadSource', e.target.value)}
+              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.875rem' }}>
+              <option value="">—</option>
+              <option>Launch Control</option>
+              <option>Snipe</option>
+            </select>
+          </div>
+
+          {/* Contact Method */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={fieldLabel}>Contact Method</div>
+            <select value={draft.contactMethod || ''} onChange={e => update('contactMethod', e.target.value)}
+              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.875rem' }}>
+              <option value="">—</option>
+              <option>Launch Control</option>
+              <option>Manual Text</option>
+              <option>Call</option>
+            </select>
+          </div>
+
           {/* Phones */}
           <div style={{ marginBottom: '1rem' }}>
             <div style={fieldLabel}>Phones</div>
