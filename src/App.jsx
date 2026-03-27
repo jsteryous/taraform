@@ -108,11 +108,16 @@ function CRM() {
                 if (c) setCurrentContact(c);
               }}
               onExport={handleExport}
-              filterSearch={filterSearch}     setFilterSearch={setFilterSearch}
-              filterStatuses={filterStatuses} setFilterStatuses={setFilterStatuses}
-              filterCounties={filterCounties} setFilterCounties={setFilterCounties}
-              filterPhone={filterPhone}       setFilterPhone={setFilterPhone}
-              filterActivity={filterActivity} setFilterActivity={setFilterActivity}
+              filterSearch={filterSearch}
+              setFilterSearch={setFilterSearch}
+              filterStatuses={filterStatuses}
+              setFilterStatuses={setFilterStatuses}
+              filterCounties={filterCounties}
+              setFilterCounties={setFilterCounties}
+              filterPhone={filterPhone}
+              setFilterPhone={setFilterPhone}
+              filterActivity={filterActivity}
+              setFilterActivity={setFilterActivity}
             />
         }
       </div>
