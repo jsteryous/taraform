@@ -26,16 +26,22 @@ function daysAgo(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-export default function ContactList({ onView, onExport }) {
+export default function ContactList({ onView, onExport, filterSearch, setFilterSearch, filterStatuses, setFilterStatuses, filterCounties, setFilterCounties, filterPhone, setFilterPhone, filterActivity, setFilterActivity }) {
   const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
   const cfg        = resolveConfig(currentClient);
   const ALL_STATUSES = cfg.statuses.map(s => s.value);
 
-  const [search,           setSearch]           = useState('');
-  const [selectedStatuses, setSelectedStatuses] = useState(new Set(ALL_STATUSES));
-  const [selectedCounties, setSelectedCounties] = useState(new Set());
-  const [phoneFilter,      setPhoneFilter]      = useState('');
-  const [activityFilter,   setActivityFilter]   = useState('');
+  // Use persisted filter state from App, fall back to defaults
+  const search           = filterSearch   ?? '';
+  const setSearch        = setFilterSearch;
+  const selectedStatuses = filterStatuses ?? new Set(ALL_STATUSES);
+  const setSelectedStatuses = setFilterStatuses;
+  const selectedCounties = filterCounties ?? new Set();
+  const setSelectedCounties = setFilterCounties;
+  const phoneFilter      = filterPhone    ?? '';
+  const setPhoneFilter   = setFilterPhone;
+  const activityFilter   = filterActivity ?? '';
+  const setActivityFilter = setFilterActivity;
   const [selected,         setSelected]         = useState(new Set());
   const [statusOpen,       setStatusOpen]       = useState(false);
   const [countyOpen,       setCountyOpen]       = useState(false);
@@ -57,9 +63,13 @@ export default function ContactList({ onView, onExport }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Reset status filter when client changes (statuses may differ)
+  // Reset filters when client changes
   useEffect(() => {
-    setSelectedStatuses(new Set(ALL_STATUSES));
+    setSelectedStatuses(null);
+    setSelectedCounties(new Set());
+    setSearch('');
+    setPhoneFilter('');
+    setActivityFilter('');
   }, [currentClientId]); // eslint-disable-line
 
   function handleStatPillFilter(status) {

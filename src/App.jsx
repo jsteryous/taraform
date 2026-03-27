@@ -13,10 +13,17 @@ import { mapDbContact } from './lib/utils';
 
 function CRM() {
   const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId } = useApp();
-  const [authReady, setAuthReady]     = useState(false);
-  const [showAdd, setShowAdd]         = useState(false);
-  const [showImport, setShowImport]   = useState(false);
+  const [authReady, setAuthReady]         = useState(false);
+  const [showAdd, setShowAdd]             = useState(false);
+  const [showImport, setShowImport]       = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+
+  // Persistent filter state — survives contact navigation
+  const [filterSearch,   setFilterSearch]   = useState('');
+  const [filterStatuses, setFilterStatuses] = useState(null); // null = use ALL_STATUSES default
+  const [filterCounties, setFilterCounties] = useState(new Set());
+  const [filterPhone,    setFilterPhone]    = useState('');
+  const [filterActivity, setFilterActivity] = useState('');
 
   useEffect(() => {
     // Apply saved theme
@@ -95,10 +102,18 @@ function CRM() {
         />
         {showDashboard
           ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={c => { setShowDashboard(false); setCurrentContact(c); }} />
-          : <ContactList onView={id => {
-              const c = contacts.find(c => c.id == id);
-              if (c) setCurrentContact(c);
-            }} onExport={handleExport} />
+          : <ContactList
+              onView={id => {
+                const c = contacts.find(c => c.id == id);
+                if (c) setCurrentContact(c);
+              }}
+              onExport={handleExport}
+              filterSearch={filterSearch}     setFilterSearch={setFilterSearch}
+              filterStatuses={filterStatuses} setFilterStatuses={setFilterStatuses}
+              filterCounties={filterCounties} setFilterCounties={setFilterCounties}
+              filterPhone={filterPhone}       setFilterPhone={setFilterPhone}
+              filterActivity={filterActivity} setFilterActivity={setFilterActivity}
+            />
         }
       </div>
       <AddContactModal open={showAdd} onClose={() => setShowAdd(false)} />
