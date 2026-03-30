@@ -56,8 +56,18 @@ export function AppProvider({ children }) {
     if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
     // Search (name, phone, county, tax map id)
     if (filters.search) {
-      const s = filters.search.toLowerCase();
-      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%`);
+      const s = filters.search.toLowerCase().trim();
+      const words = s.split(/\s+/).filter(Boolean);
+
+      if (words.length === 1) {
+        // Single word — match first name, last name, county, tax map id, or phone
+        q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%`);
+      } else {
+        // Multiple words (e.g. "jennifer cumm") — first word matches first name, rest match last name
+        const first = words[0];
+        const last  = words.slice(1).join(' ');
+        q = q.ilike('first_name', `%${first}%`).ilike('last_name', `%${last}%`);
+      }
     }
 
     return q;

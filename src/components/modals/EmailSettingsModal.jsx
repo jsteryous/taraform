@@ -287,9 +287,15 @@ export default function EmailSettingsModal({ open, onClose }) {
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                   Verifying {verifyJob.checked || 0} / {verifyJob.total || '?'} emails…
                 </div>
-                <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px' }}>
+                <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '0.5rem' }}>
                   <div style={{ height: '100%', width: verifyJob.total ? `${Math.round((verifyJob.checked || 0) / verifyJob.total * 100)}%` : '10%', background: '#6366f1', borderRadius: '2px', transition: 'width 0.5s' }} />
                 </div>
+                <button onClick={async () => {
+                  await fetch(`${BASE}/api/email/verify-reset?client_id=${currentClientId}`, { method: 'DELETE' });
+                  setVerifyJob(null);
+                }} style={{ fontSize: '0.72rem', color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  Job stuck? Reset and try again
+                </button>
               </div>
             )}
 
