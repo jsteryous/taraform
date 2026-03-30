@@ -294,22 +294,21 @@ export default function Dashboard({ onClose, onViewContact }) {
               )}
 
               {/* Recent offers list */}
-              {offerStats.all.length > 0 && (
+              {(data?.offerStats?.recent || []).length > 0 && (
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.5rem' }}>Recent Offers</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                    <span>Contact</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+                    <span>Contact</span><span>County</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
-                  {(data?.offerStats?.recent || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((o, i) => {
+                  {(data?.offerStats?.recent || []).map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                         <span
-                          onClick={() => {
-                            if (o.contactId && onViewContact) onViewContact({ id: o.contactId });
-                          }}
+                          onClick={() => { if (o.contactId && onViewContact) onViewContact({ id: o.contactId }); }}
                           style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
                         >{o.contactName}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.county || '—'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>${Number(o.amount).toLocaleString()}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: colors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</span>
