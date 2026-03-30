@@ -152,6 +152,33 @@ export default function Dashboard({ onClose, onViewContact }) {
       {!loading && data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
+          {/* ── Pipeline (moved to top) ── */}
+          {Object.keys(data.contactStatusCounts || {}).length > 0 && (
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                <div style={sectionTitle}>Pipeline — {term}</div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
+                  {data.totalContacts} total
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {Object.entries(data.contactStatusCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([status, count]) => {
+                    const cfgStatus = cfg.statuses.find(s => s.value === status);
+                    const color = cfgStatus?.color || '#6b7280';
+                    return (
+                      <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '20px', background: `${color}18`, border: `1px solid ${color}33` }}>
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{status}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{count}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* ── Top KPI row ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             <KpiCard label="Texts Sent" value={data.sentThisPeriod} color="#60a5fa" sub={`${data.totalSent} all-time`} style={card} bigNum={bigNum} cardLabel={cardLabel} />
@@ -323,27 +350,7 @@ export default function Dashboard({ onClose, onViewContact }) {
             </div>
           )}
 
-          {/* ── Contact status breakdown ── */}
-          {Object.keys(data.contactStatusCounts || {}).length > 0 && (
-            <div style={card}>
-              <div style={sectionTitle}>Pipeline — {term}</div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {Object.entries(data.contactStatusCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([status, count]) => {
-                    const cfgStatus = cfg.statuses.find(s => s.value === status);
-                    const color = cfgStatus?.color || '#6b7280';
-                    return (
-                      <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '20px', background: `${color}18`, border: `1px solid ${color}33` }}>
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{status}</span>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{count}</span>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
+
 
         </div>
       )}
