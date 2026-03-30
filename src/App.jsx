@@ -12,7 +12,7 @@ import Toast from './components/shared/Toast';
 import { mapDbContact } from './lib/utils';
 
 function CRM() {
-  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId } = useApp();
+  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact } = useApp();
   const [authReady, setAuthReady]         = useState(false);
   const [showAdd, setShowAdd]             = useState(false);
   const [showImport, setShowImport]       = useState(false);
@@ -103,9 +103,11 @@ function CRM() {
         {showDashboard
           ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={c => { setShowDashboard(false); setCurrentContact(c); }} />
           : <ContactList
-              onView={id => {
+              onView={async id => {
                 const c = contacts.find(c => c.id == id);
-                if (c) setCurrentContact(c);
+                if (c) setCurrentContact(c); // show immediately with list data
+                const full = await loadFullContact(id); // then enrich with full data
+                if (full) setCurrentContact(full);
               }}
               onExport={handleExport}
               filterSearch={filterSearch}

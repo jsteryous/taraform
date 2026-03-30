@@ -31,11 +31,13 @@ export function AppProvider({ children }) {
   const loadContacts = useCallback(async (clientId) => {
     if (!clientId) return;
     const PAGE = 1000;
+    // Only fetch fields needed for the list view — skip heavy JSONB blobs
+    const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,offers,updated_at,created_at,client_id,user_id';
 
     // First fetch — also tells us total count
     const first = await supabase
       .from('property_crm_contacts')
-      .select('*', { count: 'exact' })
+      .select(LIST_FIELDS, { count: 'exact' })
       .eq('client_id', clientId)
       .order('updated_at', { ascending: false })
       .range(0, PAGE - 1);
@@ -50,7 +52,7 @@ export function AppProvider({ children }) {
       const rest = await Promise.all(
         Array.from({ length: pageCount - 1 }, (_, i) =>
           supabase.from('property_crm_contacts')
-            .select('*')
+            .select(LIST_FIELDS)
             .eq('client_id', clientId)
             .order('updated_at', { ascending: false })
             .range((i + 1) * PAGE, (i + 2) * PAGE - 1)
@@ -60,6 +62,20 @@ export function AppProvider({ children }) {
     }
 
     setContacts(all.map(mapDbContact));
+  }, []);
+
+  // Load full contact record (including heavy JSONB) when opening detail view
+  const loadFullContact = useCallback(async (contactId) => {
+    const { data, error } = await supabase
+      .from('property_crm_contacts')
+      .select('*')
+      .eq('id', contactId)
+      .single();
+    if (error || !data) return null;
+    const full = mapDbContact(data);
+    // Update in contacts list too
+    setContacts(prev => prev.map(c => c.id === full.id ? full : c));
+    return full;
   }, []);
 
   const saveContact = useCallback(async (contact) => {
@@ -94,7 +110,7 @@ export function AppProvider({ children }) {
       currentContact, setCurrentContact,
       theme, setTheme,
       toast, showToast,
-      loadContacts, saveContact, deleteContact,
+      loadContacts, loadFullContact, saveContact, deleteContact,
     }}>
       {children}
     </AppContext.Provider>
