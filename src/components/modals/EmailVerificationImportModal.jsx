@@ -38,16 +38,31 @@ export default function EmailVerificationImportModal({ open, onClose }) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const { headers, rows } = parseCSV(ev.target.result);
-      const h = headers.map(x => x.toLowerCase());
+      const h = headers.map(x => x.toLowerCase().trim());
 
-      // Find key columns
-      const emailIdx     = h.indexOf('email');
-      const safeIdx      = h.indexOf('is_safe_to_send');
-      const firstIdx     = h.findIndex(x => x.includes('first name') || x === 'first');
-      const lastIdx      = h.findIndex(x => x.includes('last name')  || x === 'last');
+      // Handle duplicate column names — find all indices
+      const allEmailIdxs = headers.reduce((acc, hdr, i) => {
+        if (hdr.toLowerCase().trim() === 'email') acc.push(i);
+        return acc;
+      }, []);
+      const allStatusIdxs = headers.reduce((acc, hdr, i) => {
+        if (hdr.toLowerCase().trim() === 'status') acc.push(i);
+        return acc;
+      }, []);
 
-      if (safeIdx === -1) {
-        alert('Could not find "is_safe_to_send" column. Make sure this is a verification export.');
+      // Use the FIRST Email column (Taraform's export) for matching
+      const emailIdx = allEmailIdxs[0] ?? -1;
+      // Use the LAST status column (Reoon's verification result)
+      const reoonStatusIdx = allStatusIdxs[allStatusIdxs.length - 1] ?? -1;
+      // Fallback: is_safe_to_send
+      const safeIdx = h.indexOf('is_safe_to_send');
+
+      if (emailIdx === -1) {
+        alert('Could not find Email column.');
+        return;
+      }
+      if (reoonStatusIdx === -1 && safeIdx === -1) {
+        alert('Could not find a verification status column. Make sure this is a Reoon/NeverBounce export.');
         return;
       }
 
@@ -55,17 +70,25 @@ export default function EmailVerificationImportModal({ open, onClose }) {
 
       for (const row of rows) {
         const email = row[emailIdx]?.trim().toLowerCase();
-        const safe  = row[safeIdx]?.trim().toLowerCase();
         if (!email) { skipped.push({ reason: 'no email' }); continue; }
 
-        // Match to existing contact by email
-        const match = contacts.find(c => c.email?.toLowerCase() === email);
-        if (!match) { skipped.push({ email, reason: 'not in Taraform' }); continue; }
+        // Determine result — prefer Reoon status column
+        let result = reoonStatusIdx >= 0 ? row[reoonStatusIdx]?.trim().toLowerCase() : null;
+        if (!result && safeIdx >= 0) {
+          result = row[safeIdx]?.trim().toLowerCase() === 'true' ? 'safe' : 'invalid';
+        }
 
-        if (safe === 'true') {
-          verified.push({ contact: match, email });
+        // Match to existing contact by email (case-insensitive)
+        const match = contacts.find(c => c.email?.toLowerCase() === email);
+        if (!match) { skipped.push({ email, reason: 'not found in Taraform' }); continue; }
+
+        // safe / inbox_full = verified; invalid = blocked; unknown/empty = skip
+        if (result === 'safe' || result === 'inbox_full') {
+          verified.push({ contact: match, email, result });
+        } else if (result === 'invalid') {
+          invalid.push({ contact: match, email, result });
         } else {
-          invalid.push({ contact: match, email, safe });
+          skipped.push({ email, reason: `status: ${result || 'unknown'}` });
         }
       }
 
