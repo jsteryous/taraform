@@ -82,6 +82,7 @@ export default function Dashboard({ onClose, onViewContact }) {
         pendingFollowUps:    raw.pendingFollowUps    || 0,
         totalContacts:       raw.totalContacts       || 0,
         templatePerformance: raw.templatePerformance || [],
+        offerStats:          raw.offerStats          || null,
       });
       if (emailRes?.ok) setEmailData(await emailRes.json());
     } catch (e) {
