@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getStatusClass } from '../../lib/utils';
+import { getStatusClass, formatPhone } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import SmsTab from './SmsTab';
@@ -185,7 +185,11 @@ export default function ContactDetail({ onClose }) {
                 <input type="tel" value={p} placeholder="(864) 555-1234" style={{ ...inlineInput, flex: 1 }}
                   onChange={e => updatePhone(i, e.target.value)}
                   onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                  onBlur={e => { e.target.style.borderBottomColor = 'transparent'; }}
+                  onBlur={e => {
+                    e.target.style.borderBottomColor = 'transparent';
+                    const formatted = formatPhone(e.target.value);
+                    if (formatted !== e.target.value) updatePhone(i, formatted);
+                  }}
                 />
                 {p && <button onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem' }}>📋</button>}
                 <button onClick={() => removePhone(i)} style={removeBtn}>×</button>

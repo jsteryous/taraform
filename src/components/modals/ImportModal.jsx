@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
-import { normalizeCounty, mapDbContact } from '../../lib/utils';
+import { normalizeCounty, mapDbContact, formatPhone } from '../../lib/utils';
 
 const FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
@@ -115,10 +115,10 @@ export default function ImportModal({ open, onClose }) {
       let phones = [];
       if (phoneIndices.length > 0) {
         phones = [...new Set(
-          phoneIndices.map(i => (row[i] || '').trim()).filter(Boolean)
+          phoneIndices.map(i => (row[i] || '').trim()).filter(Boolean).map(formatPhone)
         )];
       } else if (mapping.phone !== undefined && row[mapping.phone]) {
-        phones = [row[mapping.phone].trim()];
+        phones = [formatPhone(row[mapping.phone].trim())];
       }
 
       // Assemble owner address
