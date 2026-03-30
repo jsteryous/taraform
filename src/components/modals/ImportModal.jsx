@@ -4,11 +4,11 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact } from '../../lib/utils';
 
-const FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId'];
+const FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
   firstName: 'First Name', lastName: 'Last Name', phone: 'Phone',
   email: 'Email', county: 'County', ownerAddress: 'Owner Address',
-  propertyAddress: 'Property Address', taxMapId: 'Tax Map ID',
+  propertyAddress: 'Property Address', taxMapId: 'Tax Map ID', acreage: 'Acreage',
 };
 
 function parseCSV(text) {
