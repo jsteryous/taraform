@@ -1,207 +1,364 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-import { supabase } from '../../lib/supabase';
 
-function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
-  const rows = lines.slice(1).map(line => {
-    const vals = [];
-    let cur = '', inQ = false;
-    for (const ch of line) {
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { vals.push(cur); cur = ''; }
-      else cur += ch;
-    }
-    vals.push(cur);
-    return vals.map(v => v.replace(/^"|"$/g, '').trim());
-  });
-  return { headers, rows };
-}
+const BASE = 'https://taraform-server-production.up.railway.app';
 
-export default function EmailVerificationImportModal({ open, onClose }) {
-  const { contacts, setContacts, currentClientId } = useApp();
-  const [step, setStep]       = useState('upload'); // upload | preview | done
-  const [preview, setPreview] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const fileRef = useRef();
+export default function EmailSettingsModal({ open, onClose }) {
+  const { currentClientId } = useApp();
+  const [connected, setConnected]         = useState(false);
+  const [connEmail, setConnEmail]         = useState(null);
+  const [templates, setTemplates]         = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [editing, setEditing]             = useState(null);
+  const [form, setForm]                   = useState({ name: '', touch_number: '', subject: '', body: '' });
+  const [showForm, setShowForm]           = useState(false);
+  const [autoEnabled, setAutoEnabled]     = useState(false);
+  const [dailyLimit, setDailyLimit]       = useState('25');
+  const [savingAuto, setSavingAuto]       = useState(false);
+  const [verifyJob, setVerifyJob]         = useState(null);
+  const [verifying, setVerifying]         = useState(false);
 
-  function handleClose() {
-    setStep('upload'); setPreview(null);
-    onClose();
+  useEffect(() => {
+    if (!open || !currentClientId) return;
+    loadAll();
+  }, [open, currentClientId]);
+
+  async function loadAll() {
+    setLoading(true);
+    const [statusRes, templatesRes, autoRes, limitRes, verifyRes] = await Promise.all([
+      fetch(`${BASE}/api/email/status?client_id=${currentClientId}`),
+      fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`),
+      fetch(`${BASE}/api/settings/email_automation_enabled?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
+      fetch(`${BASE}/api/settings/email_daily_limit?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
+      fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
+    ]);
+    const status    = await statusRes.json();
+    const tmpl      = await templatesRes.json();
+    const autoSett  = await autoRes.json().catch(() => ({}));
+    const limitSett = await limitRes.json().catch(() => ({}));
+    const verify    = await verifyRes.json().catch(() => ({}));
+    setConnected(status.connected);
+    setConnEmail(status.email);
+    setTemplates(Array.isArray(tmpl) ? tmpl : []);
+    setAutoEnabled(autoSett?.value === 'true');
+    setDailyLimit(limitSett?.value || '25');
+    setVerifyJob(verify?.status !== 'idle' ? verify : null);
+    setLoading(false);
   }
 
-  function handleFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const { headers, rows } = parseCSV(ev.target.result);
-      const h = headers.map(x => x.toLowerCase().trim());
-
-      // Handle duplicate column names — find all indices
-      const allEmailIdxs = headers.reduce((acc, hdr, i) => {
-        if (hdr.toLowerCase().trim() === 'email') acc.push(i);
-        return acc;
-      }, []);
-      const allStatusIdxs = headers.reduce((acc, hdr, i) => {
-        if (hdr.toLowerCase().trim() === 'status') acc.push(i);
-        return acc;
-      }, []);
-
-      // Use the FIRST Email column (Taraform's export) for matching
-      const emailIdx = allEmailIdxs[0] ?? -1;
-      // Use the LAST status column (Reoon's verification result)
-      const reoonStatusIdx = allStatusIdxs[allStatusIdxs.length - 1] ?? -1;
-      // Fallback: is_safe_to_send
-      const safeIdx = h.indexOf('is_safe_to_send');
-
-      if (emailIdx === -1) {
-        alert('Could not find Email column.');
-        return;
+  async function connectOutlook() {
+    const res = await fetch(`${BASE}/api/email/auth-url?client_id=${currentClientId}`);
+    const { url } = await res.json();
+    const popup = window.open(url, 'ms_auth', 'width=600,height=700,scrollbars=yes');
+    const handler = async (e) => {
+      if (e.data?.type === 'MS_AUTH_SUCCESS') {
+        window.removeEventListener('message', handler);
+        popup?.close();
+        await loadAll();
+      } else if (e.data?.type === 'MS_AUTH_ERROR') {
+        window.removeEventListener('message', handler);
+        alert('Connection failed: ' + e.data.error);
       }
-      if (reoonStatusIdx === -1 && safeIdx === -1) {
-        alert('Could not find a verification status column. Make sure this is a Reoon/NeverBounce export.');
-        return;
-      }
-
-      const verified = [], invalid = [], skipped = [];
-
-      for (const row of rows) {
-        const email = row[emailIdx]?.trim().toLowerCase();
-        if (!email) { skipped.push({ reason: 'no email' }); continue; }
-
-        // Determine result — prefer Reoon status column
-        let result = reoonStatusIdx >= 0 ? row[reoonStatusIdx]?.trim().toLowerCase() : null;
-        if (!result && safeIdx >= 0) {
-          result = row[safeIdx]?.trim().toLowerCase() === 'true' ? 'safe' : 'invalid';
-        }
-
-        // Match to existing contact by email (case-insensitive)
-        const match = contacts.find(c => c.email?.toLowerCase() === email);
-        if (!match) { skipped.push({ email, reason: 'not found in Taraform' }); continue; }
-
-        // safe / inbox_full = verified; invalid = blocked; unknown/empty = skip
-        if (result === 'safe' || result === 'inbox_full') {
-          verified.push({ contact: match, email, result });
-        } else if (result === 'invalid') {
-          invalid.push({ contact: match, email, result });
-        } else {
-          skipped.push({ email, reason: `status: ${result || 'unknown'}` });
-        }
-      }
-
-      setPreview({ verified, invalid, skipped });
-      setStep('preview');
     };
-    reader.readAsText(file);
+    window.addEventListener('message', handler);
   }
 
-  async function handleImport() {
-    if (!preview) return;
-    setImporting(true);
+  async function disconnect() {
+    if (!confirm('Disconnect Outlook?')) return;
+    await fetch(`${BASE}/api/email/disconnect?client_id=${currentClientId}`, { method: 'DELETE' });
+    setConnected(false); setConnEmail(null);
+  }
+
+  function openAdd() {
+    setEditing(null);
+    setForm({ name: '', touch_number: '', subject: '', body: '' });
+    setShowForm(true);
+  }
+
+  function openEdit(t) {
+    setEditing(t.id);
+    setForm({ name: t.name, touch_number: t.touch_number || '', subject: t.subject, body: t.body });
+    setShowForm(true);
+  }
+
+  async function saveTemplate() {
+    if (!form.name || !form.subject || !form.body) return;
+    if (editing) {
+      const res = await fetch(`${BASE}/api/email/templates/${editing}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const updated = await res.json();
+      setTemplates(ts => ts.map(t => t.id === editing ? updated : t));
+    } else {
+      const res = await fetch(`${BASE}/api/email/templates`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, client_id: currentClientId }),
+      });
+      const created = await res.json();
+      setTemplates(ts => [...ts, created]);
+    }
+    setShowForm(false);
+  }
+
+  async function deleteTemplate(id) {
+    if (!confirm('Delete this template?')) return;
+    await fetch(`${BASE}/api/email/templates/${id}`, { method: 'DELETE' });
+    setTemplates(ts => ts.filter(t => t.id !== id));
+  }
+
+  async function startVerification() {
+    if (!confirm('This will verify all email addresses in Taraform using Reoon. Continue?')) return;
+    setVerifying(true);
     try {
-      // Mark verified contacts
-      for (const { contact } of preview.verified) {
-        await supabase.from('property_crm_contacts')
-          .update({ email_status: 'verified', updated_at: new Date().toISOString() })
-          .eq('id', contact.id);
-        setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, emailStatus: 'verified' } : c));
-      }
-      // Mark invalid contacts
-      for (const { contact } of preview.invalid) {
-        await supabase.from('property_crm_contacts')
-          .update({ email_status: 'do_not_email', updated_at: new Date().toISOString() })
-          .eq('id', contact.id);
-        setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, emailStatus: 'do_not_email' } : c));
-      }
-      setStep('done');
+      const res = await fetch(`${BASE}/api/email/verify-start`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: currentClientId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setVerifyJob({ status: 'running', total: data.total, checked: 0 });
+      // Poll for updates every 30s
+      const interval = setInterval(async () => {
+        const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
+        const j = await r.json();
+        setVerifyJob(j);
+        if (j.status === 'completed' || j.status === 'timeout') clearInterval(interval);
+      }, 30000);
+    } catch (e) {
+      alert('Verification failed: ' + e.message);
     } finally {
-      setImporting(false);
+      setVerifying(false);
     }
   }
 
-  const statBadge = (n, color, label) => (
-    <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-      <div style={{ fontSize: '2rem', fontWeight: 800, color }}>{n}</div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{label}</div>
-    </div>
-  );
+  async function saveAutomation(enabled, limit) {
+    setSavingAuto(true);
+    await Promise.all([
+      fetch(`${BASE}/api/settings/email_automation_enabled`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: enabled.toString(), client_id: currentClientId }),
+      }),
+      fetch(`${BASE}/api/settings/email_daily_limit`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: limit.toString(), client_id: currentClientId }),
+      }),
+    ]);
+    setSavingAuto(false);
+  }
+
+  const inp = {
+    width: '100%', padding: '0.5rem 0.75rem', background: 'var(--bg)',
+    border: '1px solid var(--border)', borderRadius: '6px',
+    color: 'var(--text)', fontSize: '0.875rem', fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  };
+  const lbl = {
+    fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+    letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)',
+    display: 'block', marginBottom: '0.4rem',
+  };
 
   return (
-    <Modal open={open} onClose={handleClose} title="✉ Import Email Verification"
-      footer={
-        step === 'preview'
-          ? <><button onClick={() => setStep('upload')}>← Back</button>
-              <button className="btn-primary" onClick={handleImport} disabled={importing}>
-                {importing ? 'Updating…' : `Update ${(preview?.verified.length || 0) + (preview?.invalid.length || 0)} contacts`}
-              </button></>
-          : <button onClick={handleClose}>{step === 'done' ? 'Done' : 'Cancel'}</button>
-      }>
+    <Modal open={open} onClose={onClose} title="✉ Email Settings"
+      footer={<button onClick={onClose}>Close</button>}>
+      {loading ? (
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-      {step === 'upload' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            Upload a CSV from your email verifier (NeverBounce, ZeroBounce, etc.) that includes an <code style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>is_safe_to_send</code> and <code style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>email</code> column.
-          </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.75rem', lineHeight: 1.7 }}>
-            ✅ <strong>Safe to send</strong> → marked <code style={{ fontFamily: 'var(--mono)' }}>verified</code><br />
-            ❌ <strong>Not safe</strong> → marked <code style={{ fontFamily: 'var(--mono)' }}>do_not_email</code><br />
-            ⏭ <strong>No email / not found</strong> → skipped
-          </div>
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: 'none' }} />
-          <button className="btn-primary" onClick={() => fileRef.current.click()}>
-            Choose CSV File
-          </button>
-        </div>
-      )}
-
-      {step === 'preview' && preview && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-            {statBadge(preview.verified.length, '#10b981', 'Will be verified')}
-            {statBadge(preview.invalid.length,  '#f87171', 'Will be blocked')}
-            {statBadge(preview.skipped.length,  '#6b7280', 'Skipped')}
-          </div>
-
-          {preview.verified.length > 0 && (
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#10b981', fontFamily: 'var(--mono)', marginBottom: '0.4rem' }}>
-                Verified ✅
-              </div>
-              {preview.verified.slice(0, 5).map(({ contact, email }, i) => (
-                <div key={i} style={{ fontSize: '0.8rem', padding: '0.3rem 0', borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-                  {contact.firstName} {contact.lastName} — <span style={{ color: 'var(--text-muted)' }}>{email}</span>
+          {/* Outlook connection */}
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+            <div style={{ ...lbl, marginBottom: '0.75rem' }}>Outlook Account</div>
+            {connected ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  <span style={{ fontSize: '0.875rem' }}>{connEmail || 'Connected'}</span>
                 </div>
-              ))}
-              {preview.verified.length > 5 && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>+{preview.verified.length - 5} more</div>}
+                <button onClick={disconnect} style={{ fontSize: '0.75rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '5px', padding: '0.3rem 0.75rem', cursor: 'pointer' }}>Disconnect</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>No account connected</span>
+                <button onClick={connectOutlook} style={{ fontSize: '0.875rem', background: '#0078d4', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Connect Outlook
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Automation settings */}
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ ...lbl, marginBottom: 0 }}>Daily Automation</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <div
+                  onClick={async () => {
+                    const next = !autoEnabled;
+                    setAutoEnabled(next);
+                    await saveAutomation(next, dailyLimit);
+                  }}
+                  style={{
+                    width: '36px', height: '20px', borderRadius: '10px', cursor: 'pointer',
+                    background: autoEnabled ? '#10b981' : 'var(--border)',
+                    position: 'relative', transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: '2px',
+                    left: autoEnabled ? '18px' : '2px',
+                    width: '16px', height: '16px', borderRadius: '50%',
+                    background: 'white', transition: 'left 0.2s',
+                  }} />
+                </div>
+                <span style={{ fontSize: '0.8rem', color: autoEnabled ? '#10b981' : 'var(--text-muted)' }}>
+                  {autoEnabled ? 'On' : 'Off'}
+                </span>
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', opacity: autoEnabled ? 1 : 0.5 }}>
+              <div>
+                <span style={lbl}>Emails per day</span>
+                <input type="number" min="1" max="50" style={{ ...inp, width: '100%' }}
+                  value={dailyLimit}
+                  onChange={e => setDailyLimit(e.target.value)}
+                  onBlur={() => saveAutomation(autoEnabled, dailyLimit)}
+                  disabled={!autoEnabled}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Sent 8:30 AM – 5:30 PM<br />
+                  Random intervals throughout day
+                </div>
+              </div>
+            </div>
+
+            {autoEnabled && !connected && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: '#fbbf24' }}>
+                ⚠ Connect your Outlook account above for automation to work
+              </div>
+            )}
+            {autoEnabled && connected && templates.length === 0 && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: '#fbbf24' }}>
+                ⚠ Add a Touch 1 template below for automation to send
+              </div>
+            )}
+            {savingAuto && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Saving…</div>
+            )}
+          </div>
+
+          {/* Email verification */}
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ ...lbl, marginBottom: 0 }}>Email Verification</div>
+              <button
+                onClick={startVerification}
+                disabled={verifying || verifyJob?.status === 'running'}
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.875rem', background: '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit', opacity: (verifying || verifyJob?.status === 'running') ? 0.6 : 1 }}
+              >
+                {verifying ? 'Starting…' : verifyJob?.status === 'running' ? 'Running…' : '🔍 Verify All Emails'}
+              </button>
+            </div>
+
+            {!verifyJob && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Submits all contact emails to Reoon for verification. Takes a few minutes. Email automation will only send to verified addresses.
+              </div>
+            )}
+
+            {verifyJob?.status === 'running' && (
+              <div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  Verifying {verifyJob.checked || 0} / {verifyJob.total || '?'} emails…
+                </div>
+                <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px' }}>
+                  <div style={{ height: '100%', width: verifyJob.total ? `${Math.round((verifyJob.checked || 0) / verifyJob.total * 100)}%` : '10%', background: '#6366f1', borderRadius: '2px', transition: 'width 0.5s' }} />
+                </div>
+              </div>
+            )}
+
+            {verifyJob?.status === 'completed' && (
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem' }}>
+                <span style={{ color: '#10b981' }}>✅ {verifyJob.verified} verified</span>
+                <span style={{ color: '#f87171' }}>❌ {verifyJob.blocked} blocked</span>
+                <span style={{ color: 'var(--text-muted)' }}>⏭ {verifyJob.skipped} unknown</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{verifyJob.completedAt ? new Date(verifyJob.completedAt).toLocaleDateString() : ''}</span>
+              </div>
+            )}
+
+            {verifyJob?.status === 'timeout' && (
+              <div style={{ fontSize: '0.8rem', color: '#fbbf24' }}>⚠ Verification timed out — try again</div>
+            )}
+          </div>
+
+          {/* Templates */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ ...lbl, marginBottom: 0 }}>Email Templates</div>
+              <button className="btn-small btn-primary" onClick={openAdd}>+ Add Template</button>
+            </div>
+
+            {templates.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No templates yet.</div>
+            ) : templates.map(t => (
+              <div key={t.id} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.875rem', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {t.touch_number && (
+                      <span style={{ fontSize: '0.65rem', fontFamily: 'var(--mono)', color: 'var(--accent)', background: 'rgba(99,160,255,0.1)', border: '1px solid rgba(99,160,255,0.2)', borderRadius: '4px', padding: '0.1rem 0.4rem' }}>
+                        Touch {t.touch_number}
+                      </span>
+                    )}
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{t.name}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button className="btn-small" onClick={() => openEdit(t)}>Edit</button>
+                    <button className="btn-small btn-danger" onClick={() => deleteTemplate(t.id)}>Delete</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>Subject: {t.subject}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Template form */}
+          {showForm && (
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '1rem' }}>
+                {editing ? 'Edit Template' : 'New Template'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div>
+                  <span style={lbl}>Name</span>
+                  <input style={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Touch 1 — Initial Outreach" />
+                </div>
+                <div>
+                  <span style={lbl}>Touch #</span>
+                  <input style={inp} type="number" value={form.touch_number} onChange={e => setForm(f => ({ ...f, touch_number: e.target.value }))} placeholder="1" />
+                </div>
+              </div>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <span style={lbl}>Subject</span>
+                <input style={inp} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="Question about your land in {{county}}" />
+              </div>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <span style={lbl}>Body</span>
+                <textarea style={{ ...inp, minHeight: '150px', resize: 'vertical' }} value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} placeholder={'Hi {{firstName}},\n\nI came across your property in {{county}}...'} />
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.875rem', fontFamily: 'var(--mono)' }}>
+                {'{{firstName}} {{lastName}} {{county}} {{propertyAddress}} {{taxMapId}}'}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button className="btn-small" onClick={() => setShowForm(false)}>Cancel</button>
+                <button className="btn-small btn-primary" onClick={saveTemplate}>Save</button>
+              </div>
             </div>
           )}
-
-          {preview.invalid.length > 0 && (
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#f87171', fontFamily: 'var(--mono)', marginBottom: '0.4rem' }}>
-                Will Block ❌
-              </div>
-              {preview.invalid.slice(0, 5).map(({ contact, email }, i) => (
-                <div key={i} style={{ fontSize: '0.8rem', padding: '0.3rem 0', borderBottom: '1px solid var(--border)', color: 'var(--text)' }}>
-                  {contact.firstName} {contact.lastName} — <span style={{ color: 'var(--text-muted)' }}>{email}</span>
-                </div>
-              ))}
-              {preview.invalid.length > 5 && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>+{preview.invalid.length - 5} more</div>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {step === 'done' && (
-        <div style={{ textAlign: 'center', padding: '1.5rem' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>✅</div>
-          <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>Verification imported</div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {preview?.verified.length} verified · {preview?.invalid.length} blocked
-          </div>
         </div>
       )}
     </Modal>
