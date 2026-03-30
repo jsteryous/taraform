@@ -76,6 +76,7 @@ export function mapDbContact(d) {
     leadSource: d.lead_source || '',
     contactMethod: d.contact_method || '',
     acreage: d.acreage || '',
+    emailStatus: d.email_status || 'eligible',
     notes: d.notes,
     offers: d.offers || [],
     activityLog: d.activity_log || [],
