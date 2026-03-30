@@ -3,15 +3,43 @@ import { resolveConfig } from '../../lib/clientConfig';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
-export default function StatsBar({ filtered, onFilterStatus }) {
-  const { contacts, currentClient, currentClientId } = useApp();
+export default function StatsBar({ onFilterStatus }) {
+  const { currentClient, currentClientId, contacts } = useApp();
   const cfg = resolveConfig(currentClient);
-  const [totalCount, setTotalCount] = useState(null);
+  const [counts, setCounts] = useState({});
 
   useEffect(() => {
     if (!currentClientId) return;
-    supabase
-      .from('property_crm_contacts')
+    // Run count queries for each status pill in parallel
+    const pills = cfg.statsPills.filter(p => p.status !== null);
+    Promise.all(
+      pills.map(({ status, label }) => {
+        if (label === 'offers') {
+          // Count contacts with at least one offer record
+          return supabase.from('property_crm_contacts')
+            .select('id', { count: 'exact', head: true })
+            .eq('client_id', currentClientId)
+            .not('offers', 'eq', '[]')
+            .not('offers', 'is', null)
+            .then(({ count }) => ({ status, label, count: count || 0 }));
+        }
+        return supabase.from('property_crm_contacts')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', currentClientId)
+          .eq('status', status)
+          .then(({ count }) => ({ status, label, count: count || 0 }));
+      })
+    ).then(results => {
+      const map = {};
+      results.forEach(r => { map[r.label] = r.count; });
+      setCounts(map);
+    });
+  }, [currentClientId]); // eslint-disable-line
+
+  const [totalCount, setTotalCount] = useState(null);
+  useEffect(() => {
+    if (!currentClientId) return;
+    supabase.from('property_crm_contacts')
       .select('id', { count: 'exact', head: true })
       .eq('client_id', currentClientId)
       .then(({ count }) => setTotalCount(count));
@@ -20,14 +48,9 @@ export default function StatsBar({ filtered, onFilterStatus }) {
   return (
     <div style={{ padding: '0.75rem 2rem 0', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
       {cfg.statsPills.map(({ label, status, color }) => {
-        let count;
-        if (status === null) {
-          count = totalCount ?? contacts.length;
-        } else if (label === 'offers') {
-          count = contacts.filter(c => c.offers?.length > 0).length;
-        } else {
-          count = contacts.filter(c => c.status === status).length;
-        }
+        const count = status === null
+          ? (totalCount ?? '…')
+          : (counts[label] ?? '…');
         return (
           <div key={label}
             onClick={() => onFilterStatus(status)}

@@ -13,7 +13,37 @@ import { mapDbContact } from './lib/utils';
 
 function CRM() {
   const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact } = useApp();
-  const [authReady, setAuthReady]         = useState(false);
+
+  async function handleExport(selectedContacts) {
+    let source = selectedContacts?.length ? selectedContacts : null;
+    if (!source) {
+      // Fetch all contacts for export
+      const { data } = await import('./lib/supabase').then(m =>
+        m.supabase.from('property_crm_contacts')
+          .select('*')
+          .eq('client_id', currentClientId)
+          .order('updated_at', { ascending: false })
+      );
+      source = (data || []).map(d => ({
+        firstName: d.first_name, lastName: d.last_name,
+        phones: d.phones || [], email: d.email || '',
+        county: d.county, ownerAddress: d.owner_address,
+        propertyAddresses: d.property_addresses || [],
+        taxMapIds: d.tax_map_ids || [], status: d.status, smsStatus: d.sms_status,
+      }));
+    }
+    const rows = source.map(c => [
+      c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
+      c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
+      (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
+    ]);
+    const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
+    const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
+    a.click();
+  }  const [authReady, setAuthReady]         = useState(false);
   const [showAdd, setShowAdd]             = useState(false);
   const [showImport, setShowImport]       = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
@@ -54,20 +84,6 @@ function CRM() {
     }
   }, [contacts]);
 
-  function handleExport(selectedContacts) {
-    const source = selectedContacts?.length ? selectedContacts : contacts;
-    const rows = source.map(c => [
-      c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
-      c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
-      (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
-    ]);
-    const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
-    const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
-    a.click();
-  }
 
   if (!authReady) return null;
   if (!user) return <LoginScreen />;

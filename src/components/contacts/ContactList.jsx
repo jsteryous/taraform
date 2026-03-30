@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
@@ -7,73 +7,98 @@ import { resolveConfig } from '../../lib/clientConfig';
 import SendEmailModal from '../modals/SendEmailModal';
 
 const ACTIVITY_OPTIONS = [
-  { value: '',          label: 'Any Activity' },
-  { value: 'note_7',    label: 'Note in last 7 days' },
-  { value: 'note_30',   label: 'Note in last 30 days' },
-  { value: 'note_never',label: 'No notes ever' },
-  { value: 'sms_7',     label: 'SMS in last 7 days' },
-  { value: 'sms_30',    label: 'SMS in last 30 days' },
-  { value: 'sms_never', label: 'No SMS ever' },
+  { value: '',           label: 'Any Activity' },
+  { value: 'note_7',     label: 'Note in last 7 days' },
+  { value: 'note_30',    label: 'Note in last 30 days' },
+  { value: 'note_never', label: 'No notes ever' },
+  { value: 'sms_7',      label: 'SMS in last 7 days' },
+  { value: 'sms_30',     label: 'SMS in last 30 days' },
+  { value: 'sms_never',  label: 'No SMS ever' },
 ];
-
 const PHONE_OPTIONS = [
-  { value: '',       label: 'Any Phone' },
-  { value: 'has',    label: 'Has phone' },
-  { value: 'missing',label: 'No phone' },
+  { value: '',        label: 'Any Phone' },
+  { value: 'has',     label: 'Has phone' },
+  { value: 'missing', label: 'No phone' },
 ];
-
 const EMAIL_OPTIONS = [
-  { value: '',       label: 'Any Email' },
-  { value: 'has',    label: 'Has email' },
-  { value: 'missing',label: 'No email' },
+  { value: '',        label: 'Any Email' },
+  { value: 'has',     label: 'Has email' },
+  { value: 'missing', label: 'No email' },
 ];
 
-function daysAgo(n) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-}
+function daysAgo(n) { return new Date(Date.now() - n * 24 * 60 * 60 * 1000); }
 
-export default function ContactList({ onView, onExport, filterSearch, setFilterSearch, filterStatuses, setFilterStatuses, filterCounties, setFilterCounties, filterPhone, setFilterPhone, filterActivity, setFilterActivity, filterEmail, setFilterEmail }) {
-  const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
+export default function ContactList({ onView, onExport,
+  filterSearch, setFilterSearch,
+  filterStatuses, setFilterStatuses,
+  filterCounties, setFilterCounties,
+  filterPhone, setFilterPhone,
+  filterActivity, setFilterActivity,
+  filterEmail, setFilterEmail,
+}) {
+  const {
+    contacts, totalCount, loadingContacts,
+    currentClientId, currentClient,
+    deleteContact, showToast,
+    loadContacts, loadMoreContacts,
+  } = useApp();
+
   const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = cfg.statuses.map(s => s.value);
 
-  // Derive working Sets from persisted arrays (arrays serialize reliably, Sets don't)
-  const search            = filterSearch   ?? '';
-  const setSearch         = setFilterSearch;
-  const selectedStatuses  = new Set(filterStatuses ?? ALL_STATUSES);
-  const selectedCounties  = new Set(filterCounties ?? []);
-  const phoneFilter       = filterPhone    ?? '';
-  const setPhoneFilter    = setFilterPhone;
-  const activityFilter    = filterActivity ?? '';
-  const setActivityFilter = setFilterActivity;
-  const emailFilter       = filterEmail    ?? '';
-  const setEmailFilter    = setFilterEmail;
-
-  function setSelectedStatuses(val) {
-    // Accept Set or function, store as array
-    if (typeof val === 'function') {
-      setFilterStatuses(prev => [...val(new Set(prev ?? ALL_STATUSES))]);
-    } else {
-      setFilterStatuses(val === null ? null : [...val]);
-    }
-  }
-
-  function setSelectedCounties(val) {
-    if (typeof val === 'function') {
-      setFilterCounties(prev => [...val(new Set(prev ?? []))]);
-    } else {
-      setFilterCounties([...val]);
-    }
-  }
-  const [selected,         setSelected]         = useState(new Set());
-  const [statusOpen,       setStatusOpen]       = useState(false);
-  const [countyOpen,       setCountyOpen]       = useState(false);
-  const [moreOpen,         setMoreOpen]         = useState(false);
-  const [showSendEmail,    setShowSendEmail]    = useState(false);
+  // Local UI state
+  const [selected,      setSelected]      = useState(new Set());
+  const [statusOpen,    setStatusOpen]    = useState(false);
+  const [countyOpen,    setCountyOpen]    = useState(false);
+  const [moreOpen,      setMoreOpen]      = useState(false);
+  const [showSendEmail, setShowSendEmail] = useState(false);
 
   const statusRef = useRef(null);
   const countyRef = useRef(null);
   const moreRef   = useRef(null);
+  const searchTimer = useRef(null);
+
+  // Derive working values from props
+  const search           = filterSearch   ?? '';
+  const selectedStatuses = new Set(filterStatuses ?? ALL_STATUSES);
+  const selectedCounties = new Set(filterCounties ?? []);
+  const phoneFilter      = filterPhone    ?? '';
+  const activityFilter   = filterActivity ?? '';
+  const emailFilter      = filterEmail    ?? '';
+
+  // Build filters object for server query
+  const serverFilters = {
+    statuses:  filterStatuses ?? null, // null = all
+    counties:  filterCounties?.length ? filterCounties : null,
+    phone:     phoneFilter || null,
+    email:     emailFilter || null,
+    search:    search || null,
+  };
+
+  // Reload when filters change
+  useEffect(() => {
+    if (!currentClientId) return;
+    clearTimeout(searchTimer.current);
+    if (search) {
+      // Debounce search
+      searchTimer.current = setTimeout(() => {
+        loadContacts(currentClientId, serverFilters);
+      }, 300);
+    } else {
+      loadContacts(currentClientId, serverFilters);
+    }
+  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail]); // eslint-disable-line
+
+  // Reset on client change
+  useEffect(() => {
+    setFilterStatuses(null);
+    setFilterCounties([]);
+    setFilterSearch('');
+    setFilterPhone('');
+    setFilterEmail('');
+    setFilterActivity('');
+    setSelected(new Set());
+  }, [currentClientId]); // eslint-disable-line
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -86,24 +111,14 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Reset filters when client changes
-  useEffect(() => {
-    setFilterStatuses(null);
-    setFilterCounties([]);
-    setFilterSearch('');
-    setFilterPhone('');
-    setFilterEmail('');
-    setFilterActivity('');
-  }, [currentClientId]); // eslint-disable-line
-
   function handleStatPillFilter(status) {
-    if (status === null) setSelectedStatuses(new Set(ALL_STATUSES));
-    else setSelectedStatuses(new Set([status]));
+    if (status === null) setFilterStatuses(null);
+    else setFilterStatuses([status]);
   }
 
   const hasActiveFilters =
-    selectedStatuses.size < ALL_STATUSES.length ||
-    selectedCounties.size > 0 ||
+    (filterStatuses !== null && filterStatuses.length < ALL_STATUSES.length) ||
+    (filterCounties?.length > 0) ||
     phoneFilter !== '' ||
     emailFilter !== '' ||
     activityFilter !== '' ||
@@ -118,60 +133,45 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     setFilterActivity('');
   }
 
-  const counties = useMemo(() =>
-    [...new Set(contacts.map(c => c.county).filter(Boolean))].sort(),
-  [contacts]);
+  // Activity filter is still client-side (requires activityLog/lastSmsAt)
+  const filtered = activityFilter ? contacts.filter(c => {
+    const [type, period] = activityFilter.split('_');
+    if (type === 'note') {
+      const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
+      const lastNote = notes.map(e => new Date(e.timestamp || e.createdAt)).filter(d => !isNaN(d)).sort((a,b) => b-a)[0];
+      if (period === 'never' && lastNote) return false;
+      if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
+      if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
+    }
+    if (type === 'sms') {
+      const lastSms = c.lastSmsAt ? new Date(c.lastSmsAt) : null;
+      if (period === 'never' && lastSms) return false;
+      if (period === '7'  && (!lastSms || lastSms < daysAgo(7)))  return false;
+      if (period === '30' && (!lastSms || lastSms < daysAgo(30))) return false;
+    }
+    return true;
+  }) : contacts;
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return contacts.filter(c => {
-      // Status
-      if (!selectedStatuses.has(c.status)) return false;
-      // County
-      if (selectedCounties.size > 0 && !selectedCounties.has(c.county)) return false;
-      // Phone
-      if (phoneFilter === 'has'     && !(c.phones?.length && c.phones.some(Boolean))) return false;
-      if (phoneFilter === 'missing' &&  (c.phones?.length && c.phones.some(Boolean))) return false;
-      if (emailFilter === 'has'     && !c.email) return false;
-      if (emailFilter === 'missing' &&   c.email) return false;
-      // Activity
-      if (activityFilter) {
-        const [type, period] = activityFilter.split('_');
-        if (type === 'note') {
-          // Support both old format (createdAt, no type) and new format (timestamp, type:'note')
-          const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
-          const lastNote = notes
-            .map(e => new Date(e.timestamp || e.createdAt))
-            .filter(d => !isNaN(d))
-            .sort((a, b) => b - a)[0];
-          if (period === 'never' && lastNote) return false;
-          if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
-          if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
-        }
-        if (type === 'sms') {
-          const lastSms = c.lastSmsAt ? new Date(c.lastSmsAt) : null;
-          if (period === 'never' && lastSms) return false;
-          if (period === '7'  && (!lastSms || lastSms < daysAgo(7)))  return false;
-          if (period === '30' && (!lastSms || lastSms < daysAgo(30))) return false;
-        }
-      }
-      // Search
-      if (!q) return true;
-      return (
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-        (c.phones || []).some(p => p.includes(q)) ||
-        (c.propertyAddresses || []).some(a => a.toLowerCase().includes(q)) ||
-        (c.taxMapIds || []).some(t => t.toLowerCase().includes(q)) ||
-        (c.county || '').toLowerCase().includes(q)
-      );
-    });
-  }, [contacts, search, selectedStatuses, selectedCounties, phoneFilter, activityFilter]);
+  // Get unique counties from loaded contacts for the dropdown
+  const counties = [...new Set(contacts.map(c => c.county).filter(Boolean))].sort();
 
+  function setSelectedStatuses(val) {
+    if (typeof val === 'function') setFilterStatuses(prev => [...val(new Set(prev ?? ALL_STATUSES))]);
+    else setFilterStatuses(val === null ? null : [...val]);
+  }
+  function setSelectedCounties(val) {
+    if (typeof val === 'function') setFilterCounties(prev => [...val(new Set(prev ?? []))]);
+    else setFilterCounties([...val]);
+  }
   function toggleStatus(s) {
-    setSelectedStatuses(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+    const next = new Set(selectedStatuses);
+    next.has(s) ? next.delete(s) : next.add(s);
+    setFilterStatuses([...next]);
   }
   function toggleCounty(c) {
-    setSelectedCounties(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
+    const next = new Set(selectedCounties);
+    next.has(c) ? next.delete(c) : next.add(c);
+    setFilterCounties([...next]);
   }
   function toggleSelect(id) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -186,7 +186,6 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     showToast(`${selected.size} contacts deleted`);
   }
 
-  // Label helpers
   const statusLabel = selectedStatuses.size === ALL_STATUSES.length ? 'All Statuses'
     : selectedStatuses.size === 0 ? 'No Status'
     : selectedStatuses.size === 1 ? [...selectedStatuses][0]
@@ -196,7 +195,6 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     : selectedCounties.size === 1 ? [...selectedCounties][0]
     : `${selectedCounties.size} counties`;
 
-  // Count active "more" filters for badge
   const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0);
 
   const filterBtn = (active) => ({
@@ -225,9 +223,9 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
 
   return (
     <>
-      <StatsBar filtered={filtered} onFilterStatus={handleStatPillFilter} />
+      <StatsBar onFilterStatus={handleStatPillFilter} />
 
-      {/* ── Filter bar ── */}
+      {/* Filter bar */}
       <div style={{ padding: '1rem 2rem 0.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
 
         {/* Search */}
@@ -235,12 +233,10 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
           <span style={{ position: 'absolute', left: '0.875rem', color: 'rgba(99,160,255,0.6)', fontSize: '1rem', pointerEvents: 'none', zIndex: 1 }}>⌕</span>
           <input type="text" className="search"
             placeholder="Search by name, phone, address, tax map ID…"
-            value={search} onChange={e => setSearch(e.target.value)}
+            value={search} onChange={e => setFilterSearch(e.target.value)}
             style={{ width: '100%', paddingLeft: '2.25rem', paddingRight: search ? '2rem' : '1rem' }}
           />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none', color: 'rgba(99,160,255,0.7)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: 0, zIndex: 1 }}>×</button>
-          )}
+          {search && <button onClick={() => setFilterSearch('')} style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none', color: 'rgba(99,160,255,0.7)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: 0, zIndex: 1 }}>×</button>}
         </div>
 
         {/* Status */}
@@ -252,8 +248,8 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
           {statusOpen && (
             <div style={dropStyle}>
               <div style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                <button className="btn-small" onClick={() => setSelectedStatuses(new Set(ALL_STATUSES))}>All</button>
-                <button className="btn-small" onClick={() => setSelectedStatuses(new Set())}>None</button>
+                <button className="btn-small" onClick={() => setFilterStatuses(null)}>All</button>
+                <button className="btn-small" onClick={() => setFilterStatuses([])}>None</button>
               </div>
               {ALL_STATUSES.map(s => (
                 <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
@@ -277,7 +273,7 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
             {countyOpen && (
               <div style={dropStyle}>
                 <div style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                  <button className="btn-small" onClick={() => setSelectedCounties(new Set())}>All</button>
+                  <button className="btn-small" onClick={() => setFilterCounties([])}>All</button>
                 </div>
                 {counties.map(c => (
                   <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
@@ -292,46 +288,38 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
           </div>
         )}
 
-        {/* More filters (phone + activity) */}
+        {/* More filters */}
         <div ref={moreRef} style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} style={{ ...filterBtn(moreActiveCount > 0), minWidth: 'auto', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.875rem' }}>
-              Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}
-            </span>
+            <span style={{ fontSize: '0.875rem' }}>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
             <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
           </button>
           {moreOpen && (
             <div style={{ ...dropStyle, minWidth: '240px' }}>
-              <div style={{ padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                Phone
-              </div>
+              <div style={{ padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Phone</div>
               {PHONE_OPTIONS.map(o => (
                 <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <input type="radio" name="phone_filter" checked={phoneFilter === o.value} onChange={() => setPhoneFilter(o.value)} style={{ width: '14px', height: '14px' }} />
+                  <input type="radio" name="phone_filter" checked={phoneFilter === o.value} onChange={() => setFilterPhone(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
-              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                Email
-              </div>
+              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Email</div>
               {EMAIL_OPTIONS.map(o => (
                 <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <input type="radio" name="email_filter" checked={emailFilter === o.value} onChange={() => setEmailFilter(o.value)} style={{ width: '14px', height: '14px' }} />
+                  <input type="radio" name="email_filter" checked={emailFilter === o.value} onChange={() => setFilterEmail(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
-              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                Activity
-              </div>
+              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Activity</div>
               {ACTIVITY_OPTIONS.map(o => (
                 <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <input type="radio" name="activity_filter" checked={activityFilter === o.value} onChange={() => setActivityFilter(o.value)} style={{ width: '14px', height: '14px' }} />
+                  <input type="radio" name="activity_filter" checked={activityFilter === o.value} onChange={() => setFilterActivity(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
@@ -339,16 +327,14 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
           )}
         </div>
 
-        {/* Clear all filters */}
         {hasActiveFilters && (
           <button onClick={clearAllFilters} style={{ fontSize: '0.8rem', color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             ✕ Clear filters
           </button>
         )}
 
-        {/* Result count */}
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-          {filtered.length} of {contacts.length}
+          {loadingContacts ? 'Loading…' : `${filtered.length} of ${totalCount}`}
         </span>
       </div>
 
@@ -356,21 +342,14 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
       {selected.size > 0 && (
         <div style={{ padding: '0.5rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.2)' }}>
           <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 500 }}>{selected.size} selected</span>
-          <button className="btn-small" onClick={() => {
-            const selectedContacts = filtered.filter(c => selected.has(c.id));
-            onExport(selectedContacts);
-          }}>Export Selected</button>
+          <button className="btn-small" onClick={() => { onExport(filtered.filter(c => selected.has(c.id))); }}>Export Selected</button>
           <button className="btn-small" onClick={() => setShowSendEmail(true)}>✉ Send Emails</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
           <button className="btn-small" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
 
-      <SendEmailModal
-        open={showSendEmail}
-        onClose={() => setShowSendEmail(false)}
-        selectedContacts={filtered.filter(c => selected.has(c.id))}
-      />
+      <SendEmailModal open={showSendEmail} onClose={() => setShowSendEmail(false)} selectedContacts={filtered.filter(c => selected.has(c.id))} />
 
       {/* Select all */}
       <div style={{ padding: '0.5rem 2rem', borderBottom: '1px solid var(--border)' }}>
@@ -382,18 +361,34 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
 
       {/* List */}
       <div style={{ padding: '0 2rem' }}>
-        {filtered.length === 0 ? (
+        {loadingContacts && contacts.length === 0 ? (
+          <div className="empty-state"><div className="empty-icon">⏳</div><p>Loading contacts…</p></div>
+        ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>
-            <p>{contacts.length === 0 ? 'Add your first contact or import a CSV' : 'No contacts match your filters'}</p>
+            <p>{totalCount === 0 ? 'Add your first contact or import a CSV' : 'No contacts match your filters'}</p>
           </div>
         ) : (
-          <VirtualList
-            items={filtered}
-            renderItem={(c) => (
-              <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView} />
+          <>
+            <VirtualList
+              items={filtered}
+              renderItem={(c) => (
+                <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView} />
+              )}
+            />
+            {/* Load more */}
+            {contacts.length < totalCount && (
+              <div style={{ textAlign: 'center', padding: '1rem' }}>
+                <button
+                  onClick={() => loadMoreContacts(currentClientId, serverFilters)}
+                  disabled={loadingContacts}
+                  style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 1.25rem', cursor: 'pointer' }}
+                >
+                  {loadingContacts ? 'Loading…' : `Load more (${totalCount - contacts.length} remaining)`}
+                </button>
+              </div>
             )}
-          />
+          </>
         )}
       </div>
     </>
