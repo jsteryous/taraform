@@ -187,8 +187,9 @@ export default function ImportModal({ open, onClose }) {
 
       // Bulk insert new contacts
       if (toAdd.length > 0) {
-        const records = toAdd.map(c => ({
-          id: Math.floor(Date.now() + Math.random() * 1000),
+        const baseTime = Date.now();
+        const records = toAdd.map((c, i) => ({
+          id: baseTime + i,
           user_id: user.id,
           client_id: currentClientId,
           first_name: c.firstName,
