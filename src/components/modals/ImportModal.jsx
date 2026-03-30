@@ -30,16 +30,17 @@ function parseCSV(text) {
 
 function autoMap(headers) {
   const mapping = {};
-  const h = headers.map(h => h.toLowerCase());
+  const h = headers.map(h => h.toLowerCase().trim());
   const tries = {
-    firstName: ['first name','firstname','first','fname'],
-    lastName:  ['last name','lastname','last','lname'],
-    phone:     ['phone','phone number','cell','mobile','telephone'],
-    email:     ['email','email address','e-mail'],
-    county:    ['county'],
-    ownerAddress: ['owner address','owner addr','mailing address','mailing'],
-    propertyAddress: ['property address','property addr','situs','address'],
-    taxMapId:  ['tax map id','tax map','parcel id','parcel','pin','tax id'],
+    firstName:       ['first name fixed', 'matched first name', 'first name', 'firstname', 'first', 'fname', 'input first name'],
+    lastName:        ['last name fixed', 'matched last name', 'last name', 'lastname', 'last', 'lname', 'input last name'],
+    phone:           ['phone1', 'phone', 'phone number', 'cell', 'mobile', 'telephone'],
+    email:           ['email1', 'email', 'email address', 'e-mail'],
+    county:          ['input custom field 2', 'county'],
+    taxMapId:        ['input custom field 1', 'tax map id', 'tax map', 'parcel id', 'parcel', 'pin', 'tax id'],
+    ownerAddress:    ['confirmed mailing address', 'input mailing address', 'owner address', 'owner addr', 'mailing address', 'mailing'],
+    propertyAddress: ['input property address', 'property address', 'property addr', 'situs', 'address'],
+    acreage:         ['input custom field 3', 'acreage', 'acres'],
   };
   for (const [field, candidates] of Object.entries(tries)) {
     for (const candidate of candidates) {
@@ -94,18 +95,66 @@ export default function ImportModal({ open, onClose }) {
   }
 
   function buildContacts() {
-    return rows.map(row => ({
-      firstName: mapping.firstName !== undefined ? (row[mapping.firstName] || '').trim() : '',
-      lastName:  mapping.lastName  !== undefined ? (row[mapping.lastName]  || '').trim() : '',
-      phones:    mapping.phone !== undefined && row[mapping.phone] ? [row[mapping.phone].trim()] : [],
-      email:     mapping.email !== undefined ? (row[mapping.email] || '').trim() : '',
-      county:    normalizeCounty(mapping.county !== undefined ? (row[mapping.county] || '').trim() : ''),
-      ownerAddress: mapping.ownerAddress !== undefined ? (row[mapping.ownerAddress] || '').trim() : '',
-      propertyAddresses: mapping.propertyAddress !== undefined && row[mapping.propertyAddress] ? [row[mapping.propertyAddress].trim()] : [],
-      taxMapIds: mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
-      status: 'New Lead', offers: [], activityLog: [], customFields: {},
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    })).filter(c => c.firstName || c.lastName);
+    // Find all phone column indices (Phone1 through Phone7)
+    const phoneIndices = [];
+    for (let i = 1; i <= 7; i++) {
+      const idx = headers.map(h => h.toLowerCase().trim()).indexOf(`phone${i}`);
+      if (idx >= 0) phoneIndices.push(idx);
+    }
+    // Find city/state/zip columns for address assembly
+    const h = headers.map(h => h.toLowerCase().trim());
+    const mailingCityIdx  = h.indexOf('confirmed mailing city')  >= 0 ? h.indexOf('confirmed mailing city')  : h.indexOf('input mailing city');
+    const mailingStateIdx = h.indexOf('confirmed mailing state') >= 0 ? h.indexOf('confirmed mailing state') : h.indexOf('input mailing state');
+    const mailingZipIdx   = h.indexOf('confirmed mailing zip')   >= 0 ? h.indexOf('confirmed mailing zip')   : h.indexOf('input mailing zip');
+    const propCityIdx     = h.indexOf('input property city');
+    const propStateIdx    = h.indexOf('input property state');
+    const propZipIdx      = h.indexOf('input property zip');
+
+    return rows.map(row => {
+      // Collect all non-empty phones, deduplicate
+      let phones = [];
+      if (phoneIndices.length > 0) {
+        phones = [...new Set(
+          phoneIndices.map(i => (row[i] || '').trim()).filter(Boolean)
+        )];
+      } else if (mapping.phone !== undefined && row[mapping.phone]) {
+        phones = [row[mapping.phone].trim()];
+      }
+
+      // Assemble owner address
+      let ownerAddress = mapping.ownerAddress !== undefined ? (row[mapping.ownerAddress] || '').trim() : '';
+      if (ownerAddress && mailingCityIdx >= 0) {
+        const city  = (row[mailingCityIdx]  || '').trim();
+        const state = (row[mailingStateIdx] || '').trim();
+        const zip   = (row[mailingZipIdx]   || '').trim();
+        if (city) ownerAddress = `${ownerAddress}, ${city}, ${state} ${zip}`.trim().replace(/,\s*$/, '');
+      }
+
+      // Assemble property address
+      let propertyAddr = mapping.propertyAddress !== undefined ? (row[mapping.propertyAddress] || '').trim() : '';
+      if (propertyAddr && propCityIdx >= 0) {
+        const city  = (row[propCityIdx]  || '').trim();
+        const state = (row[propStateIdx] || '').trim();
+        const zip   = (row[propZipIdx]   || '').trim();
+        if (city) propertyAddr = `${propertyAddr}, ${city}, ${state} ${zip}`.trim().replace(/,\s*$/, '');
+      }
+
+      const acreage = mapping.acreage !== undefined ? (row[mapping.acreage] || '').trim() : '';
+
+      return {
+        firstName:         mapping.firstName !== undefined ? (row[mapping.firstName] || '').trim() : '',
+        lastName:          mapping.lastName  !== undefined ? (row[mapping.lastName]  || '').trim() : '',
+        phones,
+        email:             mapping.email !== undefined ? (row[mapping.email] || '').trim() : '',
+        county:            normalizeCounty(mapping.county !== undefined ? (row[mapping.county] || '').trim() : ''),
+        ownerAddress,
+        propertyAddresses: propertyAddr ? [propertyAddr] : [],
+        taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
+        customFields:      acreage ? { acreage } : {},
+        status: 'New Lead', offers: [], activityLog: [],
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+    }).filter(c => c.firstName || c.lastName);
   }
 
   function handlePreview() {
@@ -152,7 +201,7 @@ export default function ImportModal({ open, onClose }) {
           status: c.status,
           offers: [],
           activity_log: [],
-          custom_fields: {},
+          custom_fields: c.customFields || {},
           created_at: c.createdAt,
           updated_at: c.updatedAt,
         }));
