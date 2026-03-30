@@ -21,7 +21,7 @@ export const LAND_CONFIG = {
     { label: 'closed',         status: 'Closed',     color: '#10b981' },
   ],
   tabs: ['notes', 'sms', 'email', 'offers'],
-  visibleFields: ['county', 'taxMapIds', 'ownerAddress', 'propertyAddresses'],
+  visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],
 };
 

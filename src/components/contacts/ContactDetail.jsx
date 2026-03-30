@@ -243,6 +243,19 @@ export default function ContactDetail({ onClose }) {
             </div>
           )}
 
+          {/* Acreage */}
+          {visibleFields.includes('acreage') && (
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={fieldLabel}>Acreage</div>
+              <input value={draft.acreage || ''} style={{ ...inlineInput, ...fieldValue }}
+                onChange={e => setDraft(d => ({ ...d, acreage: e.target.value }))}
+                onBlur={e => update('acreage', e.target.value)}
+                onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+                placeholder="—"
+              />
+            </div>
+          )}
+
           {/* Addresses section */}
           {(visibleFields.includes('ownerAddress') || visibleFields.includes('propertyAddresses')) && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>

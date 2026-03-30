@@ -150,7 +150,8 @@ export default function ImportModal({ open, onClose }) {
         ownerAddress,
         propertyAddresses: propertyAddr ? [propertyAddr] : [],
         taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
-        customFields:      acreage ? { acreage } : {},
+        acreage:           acreage || '',
+        customFields:      {},
         status: 'New Lead', offers: [], activityLog: [],
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
@@ -198,6 +199,7 @@ export default function ImportModal({ open, onClose }) {
           property_addresses: c.propertyAddresses,
           county: c.county,
           tax_map_ids: c.taxMapIds,
+          acreage: c.acreage || null,
           status: c.status,
           offers: [],
           activity_log: [],
