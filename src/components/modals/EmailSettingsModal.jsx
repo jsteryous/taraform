@@ -18,6 +18,7 @@ export default function EmailSettingsModal({ open, onClose }) {
   const [savingAuto, setSavingAuto]       = useState(false);
   const [verifyJob, setVerifyJob]         = useState(null);
   const [verifying, setVerifying]         = useState(false);
+  const [verifyLimit, setVerifyLimit]     = useState('100');
 
   useEffect(() => {
     if (!open || !currentClientId) return;
@@ -109,12 +110,13 @@ export default function EmailSettingsModal({ open, onClose }) {
   }
 
   async function startVerification() {
-    if (!confirm('This will verify all email addresses in Taraform using Reoon. Continue?')) return;
+    const limit = parseInt(verifyLimit || '100', 10);
+    if (!confirm(`Verify up to ${limit} unverified emails using Reoon? This uses ${limit} credits.`)) return;
     setVerifying(true);
     try {
       const res = await fetch(`${BASE}/api/email/verify-start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: currentClientId }),
+        body: JSON.stringify({ client_id: currentClientId, limit }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -266,8 +268,17 @@ export default function EmailSettingsModal({ open, onClose }) {
             </div>
 
             {!verifyJob && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Submits all contact emails to Reoon for verification. Takes a few minutes. Email automation will only send to verified addresses.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flex: 1, lineHeight: 1.5 }}>
+                  Only verifies <strong>unverified</strong> contacts. Set limit to match your daily credits.
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Limit:</span>
+                  <input type="number" min="1" max="50000" value={verifyLimit}
+                    onChange={e => setVerifyLimit(e.target.value)}
+                    style={{ width: '70px', padding: '0.25rem 0.5rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text)', fontSize: '0.8rem', fontFamily: 'inherit' }}
+                  />
+                </div>
               </div>
             )}
 
