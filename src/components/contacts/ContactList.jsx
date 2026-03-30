@@ -22,11 +22,17 @@ const PHONE_OPTIONS = [
   { value: 'missing',label: 'No phone' },
 ];
 
+const EMAIL_OPTIONS = [
+  { value: '',       label: 'Any Email' },
+  { value: 'has',    label: 'Has email' },
+  { value: 'missing',label: 'No email' },
+];
+
 function daysAgo(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-export default function ContactList({ onView, onExport, filterSearch, setFilterSearch, filterStatuses, setFilterStatuses, filterCounties, setFilterCounties, filterPhone, setFilterPhone, filterActivity, setFilterActivity }) {
+export default function ContactList({ onView, onExport, filterSearch, setFilterSearch, filterStatuses, setFilterStatuses, filterCounties, setFilterCounties, filterPhone, setFilterPhone, filterActivity, setFilterActivity, filterEmail, setFilterEmail }) {
   const { contacts, currentClientId, currentClient, deleteContact, showToast } = useApp();
   const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = cfg.statuses.map(s => s.value);
@@ -40,6 +46,8 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
   const setPhoneFilter    = setFilterPhone;
   const activityFilter    = filterActivity ?? '';
   const setActivityFilter = setFilterActivity;
+  const emailFilter       = filterEmail    ?? '';
+  const setEmailFilter    = setFilterEmail;
 
   function setSelectedStatuses(val) {
     // Accept Set or function, store as array
@@ -84,6 +92,7 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     setFilterCounties([]);
     setFilterSearch('');
     setFilterPhone('');
+    setFilterEmail('');
     setFilterActivity('');
   }, [currentClientId]); // eslint-disable-line
 
@@ -96,6 +105,7 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     selectedStatuses.size < ALL_STATUSES.length ||
     selectedCounties.size > 0 ||
     phoneFilter !== '' ||
+    emailFilter !== '' ||
     activityFilter !== '' ||
     search !== '';
 
@@ -104,6 +114,7 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     setFilterStatuses(null);
     setFilterCounties([]);
     setFilterPhone('');
+    setFilterEmail('');
     setFilterActivity('');
   }
 
@@ -121,6 +132,8 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
       // Phone
       if (phoneFilter === 'has'     && !(c.phones?.length && c.phones.some(Boolean))) return false;
       if (phoneFilter === 'missing' &&  (c.phones?.length && c.phones.some(Boolean))) return false;
+      if (emailFilter === 'has'     && !c.email) return false;
+      if (emailFilter === 'missing' &&   c.email) return false;
       // Activity
       if (activityFilter) {
         const [type, period] = activityFilter.split('_');
@@ -184,7 +197,7 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
     : `${selectedCounties.size} counties`;
 
   // Count active "more" filters for badge
-  const moreActiveCount = (phoneFilter ? 1 : 0) + (activityFilter ? 1 : 0);
+  const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0);
 
   const filterBtn = (active) => ({
     display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '140px',
@@ -297,6 +310,17 @@ export default function ContactList({ onView, onExport, filterSearch, setFilterS
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <input type="radio" name="phone_filter" checked={phoneFilter === o.value} onChange={() => setPhoneFilter(o.value)} style={{ width: '14px', height: '14px' }} />
+                  {o.label}
+                </label>
+              ))}
+              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
+                Email
+              </div>
+              {EMAIL_OPTIONS.map(o => (
+                <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <input type="radio" name="email_filter" checked={emailFilter === o.value} onChange={() => setEmailFilter(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}

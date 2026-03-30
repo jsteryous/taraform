@@ -24,6 +24,7 @@ function CRM() {
   const [filterCounties, setFilterCounties] = useState([]);
   const [filterPhone,    setFilterPhone]    = useState('');
   const [filterActivity, setFilterActivity] = useState('');
+  const [filterEmail,    setFilterEmail]    = useState('');
 
   useEffect(() => {
     // Apply saved theme
@@ -117,6 +118,8 @@ function CRM() {
               setFilterPhone={setFilterPhone}
               filterActivity={filterActivity}
               setFilterActivity={setFilterActivity}
+              filterEmail={filterEmail}
+              setFilterEmail={setFilterEmail}
             />
         }
       </div>
