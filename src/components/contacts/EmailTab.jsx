@@ -36,7 +36,7 @@ export default function EmailTab({ contact }) {
     setLoading(false);
   }
 
-  async function send() {
+  async function send(force = false) {
     if (!contact.email) return;
     setSending(true);
     try {
@@ -60,12 +60,23 @@ export default function EmailTab({ contact }) {
           template_id: mode === 'template' ? selectedTemplate : null,
           subject,
           body,
+          force,
         }),
       });
       const data = await res.json();
+      if (data.unverified) {
+        // Ask user to confirm sending to unverified email
+        setSending(false);
+        if (confirm('This email address has not been verified. Send anyway?')) {
+          send(true);
+        }
+        return;
+      }
       if (data.success) {
         setCustomSubject(''); setCustomBody(''); setSelectedTemplate('');
         await loadAll();
+      } else if (data.error) {
+        alert(data.error);
       }
     } finally {
       setSending(false);
@@ -94,6 +105,17 @@ export default function EmailTab({ contact }) {
       {!contact.email && (
         <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '6px', padding: '0.75rem', fontSize: '0.8rem', color: '#fbbf24' }}>
           No email address on file for this contact.
+        </div>
+      )}
+
+      {/* Email verification status */}
+      {contact.email && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem' }}>
+          {contact.emailStatus === 'verified'     && <span style={{ color: '#10b981' }}>✅ Email verified</span>}
+          {contact.emailStatus === 'do_not_email' && <span style={{ color: '#f87171' }}>❌ Do not email</span>}
+          {contact.emailStatus === 'eligible'     && <span style={{ color: '#f59e0b' }}>⚠ Email not yet verified</span>}
+          {contact.emailStatus === 'replied'      && <span style={{ color: '#60a5fa' }}>💬 Has replied</span>}
+          {contact.emailStatus === 'contacted'    && <span style={{ color: '#6b7280' }}>📧 Contacted</span>}
         </div>
       )}
 
