@@ -284,12 +284,17 @@ export default function EmailSettingsModal({ open, onClose }) {
 
             {verifyJob?.status === 'running' && (
               <div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Verifying {verifyJob.checked || 0} / {verifyJob.total || '?'} emails…
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.5rem' }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%',
+                    border: '2px solid #6366f1', borderTopColor: 'transparent',
+                    animation: 'spin 0.8s linear infinite', flexShrink: 0,
+                  }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Verifying {verifyJob.total || '?'} emails… results update when complete
+                  </span>
                 </div>
-                <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', marginBottom: '0.5rem' }}>
-                  <div style={{ height: '100%', width: verifyJob.total ? `${Math.round((verifyJob.checked || 0) / verifyJob.total * 100)}%` : '10%', background: '#6366f1', borderRadius: '2px', transition: 'width 0.5s' }} />
-                </div>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 <button onClick={async () => {
                   await fetch(`${BASE}/api/email/verify-reset?client_id=${currentClientId}`, { method: 'DELETE' });
                   setVerifyJob(null);
