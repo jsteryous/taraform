@@ -6,13 +6,16 @@ const BASE = 'https://taraform-server-production.up.railway.app';
 
 export default function EmailSettingsModal({ open, onClose }) {
   const { currentClientId } = useApp();
-  const [connected, setConnected] = useState(false);
-  const [connEmail, setConnEmail] = useState(null);
-  const [templates, setTemplates] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [editing, setEditing]     = useState(null);
-  const [form, setForm]           = useState({ name: '', touch_number: '', subject: '', body: '' });
-  const [showForm, setShowForm]   = useState(false);
+  const [connected, setConnected]         = useState(false);
+  const [connEmail, setConnEmail]         = useState(null);
+  const [templates, setTemplates]         = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [editing, setEditing]             = useState(null);
+  const [form, setForm]                   = useState({ name: '', touch_number: '', subject: '', body: '' });
+  const [showForm, setShowForm]           = useState(false);
+  const [autoEnabled, setAutoEnabled]     = useState(false);
+  const [dailyLimit, setDailyLimit]       = useState('25');
+  const [savingAuto, setSavingAuto]       = useState(false);
 
   useEffect(() => {
     if (!open || !currentClientId) return;
@@ -21,15 +24,21 @@ export default function EmailSettingsModal({ open, onClose }) {
 
   async function loadAll() {
     setLoading(true);
-    const [statusRes, templatesRes] = await Promise.all([
+    const [statusRes, templatesRes, autoRes, limitRes] = await Promise.all([
       fetch(`${BASE}/api/email/status?client_id=${currentClientId}`),
       fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`),
+      fetch(`${BASE}/api/settings/email_automation_enabled?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
+      fetch(`${BASE}/api/settings/email_daily_limit?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
     ]);
-    const status = await statusRes.json();
-    const tmpl   = await templatesRes.json();
+    const status    = await statusRes.json();
+    const tmpl      = await templatesRes.json();
+    const autoSett  = await autoRes.json().catch(() => ({}));
+    const limitSett = await limitRes.json().catch(() => ({}));
     setConnected(status.connected);
     setConnEmail(status.email);
     setTemplates(Array.isArray(tmpl) ? tmpl : []);
+    setAutoEnabled(autoSett?.value === 'true');
+    setDailyLimit(limitSett?.value || '25');
     setLoading(false);
   }
 
@@ -94,6 +103,21 @@ export default function EmailSettingsModal({ open, onClose }) {
     setTemplates(ts => ts.filter(t => t.id !== id));
   }
 
+  async function saveAutomation(enabled, limit) {
+    setSavingAuto(true);
+    await Promise.all([
+      fetch(`${BASE}/api/settings/email_automation_enabled`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: enabled.toString(), client_id: currentClientId }),
+      }),
+      fetch(`${BASE}/api/settings/email_daily_limit`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: limit.toString(), client_id: currentClientId }),
+      }),
+    ]);
+    setSavingAuto(false);
+  }
+
   const inp = {
     width: '100%', padding: '0.5rem 0.75rem', background: 'var(--bg)',
     border: '1px solid var(--border)', borderRadius: '6px',
@@ -132,6 +156,69 @@ export default function EmailSettingsModal({ open, onClose }) {
                   Connect Outlook
                 </button>
               </div>
+            )}
+          </div>
+
+          {/* Automation settings */}
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ ...lbl, marginBottom: 0 }}>Daily Automation</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <div
+                  onClick={async () => {
+                    const next = !autoEnabled;
+                    setAutoEnabled(next);
+                    await saveAutomation(next, dailyLimit);
+                  }}
+                  style={{
+                    width: '36px', height: '20px', borderRadius: '10px', cursor: 'pointer',
+                    background: autoEnabled ? '#10b981' : 'var(--border)',
+                    position: 'relative', transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: '2px',
+                    left: autoEnabled ? '18px' : '2px',
+                    width: '16px', height: '16px', borderRadius: '50%',
+                    background: 'white', transition: 'left 0.2s',
+                  }} />
+                </div>
+                <span style={{ fontSize: '0.8rem', color: autoEnabled ? '#10b981' : 'var(--text-muted)' }}>
+                  {autoEnabled ? 'On' : 'Off'}
+                </span>
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', opacity: autoEnabled ? 1 : 0.5 }}>
+              <div>
+                <span style={lbl}>Emails per day</span>
+                <input type="number" min="1" max="50" style={{ ...inp, width: '100%' }}
+                  value={dailyLimit}
+                  onChange={e => setDailyLimit(e.target.value)}
+                  onBlur={() => saveAutomation(autoEnabled, dailyLimit)}
+                  disabled={!autoEnabled}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Sent 8:30 AM – 5:30 PM<br />
+                  Random intervals throughout day
+                </div>
+              </div>
+            </div>
+
+            {autoEnabled && !connected && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: '#fbbf24' }}>
+                ⚠ Connect your Outlook account above for automation to work
+              </div>
+            )}
+            {autoEnabled && connected && templates.length === 0 && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: '#fbbf24' }}>
+                ⚠ Add a Touch 1 template below for automation to send
+              </div>
+            )}
+            {savingAuto && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Saving…</div>
             )}
           </div>
 
