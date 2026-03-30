@@ -304,12 +304,48 @@ export default function EmailSettingsModal({ open, onClose }) {
               </div>
             )}
 
-            {verifyJob?.status === 'completed' && (
-              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem' }}>
-                <span style={{ color: '#10b981' }}>✅ {verifyJob.verified} verified</span>
-                <span style={{ color: '#f87171' }}>❌ {verifyJob.blocked} blocked</span>
-                <span style={{ color: 'var(--text-muted)' }}>⏭ {verifyJob.skipped} unknown</span>
-                <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{verifyJob.completedAt ? new Date(verifyJob.completedAt).toLocaleDateString() : ''}</span>
+            {(verifyJob?.status === 'completed' || verifyJob?.status === 'partial') && (
+              <div style={{ fontSize: '0.8rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
+                  <span style={{ color: '#10b981' }}>✅ {verifyJob.verified} verified</span>
+                  <span style={{ color: '#f87171' }}>❌ {verifyJob.blocked} blocked</span>
+                  <span style={{ color: 'var(--text-muted)' }}>⏭ {verifyJob.skipped} unknown</span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{verifyJob.completedAt ? new Date(verifyJob.completedAt).toLocaleDateString() : ''}</span>
+                </div>
+                <button onClick={async () => {
+                  try {
+                    const r = await fetch(`${BASE}/api/email/verify-reprocess`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ client_id: currentClientId }),
+                    });
+                    const d = await r.json();
+                    if (d.error) { alert(d.error); return; }
+                    setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
+                    alert(`Done — ${d.verified} verified, ${d.blocked} blocked, ${d.skipped} unknown`);
+                  } catch (e) { alert('Reprocess failed: ' + e.message); }
+                }} style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  ↻ Re-fetch & apply results from Reoon
+                </button>
+              </div>
+            )}
+
+            {verifyJob?.status === 'failed' && (
+              <div style={{ fontSize: '0.8rem' }}>
+                <div style={{ color: '#f87171', marginBottom: '0.4rem' }}>⚠ Job failed: {verifyJob.reason}</div>
+                <button onClick={async () => {
+                  try {
+                    const r = await fetch(`${BASE}/api/email/verify-reprocess`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ client_id: currentClientId }),
+                    });
+                    const d = await r.json();
+                    if (d.error) { alert(d.error); return; }
+                    setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
+                    alert(`Done — ${d.verified} verified, ${d.blocked} blocked`);
+                  } catch (e) { alert('Reprocess failed: ' + e.message); }
+                }} style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  ↻ Try to re-fetch results from Reoon
+                </button>
               </div>
             )}
 
