@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { resolveConfig } from '../lib/clientConfig';
 
@@ -20,27 +20,19 @@ const INTENT_LABELS = {
   unknown:         { label: 'Other',         color: '#6b7280' },
 };
 
-function downloadOffersReport(periodOffers, contacts, period) {
-  // Build a lookup map for contact details
-  const contactMap = {};
-  contacts.forEach(c => { contactMap[`${c.firstName} ${c.lastName}`.trim()] = c; });
-
+function downloadOffersReport(periodOffers, _contacts, period) {
   const rows = periodOffers
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(o => {
-      // Find contact by name match (offers store contactName)
-      const c = contacts.find(c => `${c.firstName} ${c.lastName}`.trim() === o.contactName);
-      return [
-        o.contactName || '',
-        c?.county || '',
-        (c?.taxMapIds || []).join(' | '),
-        Number(o.amount) || 0,
-        o.status || '',
-        o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '',
-        o.notes || '',
-      ];
-    });
+    .map(o => [
+      o.contactName || '',
+      o.county || '',
+      (o.taxMapIds || []).join(' | '),
+      Number(o.amount) || 0,
+      o.status || '',
+      o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '',
+      o.notes || '',
+    ]);
 
   const headers = ['Contact', 'County', 'Tax Map IDs', 'Amount', 'Status', 'Date', 'Notes'];
   const csv = [headers, ...rows]
@@ -57,7 +49,7 @@ function downloadOffersReport(periodOffers, contacts, period) {
 }
 
 export default function Dashboard({ onClose, onViewContact }) {
-  const { currentClientId, currentClient, contacts } = useApp();
+  const { currentClientId, currentClient } = useApp();
   const cfg = resolveConfig(currentClient);
   const [period, setPeriod] = useState('week');
   const [data, setData]     = useState(null);
@@ -65,35 +57,7 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [error, setError]   = useState(null);
   const [emailData, setEmailData] = useState(null);
 
-  // Compute offers from contacts (stored as JSONB array per contact)
-  const offerStats = useMemo(() => {
-    const now = Date.now();
-    const cutoffs = {
-      today: new Date(new Date().setHours(0,0,0,0)).getTime(),
-      week:  now - 7  * 24 * 60 * 60 * 1000,
-      month: now - 30 * 24 * 60 * 60 * 1000,
-      alltime: 0,
-    };
-    const cutoff = cutoffs[period] || cutoffs.week;
 
-    const allOffers = contacts.flatMap(c =>
-      (c.offers || []).map(o => ({ ...o, contactName: `${c.firstName} ${c.lastName}`.trim(), contactId: c.id }))
-    );
-    const periodOffers = period === 'alltime'
-      ? allOffers
-      : allOffers.filter(o => o.createdAt && new Date(o.createdAt).getTime() >= cutoff);
-
-    const totalValue    = periodOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
-    const byStatus      = {};
-    periodOffers.forEach(o => {
-      const s = o.status || 'Pending';
-      byStatus[s] = (byStatus[s] || 0) + 1;
-    });
-    const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
-    const uniqueContactCount = new Set(periodOffers.map(o => o.contactId)).size;
-
-    return { all: periodOffers, allTime: allOffers, count: uniqueContactCount, totalCount: periodOffers.length, totalValue, byStatus, acceptedValue };
-  }, [contacts, period]);
 
   const load = useCallback(async (p) => {
     if (!currentClientId) return;
@@ -286,37 +250,37 @@ export default function Dashboard({ onClose, onViewContact }) {
           )}
 
           {/* ── Offers ── */}
-          {offerStats.allTime.length > 0 ? (
+          {(data?.offerStats?.allTimeCount || 0) > 0 ? (
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
                 <button
-                  onClick={() => downloadOffersReport(offerStats.allTime, contacts, period)}
+                  onClick={() => downloadOffersReport(data.offerStats.allTime || [], [], period)}
                   style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   ↓ Download Report
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: offerStats.all.length ? '1.25rem' : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (data?.offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
-                  <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats.count}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats.totalCount} total offer{offerStats.totalCount !== 1 ? 's' : ''}</div>
+                  <div style={{ ...bigNum, color: '#fbbf24' }}>{data?.offerStats?.count || 0}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{data?.offerStats?.totalCount || 0} total offer{data?.offerStats?.totalCount || 0 !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
-                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${offerStats.totalValue.toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${(data?.offerStats?.totalValue || 0).toLocaleString()}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Accepted Value</div>
-                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${offerStats.acceptedValue.toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${(data?.offerStats?.acceptedValue || 0).toLocaleString()}</div>
                 </div>
               </div>
 
               {/* Status breakdown */}
-              {Object.keys(offerStats.byStatus).length > 0 && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: offerStats.all.length ? '1.25rem' : 0 }}>
-                  {Object.entries(offerStats.byStatus).map(([status, count]) => {
+              {Object.keys(data?.offerStats?.byStatus || {}).length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: (data?.offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
+                  {Object.entries(data?.offerStats?.byStatus || {}).map(([status, count]) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     const c = colors[status] || '#6b7280';
                     return (
@@ -336,14 +300,13 @@ export default function Dashboard({ onClose, onViewContact }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
                     <span>Contact</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
-                  {offerStats.all.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((o, i) => {
+                  {(data?.offerStats?.recent || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                         <span
                           onClick={() => {
-                            const c = contacts.find(c => `${c.firstName} ${c.lastName}`.trim() === o.contactName);
-                            if (c && onViewContact) onViewContact(c);
+                            if (o.contactId && onViewContact) onViewContact({ id: o.contactId });
                           }}
                           style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
                         >{o.contactName}</span>

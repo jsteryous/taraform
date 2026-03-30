@@ -117,7 +117,11 @@ function CRM() {
           dashboardActive={showDashboard}
         />
         {showDashboard
-          ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={c => { setShowDashboard(false); setCurrentContact(c); }} />
+          ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={async c => {
+              setShowDashboard(false);
+              const full = await loadFullContact(c.id);
+              if (full) setCurrentContact(full);
+            }} />
           : <ContactList
               onView={async id => {
                 const c = contacts.find(c => c.id == id);
