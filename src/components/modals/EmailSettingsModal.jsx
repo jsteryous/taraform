@@ -350,8 +350,11 @@ export default function EmailSettingsModal({ open, onClose }) {
                 <span style={lbl}>Body</span>
                 <textarea style={{ ...inp, minHeight: '150px', resize: 'vertical' }} value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} placeholder={'Hi {{firstName}},\n\nI came across your property in {{county}}...'} />
               </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.875rem', fontFamily: 'var(--mono)' }}>
-                {'{{firstName}} {{lastName}} {{county}} {{propertyAddress}} {{taxMapId}}'}
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.875rem', fontFamily: 'var(--mono)', lineHeight: 1.8 }}>
+                {'{{firstName}} {{lastName}} {{fullName}}'}<br/>
+                {'{{county}} {{acreage}}'}<br/>
+                {'{{propertyAddress}} {{propertyStreet}}'}<br/>
+                {'{{ownerAddress}} {{taxMapId}}'}
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button className="btn-small" onClick={() => setShowForm(false)}>Cancel</button>
