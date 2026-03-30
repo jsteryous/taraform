@@ -30,12 +30,21 @@ export function AppProvider({ children }) {
 
   const loadContacts = useCallback(async (clientId) => {
     if (!clientId) return;
-    const { data, error } = await supabase
-      .from('property_crm_contacts')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('updated_at', { ascending: false });
-    if (!error) setContacts((data || []).map(mapDbContact));
+    const PAGE = 1000;
+    let all = [], from = 0, done = false;
+    while (!done) {
+      const { data, error } = await supabase
+        .from('property_crm_contacts')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('updated_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) { console.error('loadContacts error:', error.message); break; }
+      all = [...all, ...(data || [])];
+      if (!data || data.length < PAGE) done = true;
+      else from += PAGE;
+    }
+    setContacts(all.map(mapDbContact));
   }, []);
 
   const saveContact = useCallback(async (contact) => {
