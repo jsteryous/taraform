@@ -227,28 +227,7 @@ export default function Dashboard({ onClose, onViewContact }) {
             </div>
           </div>
 
-          {/* ── Template performance ── */}
-          {data.templatePerformance?.length > 0 && (
-            <div style={card}>
-              <div style={sectionTitle}>Template Performance</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: '0', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem' }}>
-                <span>Template</span><span style={{ textAlign: 'right' }}>Sent</span><span style={{ textAlign: 'right' }}>Replies</span><span style={{ textAlign: 'right' }}>Reply %</span><span style={{ textAlign: 'right' }}>Interested</span><span style={{ textAlign: 'right' }}>Opt-outs</span>
-              </div>
-              {data.templatePerformance.map((t, i) => (
-                <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: '0', padding: '0.6rem 0', borderBottom: i < data.templatePerformance.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text)' }}>{t.name || `Touch ${t.touchNumber || i + 1}`}</div>
-                    {t.touchNumber && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Touch {t.touchNumber}</div>}
-                  </div>
-                  <NumCell value={t.sent} />
-                  <NumCell value={t.replies} />
-                  <NumCell value={t.replyRate !== null ? `${t.replyRate}%` : '—'} color={t.replyRate > 10 ? '#34d399' : t.replyRate > 5 ? '#fbbf24' : undefined} />
-                  <NumCell value={t.interested} color={t.interested > 0 ? '#10b981' : undefined} />
-                  <NumCell value={t.optOuts} color={t.optOuts > 0 ? '#f87171' : undefined} />
-                </div>
-              ))}
-            </div>
-          )}
+
 
           {/* ── Offers ── */}
           {(data?.offerStats?.allTimeCount || 0) > 0 ? (
@@ -256,7 +235,7 @@ export default function Dashboard({ onClose, onViewContact }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
                 <button
-                  onClick={() => downloadOffersReport(data.offerStats.allTime || [], [], period)}
+                  onClick={() => downloadOffersReport(data.offerStats.recent || [], [], period)}
                   style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   ↓ Download Report
@@ -338,26 +317,6 @@ export default function Dashboard({ onClose, onViewContact }) {
                 <KpiCard label="Blocked" value={emailData.blockedCount} color="#f87171" sub="do not email" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
                 <KpiCard label="Unverified" value={emailData.unverifiedCount} color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
               </div>
-
-              {/* Activity feed */}
-              {emailData.recent?.length > 0 && (
-                <div>
-                  <div style={sectionTitle}>Recent Sends</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                    <span>Contact</span><span>Subject</span><span style={{ textAlign: 'right' }}>Date</span>
-                  </div>
-                  {emailData.recent.map((m, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{m.contactName || '—'}</span>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{m.subject}</span>
-                      <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                        {m.sent_at ? new Date(m.sent_at).toLocaleDateString() : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {emailData.sentThisPeriod === 0 && (
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>
               )}
