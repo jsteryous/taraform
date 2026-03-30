@@ -19,6 +19,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   const [showEmail, setShowEmail]        = useState(false);
   const [showEmailVerify, setShowEmailVerify] = useState(false);
   const [paused, setPaused]              = useState(false);
+  const [emailAuto, setEmailAuto]        = useState(false);
   const dropRef = useRef(null);
   const themeRef = useRef(null);
   const clientDropRef = useRef(null);
@@ -39,6 +40,9 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
     getSetting('automation_paused', currentClientId)
       .then(d => setPaused(d.value === 'true'))
       .catch(() => {});
+    getSetting('email_automation_enabled', currentClientId)
+      .then(d => setEmailAuto(d.value === 'true'))
+      .catch(() => {});
   }, [currentClientId]);
 
   useEffect(() => {
@@ -56,6 +60,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
     if (id) {
       loadContacts(id);
       getSetting('automation_paused', id).then(d => setPaused(d.value === 'true')).catch(() => {});
+      getSetting('email_automation_enabled', id).then(d => setEmailAuto(d.value === 'true')).catch(() => {});
     }
   }
 
@@ -73,7 +78,21 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           <div className="header-left">
             <h1>Taraform</h1>
             <div className="client-switcher">
-              <div className={`sms-status-dot${paused ? ' paused' : ''}`} />
+              <div className={`sms-status-dot${paused ? ' paused' : ''}`} title={paused ? 'SMS paused' : 'SMS active'} />
+              <div
+                title={emailAuto ? 'Email automation on' : 'Email automation off'}
+                onClick={async () => {
+                  const next = !emailAuto;
+                  setEmailAuto(next);
+                  await putSetting('email_automation_enabled', next.toString(), currentClientId);
+                }}
+                style={{
+                  width: '8px', height: '8px', borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+                  background: emailAuto ? '#10b981' : '#6b7280',
+                  boxShadow: emailAuto ? '0 0 0 2px rgba(16,185,129,0.25)' : 'none',
+                  transition: 'all 0.2s',
+                }}
+              />
               <div ref={clientDropRef} style={{ position: 'relative' }}>
                 <button
                   onClick={() => setClientDropOpen(o => !o)}
@@ -146,6 +165,13 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                     setPaused(next); setDropOpen(false);
                   }}>
                     {paused ? '▶  Resume SMS' : '⏸  Pause SMS'}
+                  </button>
+                  <button onClick={async () => {
+                    const next = !emailAuto;
+                    await putSetting('email_automation_enabled', next.toString(), currentClientId);
+                    setEmailAuto(next); setDropOpen(false);
+                  }}>
+                    {emailAuto ? '⏸  Pause Email' : '▶  Resume Email'}
                   </button>
                 </div>
               )}

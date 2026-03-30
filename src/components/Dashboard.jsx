@@ -63,6 +63,7 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
+  const [emailData, setEmailData] = useState(null);
 
   // Compute offers from contacts (stored as JSONB array per contact)
   const offerStats = useMemo(() => {
@@ -98,12 +99,14 @@ export default function Dashboard({ onClose, onViewContact }) {
     if (!currentClientId) return;
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${BASE}/api/stats?client_id=${currentClientId}&period=${p}`);
-      if (!res.ok) throw new Error(await res.text());
-      const raw = await res.json();
-      // Normalize to prevent Object.keys(null) crashes
+      const [smsRes, emailRes] = await Promise.all([
+        fetch(`${BASE}/api/stats?client_id=${currentClientId}&period=${p}`),
+        fetch(`${BASE}/api/email/stats?client_id=${currentClientId}&period=${p}`).catch(() => null),
+      ]);
+      if (!smsRes.ok) throw new Error(await smsRes.text());
+      const raw = await smsRes.json();
       setData({
-        period:              raw.period              || period,
+        period:              raw.period              || p,
         sentThisPeriod:      raw.sentThisPeriod      || 0,
         repliesThisPeriod:   raw.repliesThisPeriod   || 0,
         replyRate:           raw.replyRate           ?? null,
@@ -116,6 +119,7 @@ export default function Dashboard({ onClose, onViewContact }) {
         totalContacts:       raw.totalContacts       || 0,
         templatePerformance: raw.templatePerformance || [],
       });
+      if (emailRes?.ok) setEmailData(await emailRes.json());
     } catch (e) {
       setError(e.message);
     } finally {
@@ -353,6 +357,49 @@ export default function Dashboard({ onClose, onViewContact }) {
               )}
             </div>
           ) : null}
+
+          {/* ── Email section ── */}
+          {emailData && (
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={sectionTitle}>Email — {PERIODS.find(p => p.value === period)?.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: emailData.autoEnabled ? '#10b981' : '#6b7280', display: 'inline-block' }} />
+                  {emailData.autoEnabled ? 'Automation on' : 'Automation off'}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <KpiCard label="Sent" value={emailData.sentThisPeriod} color="#60a5fa" sub={`${emailData.totalSent} all-time`} style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+                <KpiCard label="Verified" value={emailData.verifiedCount} color="#10b981" sub="safe to send" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+                <KpiCard label="Blocked" value={emailData.blockedCount} color="#f87171" sub="do not email" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+                <KpiCard label="Unverified" value={emailData.unverifiedCount} color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+              </div>
+
+              {/* Activity feed */}
+              {emailData.recent?.length > 0 && (
+                <div>
+                  <div style={sectionTitle}>Recent Sends</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+                    <span>Contact</span><span>Subject</span><span style={{ textAlign: 'right' }}>Date</span>
+                  </div>
+                  {emailData.recent.map((m, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{m.contactName || '—'}</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{m.subject}</span>
+                      <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
+                        {m.sent_at ? new Date(m.sent_at).toLocaleDateString() : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {emailData.sentThisPeriod === 0 && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>
+              )}
+            </div>
+          )}
 
           {/* ── Contact status breakdown ── */}
           {Object.keys(data.contactStatusCounts || {}).length > 0 && (
