@@ -208,7 +208,11 @@ export default function ImportModal({ open, onClose }) {
           updated_at: c.updatedAt,
         }));
         const { data, error } = await supabase.from('property_crm_contacts').insert(records).select();
-        if (error) throw error;
+        if (error) {
+          console.error('Import error details:', error);
+          console.error('First record sample:', JSON.stringify(records[0], null, 2));
+          throw error;
+        }
         setContacts(prev => [...(data || []).map(mapDbContact), ...prev]);
       }
 
