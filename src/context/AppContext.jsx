@@ -31,19 +31,34 @@ export function AppProvider({ children }) {
   const loadContacts = useCallback(async (clientId) => {
     if (!clientId) return;
     const PAGE = 1000;
-    let all = [], from = 0, done = false;
-    while (!done) {
-      const { data, error } = await supabase
-        .from('property_crm_contacts')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('updated_at', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error) { console.error('loadContacts error:', error.message); break; }
-      all = [...all, ...(data || [])];
-      if (!data || data.length < PAGE) done = true;
-      else from += PAGE;
+
+    // First fetch — also tells us total count
+    const first = await supabase
+      .from('property_crm_contacts')
+      .select('*', { count: 'exact' })
+      .eq('client_id', clientId)
+      .order('updated_at', { ascending: false })
+      .range(0, PAGE - 1);
+
+    if (first.error) { console.error('loadContacts error:', first.error.message); return; }
+    const total = first.count || 0;
+    let all = first.data || [];
+
+    // If more pages, fetch them all in parallel
+    if (total > PAGE) {
+      const pageCount = Math.ceil(total / PAGE);
+      const rest = await Promise.all(
+        Array.from({ length: pageCount - 1 }, (_, i) =>
+          supabase.from('property_crm_contacts')
+            .select('*')
+            .eq('client_id', clientId)
+            .order('updated_at', { ascending: false })
+            .range((i + 1) * PAGE, (i + 2) * PAGE - 1)
+        )
+      );
+      rest.forEach(r => { if (!r.error) all = [...all, ...(r.data || [])]; });
     }
+
     setContacts(all.map(mapDbContact));
   }, []);
 
