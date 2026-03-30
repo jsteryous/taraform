@@ -16,6 +16,8 @@ export default function EmailSettingsModal({ open, onClose }) {
   const [autoEnabled, setAutoEnabled]     = useState(false);
   const [dailyLimit, setDailyLimit]       = useState('25');
   const [savingAuto, setSavingAuto]       = useState(false);
+  const [verifyJob, setVerifyJob]         = useState(null);
+  const [verifying, setVerifying]         = useState(false);
 
   useEffect(() => {
     if (!open || !currentClientId) return;
@@ -24,21 +26,24 @@ export default function EmailSettingsModal({ open, onClose }) {
 
   async function loadAll() {
     setLoading(true);
-    const [statusRes, templatesRes, autoRes, limitRes] = await Promise.all([
+    const [statusRes, templatesRes, autoRes, limitRes, verifyRes] = await Promise.all([
       fetch(`${BASE}/api/email/status?client_id=${currentClientId}`),
       fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`),
       fetch(`${BASE}/api/settings/email_automation_enabled?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
       fetch(`${BASE}/api/settings/email_daily_limit?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
+      fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
     ]);
     const status    = await statusRes.json();
     const tmpl      = await templatesRes.json();
     const autoSett  = await autoRes.json().catch(() => ({}));
     const limitSett = await limitRes.json().catch(() => ({}));
+    const verify    = await verifyRes.json().catch(() => ({}));
     setConnected(status.connected);
     setConnEmail(status.email);
     setTemplates(Array.isArray(tmpl) ? tmpl : []);
     setAutoEnabled(autoSett?.value === 'true');
     setDailyLimit(limitSett?.value || '25');
+    setVerifyJob(verify?.status !== 'idle' ? verify : null);
     setLoading(false);
   }
 
@@ -103,6 +108,31 @@ export default function EmailSettingsModal({ open, onClose }) {
     setTemplates(ts => ts.filter(t => t.id !== id));
   }
 
+  async function startVerification() {
+    if (!confirm('This will verify all email addresses in Taraform using Reoon. Continue?')) return;
+    setVerifying(true);
+    try {
+      const res = await fetch(`${BASE}/api/email/verify-start`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: currentClientId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setVerifyJob({ status: 'running', total: data.total, checked: 0 });
+      // Poll for updates every 30s
+      const interval = setInterval(async () => {
+        const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
+        const j = await r.json();
+        setVerifyJob(j);
+        if (j.status === 'completed' || j.status === 'timeout') clearInterval(interval);
+      }, 30000);
+    } catch (e) {
+      alert('Verification failed: ' + e.message);
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function saveAutomation(enabled, limit) {
     setSavingAuto(true);
     await Promise.all([
@@ -131,7 +161,7 @@ export default function EmailSettingsModal({ open, onClose }) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="✉ Email Settings"
+    <Modal open={open} onClose={onClose} title="✉ Email Settings" maxHeight="92vh" width="600px"
       footer={<button onClick={onClose}>Close</button>}>
       {loading ? (
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
@@ -219,6 +249,50 @@ export default function EmailSettingsModal({ open, onClose }) {
             )}
             {savingAuto && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Saving…</div>
+            )}
+          </div>
+
+          {/* Email verification */}
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ ...lbl, marginBottom: 0 }}>Email Verification</div>
+              <button
+                onClick={startVerification}
+                disabled={verifying || verifyJob?.status === 'running'}
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.875rem', background: '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit', opacity: (verifying || verifyJob?.status === 'running') ? 0.6 : 1 }}
+              >
+                {verifying ? 'Starting…' : verifyJob?.status === 'running' ? 'Running…' : '🔍 Verify All Emails'}
+              </button>
+            </div>
+
+            {!verifyJob && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Submits all contact emails to Reoon for verification. Takes a few minutes. Email automation will only send to verified addresses.
+              </div>
+            )}
+
+            {verifyJob?.status === 'running' && (
+              <div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  Verifying {verifyJob.checked || 0} / {verifyJob.total || '?'} emails…
+                </div>
+                <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px' }}>
+                  <div style={{ height: '100%', width: verifyJob.total ? `${Math.round((verifyJob.checked || 0) / verifyJob.total * 100)}%` : '10%', background: '#6366f1', borderRadius: '2px', transition: 'width 0.5s' }} />
+                </div>
+              </div>
+            )}
+
+            {verifyJob?.status === 'completed' && (
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem' }}>
+                <span style={{ color: '#10b981' }}>✅ {verifyJob.verified} verified</span>
+                <span style={{ color: '#f87171' }}>❌ {verifyJob.blocked} blocked</span>
+                <span style={{ color: 'var(--text-muted)' }}>⏭ {verifyJob.skipped} unknown</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{verifyJob.completedAt ? new Date(verifyJob.completedAt).toLocaleDateString() : ''}</span>
+              </div>
+            )}
+
+            {verifyJob?.status === 'timeout' && (
+              <div style={{ fontSize: '0.8rem', color: '#fbbf24' }}>⚠ Verification timed out — try again</div>
             )}
           </div>
 
