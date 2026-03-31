@@ -338,11 +338,12 @@ export default function Dashboard({ onClose, onViewContact }) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 <KpiCard label="Sent" value={emailData.sentThisPeriod} color="#60a5fa" sub={`${emailData.totalSent} all-time`} style={{}} bigNum={bigNum} cardLabel={cardLabel} />
                 <KpiCard label="Verified" value={emailData.verifiedCount} color="#10b981" sub="safe to send" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
                 <KpiCard label="Blocked" value={emailData.blockedCount} color="#f87171" sub="do not email" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
                 <KpiCard label="Unverified" value={emailData.unverifiedCount} color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+                <KpiCard label="Unknown" value={emailData.unknownCount || 0} color="#6b7280" sub="unverifiable" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
               </div>
               {emailData.sentThisPeriod === 0 && (
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>

@@ -114,6 +114,7 @@ export default function EmailTab({ contact }) {
           {contact.emailStatus === 'verified'     && <span style={{ color: '#10b981' }}>✅ Email verified</span>}
           {contact.emailStatus === 'do_not_email' && <span style={{ color: '#f87171' }}>❌ Do not email</span>}
           {contact.emailStatus === 'eligible'     && <span style={{ color: '#f59e0b' }}>⚠ Email not yet verified</span>}
+          {contact.emailStatus === 'unknown'      && <span style={{ color: '#6b7280' }}>? Email unverifiable (Yahoo/AT&T/AOL)</span>}
           {contact.emailStatus === 'replied'      && <span style={{ color: '#60a5fa' }}>💬 Has replied</span>}
           {contact.emailStatus === 'contacted'    && <span style={{ color: '#6b7280' }}>📧 Contacted</span>}
         </div>
