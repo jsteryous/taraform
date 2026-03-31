@@ -122,12 +122,15 @@ export default function EmailSettingsModal({ open, onClose }) {
       if (data.error) throw new Error(data.error);
       setVerifyJob({ status: 'running', total: data.total, checked: 0 });
       // Poll for updates every 30s
+      const TERMINAL = ['completed', 'partial', 'failed', 'timeout', 'idle'];
       const interval = setInterval(async () => {
-        const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
-        const j = await r.json();
-        setVerifyJob(j);
-        if (j.status === 'completed' || j.status === 'timeout') clearInterval(interval);
-      }, 30000);
+        try {
+          const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
+          const j = await r.json();
+          setVerifyJob(j);
+          if (TERMINAL.includes(j.status)) clearInterval(interval);
+        } catch (e) { /* ignore */ }
+      }, 10000); // poll every 10s instead of 30s
     } catch (e) {
       alert('Verification failed: ' + e.message);
     } finally {
