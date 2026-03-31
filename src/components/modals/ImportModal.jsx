@@ -36,6 +36,7 @@ function autoMap(headers) {
     lastName:        ['last name fixed', 'matched last name', 'last name', 'lastname', 'last', 'lname', 'input last name'],
     phone:           ['phone1', 'phone', 'phone number', 'cell', 'mobile', 'telephone'],
     email:           ['email1', 'email', 'email address', 'e-mail'],
+    email2:          ['email2'],
     county:          ['input custom field 2', 'county'],
     taxMapId:        ['input custom field 1', 'tax map id', 'tax map', 'parcel id', 'parcel', 'pin', 'tax id'],
     ownerAddress:    ['confirmed mailing address', 'input mailing address', 'owner address', 'owner addr', 'mailing address', 'mailing'],
@@ -145,7 +146,11 @@ export default function ImportModal({ open, onClose }) {
         firstName:         mapping.firstName !== undefined ? (row[mapping.firstName] || '').trim() : '',
         lastName:          mapping.lastName  !== undefined ? (row[mapping.lastName]  || '').trim() : '',
         phones,
-        email:             mapping.email !== undefined ? (row[mapping.email] || '').trim() : '',
+        email:             (() => {
+                           const e1 = mapping.email  !== undefined ? (row[mapping.email]  || '').trim() : '';
+                           const e2 = mapping.email2 !== undefined ? (row[mapping.email2] || '').trim() : '';
+                           return e1 || e2;
+                         })(),
         county:            normalizeCounty(mapping.county !== undefined ? (row[mapping.county] || '').trim() : ''),
         ownerAddress,
         propertyAddresses: propertyAddr ? [propertyAddr] : [],
