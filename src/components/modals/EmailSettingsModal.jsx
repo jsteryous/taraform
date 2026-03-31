@@ -270,7 +270,7 @@ export default function EmailSettingsModal({ open, onClose }) {
               </button>
             </div>
 
-            {!verifyJob && (
+            {verifyJob?.status !== 'running' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flex: 1, lineHeight: 1.5 }}>
                   Only verifies <strong>unverified</strong> contacts. Set limit to match your daily credits.
