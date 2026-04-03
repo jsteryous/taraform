@@ -15,13 +15,13 @@ export default function StatsBar({ onFilterStatus }) {
     Promise.all(
       pills.map(({ status, label }) => {
         if (label === 'offers') {
-          // Count contacts with at least one offer record
-          return supabase.from('property_crm_contacts')
-            .select('id', { count: 'exact', head: true })
+          return supabase.from('contact_offers')
+            .select('contact_id')
             .eq('client_id', currentClientId)
-            .not('offers', 'eq', '[]')
-            .not('offers', 'is', null)
-            .then(({ count }) => ({ status, label, count: count || 0 }));
+            .then(({ data }) => {
+              const count = new Set((data || []).map(r => r.contact_id)).size;
+              return { status, label, count };
+            });
         }
         return supabase.from('property_crm_contacts')
           .select('id', { count: 'exact', head: true })
