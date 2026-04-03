@@ -81,11 +81,12 @@ export default function Dashboard({ onClose, onViewContact }) {
     const contactMap = Object.fromEntries(clientContacts.map(c => [c.id, c]));
     const contactIds = clientContacts.map(c => c.id);
 
-    const { data: allOffers } = await supabase
+    const { data: allOffers, error: offersError } = await supabase
       .from('contact_offers')
       .select('*')
       .in('contact_id', contactIds)
       .order('created_at', { ascending: false });
+    if (offersError) console.error('loadOfferStats offers error:', offersError);
 
     const offers = allOffers || [];
     const allTimeCount = offers.length;
@@ -311,7 +312,7 @@ export default function Dashboard({ onClose, onViewContact }) {
 
 
           {/* ── Offers ── */}
-          {(offerStats?.allTimeCount || 0) > 0 ? (
+          {offerStats !== null && (
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
@@ -379,7 +380,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                 </div>
               )}
             </div>
-          ) : null}
+          )}
 
           {/* ── Email section ── */}
           {emailData && (
