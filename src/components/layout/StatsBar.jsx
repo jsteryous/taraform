@@ -16,8 +16,8 @@ export default function StatsBar({ onFilterStatus }) {
       pills.map(({ status, label }) => {
         if (label === 'offers') {
           return supabase.from('contact_offers')
-            .select('id', { count: 'exact', head: true })
-            .eq('client_id', currentClientId)
+            .select('id, property_crm_contacts!inner(client_id)', { count: 'exact', head: true })
+            .eq('property_crm_contacts.client_id', currentClientId)
             .then(({ count }) => ({ status, label, count: count || 0 }));
         }
         return supabase.from('property_crm_contacts')

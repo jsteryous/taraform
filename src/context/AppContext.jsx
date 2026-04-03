@@ -112,14 +112,16 @@ export function AppProvider({ children }) {
   const loadFullContact = useCallback(async (contactId) => {
     const { data, error } = await supabase
       .from('property_crm_contacts').select('*').eq('id', contactId).single();
-    if (error || !data) return null;
+    if (error || !data) { console.error('loadFullContact contact error:', error); return null; }
     const full = mapDbContact(data);
     const { data: offerRows, error: offersError } = await supabase
       .from('contact_offers').select('*').eq('contact_id', contactId).order('created_at', { ascending: true });
+    if (offersError) console.error('loadFullContact offers error:', offersError);
     full.offers = offersError
       ? []
       : (offerRows || []).map(row => ({ id: row.id, amount: row.amount, status: row.status, notes: row.notes, createdAt: row.created_at }));
     setContacts(prev => prev.map(c => c.id === full.id ? full : c));
+    setCurrentContact(prev => prev?.id === full.id ? full : prev);
     return full;
   }, []);
 

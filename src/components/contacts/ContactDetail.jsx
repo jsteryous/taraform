@@ -35,7 +35,7 @@ export default function ContactDetail({ onClose }) {
 
   useEffect(() => {
     if (currentContact) setDraft({ ...currentContact });
-  }, [currentContact?.id]);
+  }, [currentContact?.id, currentContact?.offers]);
 
   if (!currentContact || !draft) return null;
 

@@ -9,7 +9,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
   const [editing, setEditing]     = useState(null);
   const [form, setForm]           = useState({ amount: '', status: 'Pending', notes: '' });
 
-  const offers = contact.offers || [];
+  const offers = Array.isArray(contact.offers) ? contact.offers : [];
 
   function openAdd() {
     setEditing(null);

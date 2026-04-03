@@ -83,6 +83,7 @@ export function mapDbContact(d) {
     customFields: d.custom_fields || {},
     createdAt: d.created_at,
     updatedAt: d.updated_at,
+    clientId: d.client_id,
   };
 }
 

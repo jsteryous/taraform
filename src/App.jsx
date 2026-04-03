@@ -80,7 +80,10 @@ function CRM() {
     const id = new URLSearchParams(window.location.search).get('contact');
     if (id && contacts.length) {
       const found = contacts.find(c => c.id == id);
-      if (found) setCurrentContact(found);
+      if (found) {
+        setCurrentContact(found);
+        loadFullContact(found.id);
+      }
     }
   }, [contacts]);
 
