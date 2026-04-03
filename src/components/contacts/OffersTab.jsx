@@ -3,7 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
 
-export default function OffersTab({ contact, onChange, onChangeMultiple }) {
+export default function OffersTab({ contact, onChange, onChangeMultiple, onOffersChange }) {
   const { loadFullContact } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
@@ -28,13 +28,15 @@ export default function OffersTab({ contact, onChange, onChangeMultiple }) {
     try {
       if (editing) {
         await updateOffer(contact.id, editing, form);
-        await loadFullContact(contact.id);
+        const updated = await loadFullContact(contact.id);
+        if (updated && onOffersChange) onOffersChange(updated.offers || []);
         if (form.status === 'Rejected' && onChangeMultiple) {
           onChangeMultiple({ status: 'Offer Rejected/NFS' });
         }
       } else {
-        await addOffer(contact.id, { ...form, client_id: contact.clientId });
-        await loadFullContact(contact.id);
+        await addOffer(contact.id, { ...form, clientId: contact.clientId });
+        const updated = await loadFullContact(contact.id);
+        if (updated && onOffersChange) onOffersChange(updated.offers || []);
         if (onChangeMultiple) onChangeMultiple({ status: 'Offer Made' });
       }
       setShowModal(false);
@@ -48,8 +50,9 @@ export default function OffersTab({ contact, onChange, onChangeMultiple }) {
     if (!confirm('Remove this offer?')) return;
     try {
       await deleteOffer(contact.id, id, contact.clientId);
-      await loadFullContact(contact.id);
-      onChange('offers', offers.filter(o => o.id !== id));
+      const updated = await loadFullContact(contact.id);
+      if (updated && onOffersChange) onOffersChange(updated.offers || []);
+      else onChange('offers', offers.filter(o => o.id !== id));
     } catch (e) {
       console.error(e);
       alert('Failed to save offer');
