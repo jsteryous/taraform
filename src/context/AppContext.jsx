@@ -118,7 +118,6 @@ export function AppProvider({ children }) {
       .from('contact_offers')
       .select('id, amount, status, notes, created_at, property_crm_contacts!inner(client_id)')
       .eq('contact_id', contactId)
-      .eq('property_crm_contacts.client_id', full.clientId)
       .order('created_at', { ascending: true });
     if (offersError) console.error('loadFullContact offers error:', offersError);
     full.offers = offersError

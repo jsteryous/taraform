@@ -35,10 +35,14 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
         }
       } else {
         await addOffer(contact.id, { ...form, clientId: contact.clientId });
+        // Show immediately with a temp id
+        const tempOffer = { id: `_tmp_${Date.now()}`, amount: form.amount, status: form.status, notes: form.notes || '', createdAt: new Date().toISOString() };
+        if (onOffersChange) onOffersChange([...offers, tempOffer]);
         if (onChangeMultiple) onChangeMultiple({ status: 'Offer Made' });
-        // Sync from DB to get the real id
-        const updated = await loadFullContact(contact.id);
-        if (updated && onOffersChange) onOffersChange(updated.offers || []);
+        // Background sync to replace temp id with real DB row
+        loadFullContact(contact.id).then(updated => {
+          if (updated?.offers?.length) onOffersChange(updated.offers);
+        });
       }
       setShowModal(false);
     } catch (e) {

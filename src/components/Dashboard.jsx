@@ -89,7 +89,8 @@ export default function Dashboard({ onClose, onViewContact }) {
     }));
 
     const allTimeCount = offers.length;
-    const periodOffers = since ? offers.filter(o => o.created_at >= since) : offers;
+    const sinceMs = since ? new Date(since).getTime() : null;
+    const periodOffers = sinceMs ? offers.filter(o => new Date(o.created_at).getTime() >= sinceMs) : offers;
 
     const uniqueContacts = new Set(periodOffers.map(o => o.contact_id));
     const totalValue = periodOffers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
