@@ -28,16 +28,17 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
     try {
       if (editing) {
         await updateOffer(contact.id, editing, { ...form, clientId: contact.clientId });
-        const updated = await loadFullContact(contact.id);
-        if (updated && onOffersChange) onOffersChange(updated.offers || []);
+        // Update immediately from form — don't wait for DB round-trip
+        if (onOffersChange) onOffersChange(offers.map(o => o.id === editing ? { ...o, ...form } : o));
         if (form.status === 'Rejected' && onChangeMultiple) {
           onChangeMultiple({ status: 'Offer Rejected/NFS' });
         }
       } else {
         await addOffer(contact.id, { ...form, clientId: contact.clientId });
+        if (onChangeMultiple) onChangeMultiple({ status: 'Offer Made' });
+        // Sync from DB to get the real id
         const updated = await loadFullContact(contact.id);
         if (updated && onOffersChange) onOffersChange(updated.offers || []);
-        if (onChangeMultiple) onChangeMultiple({ status: 'Offer Made' });
       }
       setShowModal(false);
     } catch (e) {
@@ -50,12 +51,11 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
     if (!confirm('Remove this offer?')) return;
     try {
       await deleteOffer(contact.id, id, contact.clientId);
-      const updated = await loadFullContact(contact.id);
-      if (updated && onOffersChange) onOffersChange(updated.offers || []);
-      else onChange('offers', offers.filter(o => o.id !== id));
+      // Update immediately
+      if (onOffersChange) onOffersChange(offers.filter(o => o.id !== id));
     } catch (e) {
       console.error(e);
-      alert('Failed to save offer');
+      alert('Failed to remove offer');
     }
   }
 
