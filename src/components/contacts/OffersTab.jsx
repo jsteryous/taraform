@@ -27,7 +27,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
     if (!form.amount) return;
     try {
       if (editing) {
-        await updateOffer(contact.id, editing, form);
+        await updateOffer(contact.id, editing, { ...form, clientId: contact.clientId });
         const updated = await loadFullContact(contact.id);
         if (updated && onOffersChange) onOffersChange(updated.offers || []);
         if (form.status === 'Rejected' && onChangeMultiple) {

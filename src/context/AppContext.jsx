@@ -115,7 +115,11 @@ export function AppProvider({ children }) {
     if (error || !data) { console.error('loadFullContact contact error:', error); return null; }
     const full = mapDbContact(data);
     const { data: offerRows, error: offersError } = await supabase
-      .from('contact_offers').select('*').eq('contact_id', contactId).order('created_at', { ascending: true });
+      .from('contact_offers')
+      .select('id, amount, status, notes, created_at, property_crm_contacts!inner(client_id)')
+      .eq('contact_id', contactId)
+      .eq('property_crm_contacts.client_id', full.clientId)
+      .order('created_at', { ascending: true });
     if (offersError) console.error('loadFullContact offers error:', offersError);
     full.offers = offersError
       ? []
