@@ -13,13 +13,19 @@ export default function StatsBar({ onFilterStatus }) {
     // Run count queries for each status pill in parallel
     const pills = cfg.statsPills.filter(p => p.status !== null);
     Promise.all(
-      pills.map(({ status, label }) =>
-        supabase.from('property_crm_contacts')
+      pills.map(({ status, label }) => {
+        if (label === 'offers') {
+          return supabase.from('contact_offers')
+            .select('id, property_crm_contacts!inner(client_id)', { count: 'exact', head: true })
+            .eq('property_crm_contacts.client_id', currentClientId)
+            .then(({ count }) => ({ status, label, count: count || 0 }));
+        }
+        return supabase.from('property_crm_contacts')
           .select('id', { count: 'exact', head: true })
           .eq('client_id', currentClientId)
           .eq('status', status)
-          .then(({ count }) => ({ status, label, count: count || 0 }))
-      )
+          .then(({ count }) => ({ status, label, count: count || 0 }));
+      })
     ).then(results => {
       const map = {};
       results.forEach(r => { map[r.label] = r.count; });
