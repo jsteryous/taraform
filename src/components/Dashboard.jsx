@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { resolveConfig } from '../lib/clientConfig';
+import { supabase } from '../lib/supabase';
 
 const BASE = 'https://taraform-server-production.up.railway.app';
 
@@ -56,8 +57,62 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
   const [emailData, setEmailData] = useState(null);
+  const [offerStats, setOfferStats] = useState(null);
 
+  const loadOfferStats = useCallback(async (p) => {
+    if (!currentClientId) return;
 
+    const now = new Date();
+    let since = null;
+    if (p === 'today')      since = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    else if (p === 'week')  since = new Date(now - 7 * 86400000).toISOString();
+    else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
+
+    const { data: clientContacts } = await supabase
+      .from('property_crm_contacts')
+      .select('id, first_name, last_name, county, tax_map_ids')
+      .eq('client_id', currentClientId);
+
+    if (!clientContacts?.length) {
+      setOfferStats({ allTimeCount: 0, count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] });
+      return;
+    }
+
+    const contactMap = Object.fromEntries(clientContacts.map(c => [c.id, c]));
+    const contactIds = clientContacts.map(c => c.id);
+
+    const { data: allOffers } = await supabase
+      .from('contact_offers')
+      .select('*')
+      .in('contact_id', contactIds)
+      .order('created_at', { ascending: false });
+
+    const offers = allOffers || [];
+    const allTimeCount = offers.length;
+    const periodOffers = since ? offers.filter(o => o.created_at >= since) : offers;
+
+    const uniqueContacts = new Set(periodOffers.map(o => o.contact_id));
+    const totalValue = periodOffers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+    const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
+    const byStatus = {};
+    for (const o of periodOffers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
+
+    const recent = periodOffers.slice(0, 10).map(o => {
+      const c = contactMap[o.contact_id] || {};
+      return {
+        contactId: o.contact_id,
+        contactName: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+        county: c.county || '',
+        taxMapIds: c.tax_map_ids || [],
+        amount: o.amount,
+        status: o.status,
+        notes: o.notes,
+        createdAt: o.created_at,
+      };
+    });
+
+    setOfferStats({ allTimeCount, count: uniqueContacts.size, totalCount: periodOffers.length, totalValue, acceptedValue, byStatus, recent });
+  }, [currentClientId]);
 
   const load = useCallback(async (p) => {
     if (!currentClientId) return;
@@ -82,7 +137,6 @@ export default function Dashboard({ onClose, onViewContact }) {
         pendingFollowUps:    raw.pendingFollowUps    || 0,
         totalContacts:       raw.totalContacts       || 0,
         templatePerformance: raw.templatePerformance || [],
-        offerStats:          raw.offerStats          || null,
       });
       if (emailRes?.ok) setEmailData(await emailRes.json());
     } catch (e) {
@@ -92,7 +146,7 @@ export default function Dashboard({ onClose, onViewContact }) {
     }
   }, [currentClientId]);
 
-  useEffect(() => { load(period); }, [period, load]);
+  useEffect(() => { load(period); loadOfferStats(period); }, [period, load, loadOfferStats]);
 
   const term = cfg.terminology?.contacts || 'Contacts';
 
@@ -257,37 +311,37 @@ export default function Dashboard({ onClose, onViewContact }) {
 
 
           {/* ── Offers ── */}
-          {(data?.offerStats?.allTimeCount || 0) > 0 ? (
+          {(offerStats?.allTimeCount || 0) > 0 ? (
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
                 <button
-                  onClick={() => downloadOffersReport(data.offerStats.recent || [], [], period)}
+                  onClick={() => downloadOffersReport(offerStats.recent || [], [], period)}
                   style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   ↓ Download Report
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (data?.offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
-                  <div style={{ ...bigNum, color: '#fbbf24' }}>{data?.offerStats?.count || 0}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{data?.offerStats?.totalCount || 0} total offer{data?.offerStats?.totalCount || 0 !== 1 ? 's' : ''}</div>
+                  <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats?.count || 0}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats?.totalCount || 0} total offer{offerStats?.totalCount !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
-                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${(data?.offerStats?.totalValue || 0).toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${(offerStats?.totalValue || 0).toLocaleString()}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Accepted Value</div>
-                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${(data?.offerStats?.acceptedValue || 0).toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${(offerStats?.acceptedValue || 0).toLocaleString()}</div>
                 </div>
               </div>
 
               {/* Status breakdown */}
-              {Object.keys(data?.offerStats?.byStatus || {}).length > 0 && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: (data?.offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
-                  {Object.entries(data?.offerStats?.byStatus || {}).map(([status, count]) => {
+              {Object.keys(offerStats?.byStatus || {}).length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: (offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
+                  {Object.entries(offerStats?.byStatus || {}).map(([status, count]) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     const c = colors[status] || '#6b7280';
                     return (
@@ -301,13 +355,13 @@ export default function Dashboard({ onClose, onViewContact }) {
               )}
 
               {/* Recent offers list */}
-              {(data?.offerStats?.recent || []).length > 0 && (
+              {(offerStats?.recent || []).length > 0 && (
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.5rem' }}>Recent Offers</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
                     <span>Contact</span><span>County</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
-                  {(data?.offerStats?.recent || []).map((o, i) => {
+                  {(offerStats?.recent || []).map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
