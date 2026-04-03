@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-import { createClient, updateClient, deleteClient, getClients } from '../../lib/api';
+import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser } from '../../lib/api';
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
 
 const ALL_TABS      = ['notes', 'sms', 'offers'];
@@ -76,7 +76,7 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
             </div>
             {activeEditor === c.id && (
               <ClientEditor client={c} tab={editorTab} onTabChange={setEditorTab}
-                onSave={patch => saveClientConfig(c.id, patch)} />
+                onSave={patch => saveClientConfig(c.id, patch)} showToast={showToast} />
             )}
           </div>
         ))}
@@ -100,23 +100,25 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   );
 }
 
-function ClientEditor({ client, tab, onTabChange, onSave }) {
+function ClientEditor({ client, tab, onTabChange, onSave, showToast }) {
+  const TAB_LABELS = { config: 'View Config', fields: 'Custom Fields', members: 'Members' };
   return (
     <div style={{ marginTop: '0.75rem', background: 'var(--bg)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-        {['config', 'fields'].map(t => (
+        {['config', 'fields', 'members'].map(t => (
           <button key={t} onClick={() => onTabChange(t)} style={{
             padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 600, background: 'none', border: 'none',
             borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
             color: tab === t ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)',
           }}>
-            {t === 'config' ? 'View Config' : 'Custom Fields'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
       <div style={{ padding: '1rem' }}>
-        {tab === 'config' && <ViewConfig client={client} onSave={onSave} />}
-        {tab === 'fields' && <FieldEditor client={client} onSave={defs => onSave({ custom_field_definitions: defs.filter(d => d.key && d.label) })} />}
+        {tab === 'config'  && <ViewConfig client={client} onSave={onSave} />}
+        {tab === 'fields'  && <FieldEditor client={client} onSave={defs => onSave({ custom_field_definitions: defs.filter(d => d.key && d.label) })} />}
+        {tab === 'members' && <MembersEditor client={client} showToast={showToast} />}
       </div>
     </div>
   );
@@ -277,6 +279,89 @@ function Chip({ active, label, color, onChange }) {
     }}>
       {active ? '✓ ' : ''}{label}
     </button>
+  );
+}
+
+function MembersEditor({ client, showToast }) {
+  const [members, setMembers] = useState([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getClientUsers(client.id)
+      .then(setMembers)
+      .catch(() => {});
+  }, [client.id]);
+
+  async function handleInvite() {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setLoading(true);
+    try {
+      await addClientUser(client.id, email);
+      const updated = await getClientUsers(client.id);
+      setMembers(updated);
+      setInviteEmail('');
+      showToast(`${email} added`);
+    } catch (err) {
+      showToast(err.message || 'Failed to add user');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRemove(userId, email) {
+    if (!confirm(`Remove ${email} from this client?`)) return;
+    try {
+      await removeClientUser(client.id, userId);
+      setMembers(m => m.filter(u => u.user_id !== userId));
+      showToast('Member removed');
+    } catch (err) {
+      showToast(err.message || 'Failed to remove user');
+    }
+  }
+
+  const sL = { fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '0.5rem', fontFamily: 'var(--mono)' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div>
+        <div style={sL}>Current Members</div>
+        {members.length === 0 ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No members yet.</div>
+        ) : members.map(m => (
+          <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.85rem' }}>
+            <div>
+              <span style={{ color: 'var(--text)' }}>{m.email || m.user_id}</span>
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', fontFamily: 'var(--mono)', color: m.role === 'owner' ? 'var(--accent)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{m.role}</span>
+            </div>
+            {m.role !== 'owner' && (
+              <button className="btn-small btn-danger" onClick={() => handleRemove(m.user_id, m.email)} style={{ padding: '0.2rem 0.5rem' }}>Remove</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div style={sL}>Invite by Email</div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleInvite()}
+            placeholder="user@example.com"
+            style={{ flex: 1, fontSize: '0.85rem' }}
+          />
+          <button className="btn-primary btn-small" onClick={handleInvite} disabled={loading}>
+            {loading ? '…' : 'Add'}
+          </button>
+        </div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+          User must already have a Taraform account.
+        </div>
+      </div>
+    </div>
   );
 }
 
