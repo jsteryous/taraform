@@ -4,7 +4,7 @@ import { mapDbContact, mapContactToDb } from '../lib/utils';
 
 const AppContext = createContext(null);
 
-const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,offers,updated_at,created_at,client_id,user_id';
+const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
 
 export function AppProvider({ children }) {
@@ -114,6 +114,11 @@ export function AppProvider({ children }) {
       .from('property_crm_contacts').select('*').eq('id', contactId).single();
     if (error || !data) return null;
     const full = mapDbContact(data);
+    const { data: offerRows, error: offersError } = await supabase
+      .from('contact_offers').select('*').eq('contact_id', contactId).order('created_at', { ascending: true });
+    full.offers = offersError
+      ? []
+      : (offerRows || []).map(row => ({ id: row.id, amount: row.amount, status: row.status, notes: row.notes, createdAt: row.created_at }));
     setContacts(prev => prev.map(c => c.id === full.id ? full : c));
     return full;
   }, []);
