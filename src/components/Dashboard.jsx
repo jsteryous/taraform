@@ -68,27 +68,26 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'week')  since = new Date(now - 7 * 86400000).toISOString();
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
-    const { data: clientContacts } = await supabase
-      .from('property_crm_contacts')
-      .select('id, first_name, last_name, county, tax_map_ids')
-      .eq('client_id', currentClientId);
-
-    if (!clientContacts?.length) {
-      setOfferStats({ allTimeCount: 0, count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] });
-      return;
-    }
-
-    const contactMap = Object.fromEntries(clientContacts.map(c => [c.id, c]));
-    const contactIds = clientContacts.map(c => c.id);
-
-    const { data: allOffers, error: offersError } = await supabase
+    // Use inner join — same pattern that RLS allows (confirmed working via StatsBar)
+    const { data: rows, error: offersError } = await supabase
       .from('contact_offers')
-      .select('*')
-      .in('contact_id', contactIds)
+      .select('*, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
+      .eq('property_crm_contacts.client_id', currentClientId)
       .order('created_at', { ascending: false });
-    if (offersError) console.error('loadOfferStats offers error:', offersError);
+    if (offersError) console.error('loadOfferStats error:', offersError);
 
-    const offers = allOffers || [];
+    const offers = (rows || []).map(row => ({
+      id: row.id,
+      contact_id: row.contact_id,
+      amount: row.amount,
+      status: row.status,
+      notes: row.notes,
+      created_at: row.created_at,
+      contactName: `${row.property_crm_contacts?.first_name || ''} ${row.property_crm_contacts?.last_name || ''}`.trim(),
+      county: row.property_crm_contacts?.county || '',
+      taxMapIds: row.property_crm_contacts?.tax_map_ids || [],
+    }));
+
     const allTimeCount = offers.length;
     const periodOffers = since ? offers.filter(o => o.created_at >= since) : offers;
 
@@ -98,19 +97,16 @@ export default function Dashboard({ onClose, onViewContact }) {
     const byStatus = {};
     for (const o of periodOffers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
 
-    const recent = periodOffers.slice(0, 10).map(o => {
-      const c = contactMap[o.contact_id] || {};
-      return {
-        contactId: o.contact_id,
-        contactName: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
-        county: c.county || '',
-        taxMapIds: c.tax_map_ids || [],
-        amount: o.amount,
-        status: o.status,
-        notes: o.notes,
-        createdAt: o.created_at,
-      };
-    });
+    const recent = periodOffers.slice(0, 10).map(o => ({
+      contactId: o.contact_id,
+      contactName: o.contactName,
+      county: o.county,
+      taxMapIds: o.taxMapIds,
+      amount: o.amount,
+      status: o.status,
+      notes: o.notes,
+      createdAt: o.created_at,
+    }));
 
     setOfferStats({ allTimeCount, count: uniqueContacts.size, totalCount: periodOffers.length, totalValue, acceptedValue, byStatus, recent });
   }, [currentClientId]);
