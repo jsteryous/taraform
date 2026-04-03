@@ -48,7 +48,6 @@ export default function AddContactModal({ open, onClose }) {
       taxMapIds: form.taxMapIds.filter(Boolean),
       status: form.status,
       notes: form.notes.trim(),
-      offers: [],
       activityLog: form.notes ? [{ id: Date.now(), text: form.notes, timestamp: new Date().toISOString(), type: 'note' }] : [],
       customFields: {},
       smsStatus: 'eligible',

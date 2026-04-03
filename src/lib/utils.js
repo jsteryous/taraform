@@ -104,7 +104,6 @@ export function mapContactToDb(contact, userId, clientId) {
     tax_map_ids: contact.taxMapIds,
     status: contact.status,
     notes: contact.notes,
-    offers: contact.offers,
     activity_log: contact.activityLog,
     custom_fields: contact.customFields || {},
     created_at: contact.createdAt,

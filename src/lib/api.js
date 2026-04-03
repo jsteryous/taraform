@@ -28,3 +28,8 @@ export const putSetting      = (key, value, cid) => req(`/api/settings/${key}`, 
 // SMS
 export const getMessages     = (contactId)  => req(`/api/messages/${contactId}`);
 export const sendMessage     = (body)       => req('/api/send', { method: 'POST', body: JSON.stringify(body) });
+
+// Offers
+export const addOffer    = (contactId, body)              => req(`/api/contacts/${contactId}/offers`, { method: 'POST', body: JSON.stringify(body) });
+export const updateOffer = (contactId, offerId, body)     => req(`/api/contacts/${contactId}/offers/${offerId}`, { method: 'PUT', body: JSON.stringify(body) });
+export const deleteOffer = (contactId, offerId, clientId) => req(`/api/contacts/${contactId}/offers/${offerId}?client_id=${clientId}`, { method: 'DELETE' });

@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import Modal from '../shared/Modal';
+import { useApp } from '../../context/AppContext';
+import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
 
 export default function OffersTab({ contact, onChange, onChangeMultiple }) {
+  const { loadFullContact } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
   const [form, setForm]           = useState({ amount: '', status: 'Pending', notes: '' });
@@ -20,28 +23,37 @@ export default function OffersTab({ contact, onChange, onChangeMultiple }) {
     setShowModal(true);
   }
 
-  function save() {
+  async function save() {
     if (!form.amount) return;
-    const updatedOffers = editing
-      ? offers.map(o => o.id === editing ? { ...o, ...form } : o)
-      : [...offers, { id: Date.now(), ...form, createdAt: new Date().toISOString() }];
-
-    if (!editing && onChangeMultiple) {
-      // New offer — set contact status to Offer Made
-      onChangeMultiple({ offers: updatedOffers, status: 'Offer Made' });
-    } else if (editing && form.status === 'Rejected' && onChangeMultiple) {
-      // Edited to Rejected — set contact status to Offer Rejected/NFS
-      onChangeMultiple({ offers: updatedOffers, status: 'Offer Rejected/NFS' });
-    } else {
-      onChange('offers', updatedOffers);
+    try {
+      if (editing) {
+        await updateOffer(contact.id, editing, form);
+        await loadFullContact(contact.id);
+        if (form.status === 'Rejected' && onChangeMultiple) {
+          onChangeMultiple({ status: 'Offer Rejected/NFS' });
+        }
+      } else {
+        await addOffer(contact.id, { ...form, client_id: contact.clientId });
+        await loadFullContact(contact.id);
+        if (onChangeMultiple) onChangeMultiple({ status: 'Offer Made' });
+      }
+      setShowModal(false);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save offer');
     }
-
-    setShowModal(false);
   }
 
-  function remove(id) {
+  async function remove(id) {
     if (!confirm('Remove this offer?')) return;
-    onChange('offers', offers.filter(o => o.id !== id));
+    try {
+      await deleteOffer(contact.id, id, contact.clientId);
+      await loadFullContact(contact.id);
+      onChange('offers', offers.filter(o => o.id !== id));
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save offer');
+    }
   }
 
   const statusColors = {

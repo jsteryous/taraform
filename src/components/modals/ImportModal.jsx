@@ -157,7 +157,7 @@ export default function ImportModal({ open, onClose }) {
         taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
         acreage:           acreage || '',
         customFields:      {},
-        status: 'New Lead', offers: [], activityLog: [],
+        status: 'New Lead', activityLog: [],
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
     }).filter(c => c.firstName || c.lastName);
