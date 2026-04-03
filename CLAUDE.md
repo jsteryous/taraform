@@ -17,7 +17,7 @@ src/
   index.css
   lib/
     supabase.js         — Supabase client
-    api.js              — fetch wrappers for Railway server
+    api.js              — fetch wrappers for Railway server (always sends JWT)
     utils.js            — formatPhone, normalizeCounty, mapDbContact, mapContactToDb
     clientConfig.js     — LAND_CONFIG, resolveConfig, getStatusColor, statsPills
   context/
@@ -40,12 +40,12 @@ src/
     modals/EmailSettingsModal.jsx   — Outlook connect, Reoon verify, templates
     modals/EmailVerificationImportModal.jsx
     modals/SendEmailModal.jsx
-    modals/ManageClientsModal.jsx
+    modals/ManageClientsModal.jsx   — create/edit clients + Members tab (invite by email, remove)
     modals/TemplatesModal.jsx
     modals/SmsSettingsModal.jsx
     shared/Modal.jsx
     shared/Toast.jsx
-    Dashboard.jsx       — pipeline, SMS KPIs, offer stats (server-side), email stats
+    Dashboard.jsx       — pipeline, SMS KPIs, offer stats (Supabase direct), email stats
 ```
 
 ## Key patterns
@@ -63,13 +63,34 @@ All client-specific UI (statuses, colors, tabs, visible fields) comes from `reso
 
 ### API calls
 All calls to the Railway server go through `src/lib/api.js`.
+Every request automatically attaches the Supabase session JWT as `Authorization: Bearer <token>`.
 Server base URL: `https://taraform-server-production.up.railway.app`
+
+## Multi-tenancy architecture
+Access control is enforced at two layers:
+
+**Railway server** — `/api/clients` reads the JWT, looks up `client_users` for that user's client IDs, and returns only those clients. All client management routes (create, update, delete, add/remove members) are gated by membership checks server-side.
+
+**Supabase RLS** — Row Level Security is enabled on:
+- `property_crm_contacts` — users can only read/write contacts belonging to clients they're a member of
+- `contact_offers` — access via contact → client membership chain
+
+**client_users table** — junction table mapping users to clients:
+- columns: id, client_id, user_id, role ('owner' | 'member'), created_at
+- unique(client_id, user_id)
+- RLS policy: `user_id = auth.uid()` (direct check — never self-referential)
+- To add a user to a client: Manage Clients → Configure → Members tab → enter email → Add
+- The invited user must already have a Taraform account (signed up first)
 
 ## Database (Supabase)
 URL: https://ykuenmwfxecmmqichwit.supabase.co
 Key tables: property_crm_contacts, sms_messages, sms_templates, sms_followup_queue,
-            sms_settings, clients, email_tokens, email_templates, email_messages,
-            email_followup_queue
+            sms_settings, clients, client_users, email_tokens, email_templates,
+            email_messages, email_followup_queue, contact_offers
+
+contact_offers columns: id, contact_id, client_id (may be null on older rows), amount, status, notes, created_at
+contact_offers status values: Pending | Accepted | Rejected | Countered
+Note: client_id is not reliably populated on all rows — always join through property_crm_contacts when filtering by client
 
 email_status values: eligible | verified | do_not_email | unknown | contacted | replied
 
@@ -82,6 +103,6 @@ email_status values: eligible | verified | do_not_email | unknown | contacted | 
 
 ## Deploying
 ```bash
-npm run build && npm run deploy
+npm run build && npx gh-pages -d dist
 ```
 GitHub Pages serves from the `gh-pages` branch automatically.
