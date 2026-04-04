@@ -182,21 +182,10 @@ function ViewConfig({ client, onSave }) {
   function toggleColumn(c) { setColumns(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]); }
 
   function handleSave() {
-    // Preserve custom_field_definitions when saving general settings
-    const existingCustomFields = client.config?.custom_field_definitions;
     onSave({
       name: name.trim(),
       twilio_number: twilio.trim() || null,
-      config: {
-        type,
-        terminology: { contact: term, contacts: term + 's' },
-        statuses,
-        statsPills: pills,
-        tabs,
-        visibleFields: fields,
-        listColumns: columns,
-        ...(existingCustomFields !== undefined ? { custom_field_definitions: existingCustomFields } : {}),
-      },
+      config: { type, terminology: { contact: term, contacts: term + 's' }, statuses, statsPills: pills, tabs, visibleFields: fields, listColumns: columns },
     });
   }
 
@@ -393,8 +382,11 @@ function MembersEditor({ client, showToast }) {
 }
 
 function FieldEditor({ client, onSave }) {
-  // custom_field_definitions lives inside config to avoid a separate DB column
-  const [defs, setDefs] = useState(client.config?.custom_field_definitions || []);
+  const [defs, setDefs] = useState(() => {
+    const raw = client.custom_field_definitions;
+    if (!raw) return [];
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  });
 
   function add() { setDefs(d => [...d, { key: '', label: '' }]); }
   function remove(i) { setDefs(d => d.filter((_, idx) => idx !== i)); }
@@ -411,8 +403,7 @@ function FieldEditor({ client, onSave }) {
 
   function handleSave() {
     const filtered = defs.filter(d => d.key && d.label);
-    // Merge into config so it's stored in the config JSONB column
-    onSave({ config: { ...(client.config || {}), custom_field_definitions: filtered } });
+    onSave({ custom_field_definitions: filtered });
   }
 
   return (

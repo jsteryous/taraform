@@ -20,7 +20,11 @@ export default function TemplatesModal({ open, onClose }) {
   const [form, setForm]           = useState({ name: '', body: '', touch_number: 1 });
   const bodyRef = useRef(null);
 
-  const customVars = (currentClient?.config?.custom_field_definitions || []).map(d => d.key);
+  const rawCustomDefs = currentClient?.custom_field_definitions;
+  const customVars = (rawCustomDefs
+    ? (typeof rawCustomDefs === 'string' ? JSON.parse(rawCustomDefs) : rawCustomDefs)
+    : []
+  ).map(d => d.key);
 
   useEffect(() => {
     if (open && currentClientId) {
