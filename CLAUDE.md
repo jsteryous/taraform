@@ -36,7 +36,7 @@ src/
     contacts/EmailTab.jsx
     contacts/VirtualList.jsx
     modals/AddContactModal.jsx
-    modals/ImportModal.jsx          — skip trace CSV import, multi-phone, Email1/Email2
+    modals/ImportModal.jsx          — skip trace CSV import, multi-phone, Email1/Email2, three-tier field mapping
     modals/EmailSettingsModal.jsx   — Gmail + Outlook connect, Reoon verify, templates
     modals/EmailVerificationImportModal.jsx
     modals/SendEmailModal.jsx
@@ -57,6 +57,14 @@ Filters (status, county, search, phone, email) are passed as Supabase query para
 
 ### Data mapping
 DB uses snake_case. Frontend uses camelCase. Always go through `mapDbContact` / `mapContactToDb` in utils.js.
+
+### CSV import field mapping (three tiers)
+ImportModal uses three tiers for mapping CSV columns:
+1. **Core fields** — hardcoded (`CORE_FIELDS`), map to dedicated DB columns (name, phone, email, county, addresses, tax map ID, acreage). Special processing: multi-phone deduplication, address assembly from city/state/zip columns.
+2. **Client custom fields** — pulled from `currentClient.custom_field_definitions` at runtime, auto-mapped by label/key. Stored in `custom_fields` JSONB.
+3. **Ad-hoc extra fields** — user clicks "+ Add field", types a name, picks a CSV column. Stored in `custom_fields` JSONB with a slugified key. No pre-configuration needed for one-off columns like "website".
+
+No DB schema changes needed — `property_crm_contacts.custom_fields` is already JSONB and the insert always writes it.
 
 ### Config system
 All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in clientConfig.js. Never hardcode status names or colors.

@@ -84,7 +84,7 @@ export default function ImportModal({ open, onClose }) {
   const [rows, setRows]       = useState([]);
   const [mapping, setMapping] = useState({});
   const [customMapping, setCustomMapping] = useState({}); // { fieldKey: colIndex }
-  const [captureRemaining, setCaptureRemaining] = useState(false);
+  const [extraMappings, setExtraMappings] = useState([]); // [{ label, colIndex }]
   const [preview, setPreview] = useState(null); // { toAdd, toUpdate, toSkip }
   const [importing, setImporting] = useState(false);
   const fileRef = useRef(null);
@@ -97,7 +97,7 @@ export default function ImportModal({ open, onClose }) {
 
   function reset() {
     setStep('upload'); setHeaders([]); setRows([]); setMapping({});
-    setCustomMapping({}); setCaptureRemaining(false); setPreview(null);
+    setCustomMapping({}); setExtraMappings([]); setPreview(null);
   }
 
   function handleClose() { reset(); onClose(); }
@@ -181,14 +181,12 @@ export default function ImportModal({ open, onClose }) {
         }
       }
 
-      // Capture remaining unmapped columns
-      if (captureRemaining) {
-        headers.forEach((header, i) => {
-          if (!claimedIndices.has(i) && header && (row[i] || '').trim()) {
-            const key = header.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-            if (key) customFields[key] = row[i].trim();
-          }
-        });
+      // Extra manually-added field mappings
+      for (const { label, colIndex } of extraMappings) {
+        if (colIndex !== undefined && (row[colIndex] || '').trim()) {
+          const key = label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          if (key) customFields[key] = row[colIndex].trim();
+        }
       }
 
       return {
@@ -292,13 +290,6 @@ export default function ImportModal({ open, onClose }) {
     }
   }
 
-  // Columns not yet claimed by core or custom mappings (for "remaining" count)
-  const claimedCount = new Set([
-    ...Object.values(mapping).filter(v => v !== undefined),
-    ...Object.values(customMapping).filter(v => v !== undefined),
-  ]).size;
-  const remainingCount = headers.length - claimedCount;
-
   return (
     <Modal
       open={open}
@@ -371,21 +362,44 @@ export default function ImportModal({ open, onClose }) {
             </div>
           )}
 
-          {/* Capture remaining */}
-          {remainingCount > 0 && (
-            <div style={{ marginTop: '1rem', padding: '0.625rem 0.75rem', background: 'var(--bg)', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-              <input
-                type="checkbox"
-                id="captureRemaining"
-                checked={captureRemaining}
-                onChange={e => setCaptureRemaining(e.target.checked)}
-                style={{ cursor: 'pointer', margin: 0 }}
-              />
-              <label htmlFor="captureRemaining" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer', margin: 0 }}>
-                Capture {remainingCount} unmapped column{remainingCount !== 1 ? 's' : ''} as custom fields
-              </label>
+          {/* Extra ad-hoc field mappings */}
+          <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Additional Fields
+              </div>
+              <button
+                style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-muted)' }}
+                onClick={() => setExtraMappings(m => [...m, { label: '', colIndex: undefined }])}
+              >
+                + Add field
+              </button>
             </div>
-          )}
+            {extraMappings.map((em, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                <input
+                  placeholder="Field name"
+                  value={em.label}
+                  onChange={e => setExtraMappings(m => m.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                  style={{ padding: '0.35rem 0.5rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontSize: '0.8rem' }}
+                />
+                <select
+                  value={em.colIndex !== undefined ? em.colIndex : ''}
+                  onChange={e => setExtraMappings(m => m.map((x, j) => j === i ? { ...x, colIndex: e.target.value === '' ? undefined : parseInt(e.target.value) } : x))}
+                  style={{ padding: '0.35rem 0.5rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontSize: '0.8rem' }}
+                >
+                  <option value="">— Column —</option>
+                  {headers.map((h, idx) => <option key={idx} value={idx}>{h || `Column ${idx+1}`}</option>)}
+                </select>
+                <button
+                  onClick={() => setExtraMappings(m => m.filter((_, j) => j !== i))}
+                  style={{ padding: '0.25rem 0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem', lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
 
           {/* Sample preview */}
           {rows.length > 0 && (
@@ -401,6 +415,12 @@ export default function ImportModal({ open, onClose }) {
                 <div key={def.key} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.2rem' }}>
                   <span style={{ color: 'var(--text-muted)', minWidth: '130px' }}>{def.label}:</span>
                   <span style={{ color: 'var(--text)' }}>{rows[0]?.[customMapping[def.key]] || '—'}</span>
+                </div>
+              ))}
+              {extraMappings.filter(em => em.label && em.colIndex !== undefined).map((em, i) => (
+                <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: '130px' }}>{em.label}:</span>
+                  <span style={{ color: 'var(--text)' }}>{rows[0]?.[em.colIndex] || '—'}</span>
                 </div>
               ))}
             </div>
