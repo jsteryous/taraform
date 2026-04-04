@@ -50,9 +50,9 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [emailData, setEmailData]   = useState(null);
 
   const loadOfferStats = useCallback(async (p) => {
-    if (!currentClientId) return;
     setOfferLoading(true);
     setOfferError(null);
+    if (!currentClientId) { setOfferLoading(false); return; }
 
     const now = new Date();
     let since = null;
@@ -61,24 +61,11 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
     try {
-      // Step 1: get contact IDs for this client
-      const { data: clientContacts, error: contactsError } = await supabase
-        .from('property_crm_contacts')
-        .select('id')
-        .eq('client_id', currentClientId);
-      if (contactsError) throw contactsError;
-
-      const contactIds = (clientContacts || []).map(c => c.id);
-      if (contactIds.length === 0) {
-        setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] });
-        return;
-      }
-
-      // Step 2: fetch offers for those contacts
+      // Same join pattern as StatsBar (confirmed working)
       let q = supabase
         .from('contact_offers')
-        .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts(first_name, last_name, county, tax_map_ids)')
-        .in('contact_id', contactIds)
+        .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
+        .eq('property_crm_contacts.client_id', currentClientId)
         .order('created_at', { ascending: false });
       if (since) q = q.gte('created_at', since);
 
