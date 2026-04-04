@@ -30,7 +30,7 @@ export default function ContactDetail({ onClose }) {
   const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
   const [draft, setDraft] = useState(null);
 
-  const fieldDefs = currentClient?.custom_field_definitions || [];
+  const fieldDefs = currentClient?.config?.custom_field_definitions || [];
   const visibleFields = cfg.visibleFields;
 
   useEffect(() => {

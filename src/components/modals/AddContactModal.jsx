@@ -26,7 +26,7 @@ export default function AddContactModal({ open, onClose }) {
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
   const term = cfg.terminology?.contact || 'Contact';
-  const fieldDefs = currentClient?.custom_field_definitions || [];
+  const fieldDefs = currentClient?.config?.custom_field_definitions || [];
 
   const [form, setForm] = useState(defaultForm(statuses));
   const [dupeWarning, setDupeWarning] = useState(null);

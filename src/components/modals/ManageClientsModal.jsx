@@ -4,10 +4,10 @@ import { useApp } from '../../context/AppContext';
 import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser } from '../../lib/api';
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
 
-const ALL_TABS      = ['notes', 'sms', 'offers'];
-const TAB_LABELS    = { notes: 'Notes & Activity', sms: 'SMS', offers: 'Offers' };
-const ALL_FIELDS    = ['county', 'taxMapIds', 'ownerAddress', 'propertyAddresses'];
-const FIELD_LABELS  = { county: 'County', taxMapIds: 'Tax Map IDs', ownerAddress: 'Owner Address', propertyAddresses: 'Property Addresses' };
+const ALL_TABS      = ['notes', 'sms', 'email', 'offers'];
+const TAB_LABELS    = { notes: 'Notes & Activity', sms: 'SMS', email: 'Email', offers: 'Offers' };
+const ALL_FIELDS    = ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'];
+const FIELD_LABELS  = { county: 'County', taxMapIds: 'Tax Map IDs', acreage: 'Acreage', ownerAddress: 'Owner Address', propertyAddresses: 'Property Addresses' };
 const ALL_COLUMNS   = ['name', 'phone', 'county', 'status'];
 const COLUMN_LABELS = { name: 'Name', phone: 'Phone', county: 'County', status: 'Status' };
 const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG };
@@ -17,7 +17,7 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   const [newName, setNewName]     = useState('');
   const [newTwilio, setNewTwilio] = useState('');
   const [activeEditor, setActiveEditor] = useState(null);
-  const [editorTab, setEditorTab] = useState('config');
+  const [editorTab, setEditorTab] = useState('settings');
 
   async function refresh() {
     const clients = await getClients();
@@ -53,8 +53,17 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
     showToast('Saved');
   }
 
+  function handleToggleEditor(clientId) {
+    if (activeEditor === clientId) {
+      setActiveEditor(null);
+    } else {
+      setActiveEditor(clientId);
+      setEditorTab('settings');
+    }
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="Manage Clients" width="660px">
+    <Modal open={open} onClose={onClose} title="Manage Clients" width="740px">
       <div style={{ marginBottom: '1.5rem' }}>
         {clientsList.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No clients yet.</p>
@@ -68,9 +77,9 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
                 </div>
               </div>
               <button className="btn-small"
-                onClick={() => { setActiveEditor(activeEditor === c.id ? null : c.id); setEditorTab('config'); }}
+                onClick={() => handleToggleEditor(c.id)}
                 style={activeEditor === c.id ? { background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' } : {}}>
-                Configure
+                {activeEditor === c.id ? 'Close' : 'Configure'}
               </button>
               <button className="btn-small btn-danger" onClick={() => handleDelete(c.id, c.name)} style={{ padding: '0.375rem 0.6rem' }}>×</button>
             </div>
@@ -85,11 +94,11 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
         <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>Add New Client</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-          <div className="form-group">
+          <div className="form-group" style={{ margin: 0 }}>
             <label>Business Name *</label>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Rosso Restaurant" />
           </div>
-          <div className="form-group">
+          <div className="form-group" style={{ margin: 0 }}>
             <label>Twilio Number</label>
             <input value={newTwilio} onChange={e => setNewTwilio(e.target.value)} placeholder="+18645551234" />
           </div>
@@ -101,24 +110,24 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
 }
 
 function ClientEditor({ client, tab, onTabChange, onSave, showToast }) {
-  const TAB_LABELS = { config: 'View Config', fields: 'Custom Fields', members: 'Members' };
+  const EDITOR_TABS = { settings: 'Settings', fields: 'Custom Fields', members: 'Members' };
   return (
     <div style={{ marginTop: '0.75rem', background: 'var(--bg)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-        {['config', 'fields', 'members'].map(t => (
-          <button key={t} onClick={() => onTabChange(t)} style={{
+        {Object.entries(EDITOR_TABS).map(([key, label]) => (
+          <button key={key} onClick={() => onTabChange(key)} style={{
             padding: '0.5rem 1rem', fontSize: '0.8rem', fontWeight: 600, background: 'none', border: 'none',
-            borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-            color: tab === t ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)',
+            borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
+            color: tab === key ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)',
           }}>
-            {TAB_LABELS[t]}
+            {label}
           </button>
         ))}
       </div>
       <div style={{ padding: '1rem' }}>
-        {tab === 'config'  && <ViewConfig client={client} onSave={onSave} />}
-        {tab === 'fields'  && <FieldEditor client={client} onSave={defs => onSave({ custom_field_definitions: defs.filter(d => d.key && d.label) })} />}
-        {tab === 'members' && <MembersEditor client={client} showToast={showToast} />}
+        {tab === 'settings' && <ViewConfig client={client} onSave={onSave} />}
+        {tab === 'fields'   && <FieldEditor client={client} onSave={onSave} />}
+        {tab === 'members'  && <MembersEditor client={client} showToast={showToast} />}
       </div>
     </div>
   );
@@ -166,10 +175,21 @@ function ViewConfig({ client, onSave }) {
   function toggleColumn(c) { setColumns(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]); }
 
   function handleSave() {
+    // Preserve custom_field_definitions when saving general settings
+    const existingCustomFields = client.config?.custom_field_definitions;
     onSave({
       name: name.trim(),
       twilio_number: twilio.trim() || null,
-      config: { type, terminology: { contact: term, contacts: term + 's' }, statuses, statsPills: pills, tabs, visibleFields: fields, listColumns: columns },
+      config: {
+        type,
+        terminology: { contact: term, contacts: term + 's' },
+        statuses,
+        statsPills: pills,
+        tabs,
+        visibleFields: fields,
+        listColumns: columns,
+        ...(existingCustomFields !== undefined ? { custom_field_definitions: existingCustomFields } : {}),
+      },
     });
   }
 
@@ -249,7 +269,7 @@ function ViewConfig({ client, onSave }) {
 
       {/* Sidebar fields */}
       <div>
-        <div style={sL}>Sidebar Fields (land-specific)</div>
+        <div style={sL}>Sidebar Fields</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
           {ALL_FIELDS.map(f => <Chip key={f} active={fields.includes(f)} label={FIELD_LABELS[f]} onChange={() => toggleField(f)} />)}
         </div>
@@ -366,7 +386,8 @@ function MembersEditor({ client, showToast }) {
 }
 
 function FieldEditor({ client, onSave }) {
-  const [defs, setDefs] = useState(client.custom_field_definitions || []);
+  // custom_field_definitions lives inside config to avoid a separate DB column
+  const [defs, setDefs] = useState(client.config?.custom_field_definitions || []);
 
   function add() { setDefs(d => [...d, { key: '', label: '' }]); }
   function remove(i) { setDefs(d => d.filter((_, idx) => idx !== i)); }
@@ -379,6 +400,12 @@ function FieldEditor({ client, onSave }) {
   }
   function updateKey(i, val) {
     setDefs(d => d.map((def, idx) => idx === i ? { ...def, key: val.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') } : def));
+  }
+
+  function handleSave() {
+    const filtered = defs.filter(d => d.key && d.label);
+    // Merge into config so it's stored in the config JSONB column
+    onSave({ config: { ...(client.config || {}), custom_field_definitions: filtered } });
   }
 
   return (
@@ -398,7 +425,7 @@ function FieldEditor({ client, onSave }) {
       ))}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
         <button className="btn-small" onClick={add}>+ Add Field</button>
-        <button className="btn-small btn-primary" onClick={() => onSave(defs)}>Save Fields</button>
+        <button className="btn-small btn-primary" onClick={handleSave}>Save Fields</button>
       </div>
     </div>
   );
