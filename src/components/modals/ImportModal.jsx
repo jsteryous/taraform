@@ -212,7 +212,10 @@ export default function ImportModal({ open, onClose }) {
         }));
         const { data, error } = await supabase.from('property_crm_contacts').insert(records).select();
         if (error) {
-          console.error('Import error details:', error);
+          console.error('Import error — message:', error.message);
+          console.error('Import error — code:', error.code);
+          console.error('Import error — details:', error.details);
+          console.error('Import error — hint:', error.hint);
           console.error('First record sample:', JSON.stringify(records[0], null, 2));
           throw error;
         }
@@ -233,8 +236,8 @@ export default function ImportModal({ open, onClose }) {
       showToast(`✓ ${toAdd.length} added · ${toUpdate.length} updated · ${preview.toSkip.length} skipped`);
       handleClose();
     } catch (err) {
-      console.error(err);
-      showToast('Import failed — check console');
+      console.error('Import failed:', err?.message, err?.code, err?.details, err?.hint);
+      showToast(`Import failed: ${err?.message || err}`);
     } finally {
       setImporting(false);
     }
