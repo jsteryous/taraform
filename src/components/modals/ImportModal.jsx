@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact, formatPhone } from '../../lib/utils';
 
-const FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
+const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
   firstName: 'First Name', lastName: 'Last Name', phone: 'Phone',
   email: 'Email', county: 'County', ownerAddress: 'Owner Address',
@@ -52,6 +52,18 @@ function autoMap(headers) {
   return mapping;
 }
 
+function autoMapCustomFields(headers, fieldDefs) {
+  const h = headers.map(h => h.toLowerCase().trim());
+  const cm = {};
+  for (const def of fieldDefs) {
+    const byLabel = h.indexOf(def.label.toLowerCase());
+    if (byLabel >= 0) { cm[def.key] = byLabel; continue; }
+    const byKey = h.indexOf(def.key.toLowerCase());
+    if (byKey >= 0) { cm[def.key] = byKey; }
+  }
+  return cm;
+}
+
 function findDuplicates(contact, existing) {
   return existing.filter(c => {
     const nameMatch = contact.firstName && contact.lastName &&
@@ -66,17 +78,26 @@ function findDuplicates(contact, existing) {
 }
 
 export default function ImportModal({ open, onClose }) {
-  const { contacts, setContacts, currentClientId, user, showToast } = useApp();
+  const { contacts, setContacts, currentClientId, currentClient, user, showToast } = useApp();
   const [step, setStep]       = useState('upload'); // upload | map | preview | importing
   const [headers, setHeaders] = useState([]);
   const [rows, setRows]       = useState([]);
   const [mapping, setMapping] = useState({});
+  const [customMapping, setCustomMapping] = useState({}); // { fieldKey: colIndex }
+  const [captureRemaining, setCaptureRemaining] = useState(false);
   const [preview, setPreview] = useState(null); // { toAdd, toUpdate, toSkip }
   const [importing, setImporting] = useState(false);
   const fileRef = useRef(null);
 
+  const fieldDefs = currentClient?.custom_field_definitions
+    ? (typeof currentClient.custom_field_definitions === 'string'
+        ? JSON.parse(currentClient.custom_field_definitions)
+        : currentClient.custom_field_definitions)
+    : [];
+
   function reset() {
-    setStep('upload'); setHeaders([]); setRows([]); setMapping({}); setPreview(null);
+    setStep('upload'); setHeaders([]); setRows([]); setMapping({});
+    setCustomMapping({}); setCaptureRemaining(false); setPreview(null);
   }
 
   function handleClose() { reset(); onClose(); }
@@ -90,6 +111,7 @@ export default function ImportModal({ open, onClose }) {
       setHeaders(headers);
       setRows(rows);
       setMapping(autoMap(headers));
+      setCustomMapping(autoMapCustomFields(headers, fieldDefs));
       setStep('map');
     };
     reader.readAsText(file);
@@ -110,6 +132,15 @@ export default function ImportModal({ open, onClose }) {
     const propCityIdx     = h.indexOf('input property city');
     const propStateIdx    = h.indexOf('input property state');
     const propZipIdx      = h.indexOf('input property zip');
+
+    // All column indices already claimed by core + custom mappings
+    const claimedIndices = new Set([
+      ...Object.values(mapping).filter(v => v !== undefined),
+      ...Object.values(customMapping).filter(v => v !== undefined),
+      // Also claim the implicit columns so they don't get captured as remaining
+      ...phoneIndices,
+      ...[mailingCityIdx, mailingStateIdx, mailingZipIdx, propCityIdx, propStateIdx, propZipIdx].filter(i => i >= 0),
+    ]);
 
     return rows.map(row => {
       // Collect all non-empty phones, deduplicate
@@ -142,6 +173,24 @@ export default function ImportModal({ open, onClose }) {
 
       const acreage = mapping.acreage !== undefined ? (row[mapping.acreage] || '').trim() : '';
 
+      // Build custom fields from client definitions
+      const customFields = {};
+      for (const [key, idx] of Object.entries(customMapping)) {
+        if (idx !== undefined && (row[idx] || '').trim()) {
+          customFields[key] = row[idx].trim();
+        }
+      }
+
+      // Capture remaining unmapped columns
+      if (captureRemaining) {
+        headers.forEach((header, i) => {
+          if (!claimedIndices.has(i) && header && (row[i] || '').trim()) {
+            const key = header.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+            if (key) customFields[key] = row[i].trim();
+          }
+        });
+      }
+
       return {
         firstName:         mapping.firstName !== undefined ? (row[mapping.firstName] || '').trim() : '',
         lastName:          mapping.lastName  !== undefined ? (row[mapping.lastName]  || '').trim() : '',
@@ -156,7 +205,7 @@ export default function ImportModal({ open, onClose }) {
         propertyAddresses: propertyAddr ? [propertyAddr] : [],
         taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
         acreage:           acreage || '',
-        customFields:      {},
+        customFields,
         status: 'New Lead', activityLog: [],
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
@@ -243,6 +292,13 @@ export default function ImportModal({ open, onClose }) {
     }
   }
 
+  // Columns not yet claimed by core or custom mappings (for "remaining" count)
+  const claimedCount = new Set([
+    ...Object.values(mapping).filter(v => v !== undefined),
+    ...Object.values(customMapping).filter(v => v !== undefined),
+  ]).size;
+  const remainingCount = headers.length - claimedCount;
+
   return (
     <Modal
       open={open}
@@ -275,8 +331,10 @@ export default function ImportModal({ open, onClose }) {
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
             {rows.length} rows detected. Map your CSV columns to Taraform fields.
           </p>
+
+          {/* Core fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            {FIELDS.map(field => (
+            {CORE_FIELDS.map(field => (
               <div key={field} className="form-group">
                 <label>{FIELD_LABELS[field]}</label>
                 <select
@@ -290,14 +348,59 @@ export default function ImportModal({ open, onClose }) {
             ))}
           </div>
 
+          {/* Client custom fields */}
+          {fieldDefs.length > 0 && (
+            <div style={{ marginTop: '1.25rem' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.75rem' }}>
+                Custom Fields
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                {fieldDefs.map(def => (
+                  <div key={def.key} className="form-group">
+                    <label>{def.label}</label>
+                    <select
+                      value={customMapping[def.key] !== undefined ? customMapping[def.key] : ''}
+                      onChange={e => setCustomMapping(m => ({ ...m, [def.key]: e.target.value === '' ? undefined : parseInt(e.target.value) }))}
+                    >
+                      <option value="">— Skip —</option>
+                      {headers.map((h, i) => <option key={i} value={i}>{h || `Column ${i+1}`}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Capture remaining */}
+          {remainingCount > 0 && (
+            <div style={{ marginTop: '1rem', padding: '0.625rem 0.75rem', background: 'var(--bg)', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <input
+                type="checkbox"
+                id="captureRemaining"
+                checked={captureRemaining}
+                onChange={e => setCaptureRemaining(e.target.checked)}
+                style={{ cursor: 'pointer', margin: 0 }}
+              />
+              <label htmlFor="captureRemaining" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer', margin: 0 }}>
+                Capture {remainingCount} unmapped column{remainingCount !== 1 ? 's' : ''} as custom fields
+              </label>
+            </div>
+          )}
+
           {/* Sample preview */}
           {rows.length > 0 && (
             <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: 'var(--bg)', borderRadius: '6px', fontSize: '0.8rem' }}>
               <div style={{ color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>Sample row:</div>
-              {FIELDS.filter(f => mapping[f] !== undefined).map(f => (
+              {CORE_FIELDS.filter(f => mapping[f] !== undefined).map(f => (
                 <div key={f} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.2rem' }}>
                   <span style={{ color: 'var(--text-muted)', minWidth: '130px' }}>{FIELD_LABELS[f]}:</span>
                   <span style={{ color: 'var(--text)' }}>{rows[0]?.[mapping[f]] || '—'}</span>
+                </div>
+              ))}
+              {fieldDefs.filter(def => customMapping[def.key] !== undefined).map(def => (
+                <div key={def.key} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: '130px' }}>{def.label}:</span>
+                  <span style={{ color: 'var(--text)' }}>{rows[0]?.[customMapping[def.key]] || '—'}</span>
                 </div>
               ))}
             </div>
