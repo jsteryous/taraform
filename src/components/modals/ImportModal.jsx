@@ -205,7 +205,6 @@ export default function ImportModal({ open, onClose }) {
           tax_map_ids: c.taxMapIds,
           acreage: c.acreage || null,
           status: c.status,
-          offers: [],
           activity_log: [],
           custom_fields: c.customFields || {},
           created_at: c.createdAt,

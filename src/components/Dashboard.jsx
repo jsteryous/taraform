@@ -69,12 +69,14 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
     // Use inner join — same pattern that RLS allows (confirmed working via StatsBar)
-    const { data: rows, error: offersError } = await supabase
+    let q = supabase
       .from('contact_offers')
       .select('*, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
       .eq('property_crm_contacts.client_id', currentClientId)
       .order('created_at', { ascending: false });
-    if (offersError) console.error('loadOfferStats error:', offersError);
+    if (since) q = q.gte('created_at', since);
+    const { data: rows, error: offersError } = await q;
+    if (offersError) { console.error('loadOfferStats error:', offersError); setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
 
     const offers = (rows || []).map(row => ({
       id: row.id,
@@ -88,17 +90,13 @@ export default function Dashboard({ onClose, onViewContact }) {
       taxMapIds: row.property_crm_contacts?.tax_map_ids || [],
     }));
 
-    const allTimeCount = offers.length;
-    const sinceMs = since ? new Date(since).getTime() : null;
-    const periodOffers = sinceMs ? offers.filter(o => new Date(o.created_at).getTime() >= sinceMs) : offers;
-
-    const uniqueContacts = new Set(periodOffers.map(o => o.contact_id));
-    const totalValue = periodOffers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
-    const acceptedValue = periodOffers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
+    const uniqueContacts = new Set(offers.map(o => o.contact_id));
+    const totalValue = offers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+    const acceptedValue = offers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
     const byStatus = {};
-    for (const o of periodOffers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
+    for (const o of offers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
 
-    const recent = periodOffers.slice(0, 10).map(o => ({
+    const recent = offers.slice(0, 10).map(o => ({
       contactId: o.contact_id,
       contactName: o.contactName,
       county: o.county,
@@ -109,7 +107,7 @@ export default function Dashboard({ onClose, onViewContact }) {
       createdAt: o.created_at,
     }));
 
-    setOfferStats({ allTimeCount, count: uniqueContacts.size, totalCount: periodOffers.length, totalValue, acceptedValue, byStatus, recent });
+    setOfferStats({ count: uniqueContacts.size, totalCount: offers.length, totalValue, acceptedValue, byStatus, recent });
   }, [currentClientId]);
 
   const load = useCallback(async (p) => {
