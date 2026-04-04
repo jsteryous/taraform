@@ -37,7 +37,7 @@ src/
     contacts/VirtualList.jsx
     modals/AddContactModal.jsx
     modals/ImportModal.jsx          — skip trace CSV import, multi-phone, Email1/Email2
-    modals/EmailSettingsModal.jsx   — Outlook connect, Reoon verify, templates
+    modals/EmailSettingsModal.jsx   — Gmail + Outlook connect, Reoon verify, templates
     modals/EmailVerificationImportModal.jsx
     modals/SendEmailModal.jsx
     modals/ManageClientsModal.jsx   — create/edit clients + Members tab (invite by email, remove)
@@ -97,6 +97,16 @@ contact_offers status values: Pending | Accepted | Rejected | Countered
 Note: client_id is not reliably populated on all rows — always join through property_crm_contacts when filtering by client
 
 email_status values: eligible | verified | do_not_email | unknown | contacted | replied
+
+### email_tokens table
+- Stores OAuth tokens per client for email sending
+- columns include: client_id, provider ('outlook' | 'gmail'), access_token, refresh_token, email
+- `provider` column added via: `ALTER TABLE email_tokens ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'outlook';`
+- GET /api/email/status returns { connected, email, provider } — frontend uses provider to show "GMAIL" or "OUTLOOK" badge
+- OAuth popup flow: opener listens for postMessage with type GOOGLE_AUTH_SUCCESS / GOOGLE_AUTH_ERROR (Gmail) or MS_AUTH_SUCCESS / MS_AUTH_ERROR (Outlook)
+- Gmail OAuth endpoints: GET /api/email/gmail-auth-url?client_id=, callback at /auth/google/callback
+- Outlook OAuth endpoints: GET /api/email/auth-url?client_id=, disconnect: DELETE /api/email/disconnect?client_id=
+- Railway env vars required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI (https://taraform-server-production.up.railway.app/auth/google/callback)
 
 ### clients table columns
 - id (uuid, PK)
