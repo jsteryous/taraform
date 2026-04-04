@@ -301,21 +301,37 @@ export default function ContactDetail({ onClose }) {
           )}
 
           {/* Custom fields */}
-          {fieldDefs.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
-              {fieldDefs.map(def => (
-                <div key={def.key} style={{ marginBottom: '1rem' }}>
-                  <div style={fieldLabel}>{def.label}</div>
-                  <input value={draft.customFields?.[def.key] || ''} placeholder="—"
-                    style={{ ...inlineInput, ...fieldValue }}
-                    onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [def.key]: e.target.value } }))}
-                    onBlur={e => updateCustomField(def.key, e.target.value)}
-                    onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const knownKeys = new Set(fieldDefs.map(d => d.key));
+            const adHocKeys = Object.keys(draft.customFields || {}).filter(k => !knownKeys.has(k) && draft.customFields[k]);
+            if (fieldDefs.length === 0 && adHocKeys.length === 0) return null;
+            return (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
+                {fieldDefs.map(def => (
+                  <div key={def.key} style={{ marginBottom: '1rem' }}>
+                    <div style={fieldLabel}>{def.label}</div>
+                    <input value={draft.customFields?.[def.key] || ''} placeholder="—"
+                      style={{ ...inlineInput, ...fieldValue }}
+                      onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [def.key]: e.target.value } }))}
+                      onBlur={e => updateCustomField(def.key, e.target.value)}
+                      onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+                    />
+                  </div>
+                ))}
+                {adHocKeys.map(key => (
+                  <div key={key} style={{ marginBottom: '1rem' }}>
+                    <div style={fieldLabel}>{key.replace(/_/g, ' ')}</div>
+                    <input value={draft.customFields?.[key] || ''} placeholder="—"
+                      style={{ ...inlineInput, ...fieldValue }}
+                      onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [key]: e.target.value } }))}
+                      onBlur={e => updateCustomField(key, e.target.value)}
+                      onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Main area ── */}
