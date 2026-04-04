@@ -68,11 +68,20 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'week')  since = new Date(now - 7 * 86400000).toISOString();
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
-    // Use inner join — same pattern that RLS allows (confirmed working via StatsBar)
+    // Step 1: get all contact IDs for this client
+    const { data: clientContacts, error: contactsError } = await supabase
+      .from('property_crm_contacts')
+      .select('id')
+      .eq('client_id', currentClientId);
+    if (contactsError) { console.error('loadOfferStats contacts error:', contactsError); setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
+    const contactIds = (clientContacts || []).map(c => c.id);
+    if (contactIds.length === 0) { setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
+
+    // Step 2: fetch offers for those contacts with optional date filter
     let q = supabase
       .from('contact_offers')
-      .select('*, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
-      .eq('property_crm_contacts.client_id', currentClientId)
+      .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts(first_name, last_name, county, tax_map_ids)')
+      .in('contact_id', contactIds)
       .order('created_at', { ascending: false });
     if (since) q = q.gte('created_at', since);
     const { data: rows, error: offersError } = await q;
