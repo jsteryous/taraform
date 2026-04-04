@@ -6,23 +6,14 @@ import { supabase } from '../lib/supabase';
 const BASE = 'https://taraform-server-production.up.railway.app';
 
 const PERIODS = [
-  { value: 'today', label: 'Today' },
-  { value: 'week',  label: '7 Days' },
-  { value: 'month', label: '30 Days' },
+  { value: 'today',   label: 'Today' },
+  { value: 'week',    label: '7 Days' },
+  { value: 'month',   label: '30 Days' },
   { value: 'alltime', label: 'All Time' },
 ];
 
-const INTENT_LABELS = {
-  interested:      { label: 'Interested',    color: '#10b981' },
-  not_interested:  { label: 'Not Interested',color: '#6b7280' },
-  opt_out:         { label: 'Opted Out',     color: '#ef4444' },
-  question:        { label: 'Question',      color: '#3b82f6' },
-  unclear:         { label: 'Unclear',       color: '#f59e0b' },
-  unknown:         { label: 'Other',         color: '#6b7280' },
-};
-
-function downloadOffersReport(periodOffers, _contacts, period) {
-  const rows = periodOffers
+function downloadOffersReport(recent, period) {
+  const rows = recent
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map(o => [
@@ -44,7 +35,7 @@ function downloadOffersReport(periodOffers, _contacts, period) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `offers-${period}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `offers-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -52,15 +43,16 @@ function downloadOffersReport(periodOffers, _contacts, period) {
 export default function Dashboard({ onClose, onViewContact }) {
   const { currentClientId, currentClient } = useApp();
   const cfg = resolveConfig(currentClient);
-  const [period, setPeriod] = useState('week');
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
-  const [emailData, setEmailData] = useState(null);
+  const [period, setPeriod]         = useState('week');
   const [offerStats, setOfferStats] = useState(null);
+  const [offerLoading, setOfferLoading] = useState(true);
+  const [offerError, setOfferError] = useState(null);
+  const [emailData, setEmailData]   = useState(null);
 
   const loadOfferStats = useCallback(async (p) => {
     if (!currentClientId) return;
+    setOfferLoading(true);
+    setOfferError(null);
 
     const now = new Date();
     let since = null;
@@ -68,92 +60,81 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'week')  since = new Date(now - 7 * 86400000).toISOString();
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
-    // Step 1: get all contact IDs for this client
-    const { data: clientContacts, error: contactsError } = await supabase
-      .from('property_crm_contacts')
-      .select('id')
-      .eq('client_id', currentClientId);
-    if (contactsError) { console.error('loadOfferStats contacts error:', contactsError); setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
-    const contactIds = (clientContacts || []).map(c => c.id);
-    if (contactIds.length === 0) { setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
-
-    // Step 2: fetch offers for those contacts with optional date filter
-    let q = supabase
-      .from('contact_offers')
-      .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts(first_name, last_name, county, tax_map_ids)')
-      .in('contact_id', contactIds)
-      .order('created_at', { ascending: false });
-    if (since) q = q.gte('created_at', since);
-    const { data: rows, error: offersError } = await q;
-    if (offersError) { console.error('loadOfferStats error:', offersError); setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] }); return; }
-
-    const offers = (rows || []).map(row => ({
-      id: row.id,
-      contact_id: row.contact_id,
-      amount: row.amount,
-      status: row.status,
-      notes: row.notes,
-      created_at: row.created_at,
-      contactName: `${row.property_crm_contacts?.first_name || ''} ${row.property_crm_contacts?.last_name || ''}`.trim(),
-      county: row.property_crm_contacts?.county || '',
-      taxMapIds: row.property_crm_contacts?.tax_map_ids || [],
-    }));
-
-    const uniqueContacts = new Set(offers.map(o => o.contact_id));
-    const totalValue = offers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
-    const acceptedValue = offers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
-    const byStatus = {};
-    for (const o of offers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
-
-    const recent = offers.slice(0, 10).map(o => ({
-      contactId: o.contact_id,
-      contactName: o.contactName,
-      county: o.county,
-      taxMapIds: o.taxMapIds,
-      amount: o.amount,
-      status: o.status,
-      notes: o.notes,
-      createdAt: o.created_at,
-    }));
-
-    setOfferStats({ count: uniqueContacts.size, totalCount: offers.length, totalValue, acceptedValue, byStatus, recent });
-  }, [currentClientId]);
-
-  const load = useCallback(async (p) => {
-    if (!currentClientId) return;
-    setLoading(true); setError(null);
     try {
-      const [smsRes, emailRes] = await Promise.all([
-        fetch(`${BASE}/api/stats?client_id=${currentClientId}&period=${p}`),
-        fetch(`${BASE}/api/email/stats?client_id=${currentClientId}&period=${p}`).catch(() => null),
-      ]);
-      if (!smsRes.ok) throw new Error(await smsRes.text());
-      const raw = await smsRes.json();
-      setData({
-        period:              raw.period              || p,
-        sentThisPeriod:      raw.sentThisPeriod      || 0,
-        repliesThisPeriod:   raw.repliesThisPeriod   || 0,
-        replyRate:           raw.replyRate           ?? null,
-        intentBreakdown:     raw.intentBreakdown     || {},
-        totalSent:           raw.totalSent           || 0,
-        deliveryRate:        raw.deliveryRate        ?? null,
-        smsStatusCounts:     raw.smsStatusCounts     || {},
-        contactStatusCounts: raw.contactStatusCounts || {},
-        pendingFollowUps:    raw.pendingFollowUps    || 0,
-        totalContacts:       raw.totalContacts       || 0,
-        templatePerformance: raw.templatePerformance || [],
-      });
-      if (emailRes?.ok) setEmailData(await emailRes.json());
+      // Step 1: get contact IDs for this client
+      const { data: clientContacts, error: contactsError } = await supabase
+        .from('property_crm_contacts')
+        .select('id')
+        .eq('client_id', currentClientId);
+      if (contactsError) throw contactsError;
+
+      const contactIds = (clientContacts || []).map(c => c.id);
+      if (contactIds.length === 0) {
+        setOfferStats({ count: 0, totalCount: 0, totalValue: 0, acceptedValue: 0, byStatus: {}, recent: [] });
+        return;
+      }
+
+      // Step 2: fetch offers for those contacts
+      let q = supabase
+        .from('contact_offers')
+        .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts(first_name, last_name, county, tax_map_ids)')
+        .in('contact_id', contactIds)
+        .order('created_at', { ascending: false });
+      if (since) q = q.gte('created_at', since);
+
+      const { data: rows, error: offersError } = await q;
+      if (offersError) throw offersError;
+
+      const offers = (rows || []).map(row => ({
+        id: row.id,
+        contact_id: row.contact_id,
+        amount: row.amount,
+        status: row.status,
+        notes: row.notes,
+        created_at: row.created_at,
+        contactName: `${row.property_crm_contacts?.first_name || ''} ${row.property_crm_contacts?.last_name || ''}`.trim(),
+        county: row.property_crm_contacts?.county || '',
+        taxMapIds: row.property_crm_contacts?.tax_map_ids || [],
+      }));
+
+      const uniqueContacts = new Set(offers.map(o => o.contact_id));
+      const totalValue     = offers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+      const acceptedValue  = offers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
+      const byStatus = {};
+      for (const o of offers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
+
+      const recent = offers.slice(0, 10).map(o => ({
+        contactId:   o.contact_id,
+        contactName: o.contactName,
+        county:      o.county,
+        taxMapIds:   o.taxMapIds,
+        amount:      o.amount,
+        status:      o.status,
+        notes:       o.notes,
+        createdAt:   o.created_at,
+      }));
+
+      setOfferStats({ count: uniqueContacts.size, totalCount: offers.length, totalValue, acceptedValue, byStatus, recent });
     } catch (e) {
-      setError(e.message);
+      console.error('loadOfferStats error:', e);
+      setOfferError(e.message);
     } finally {
-      setLoading(false);
+      setOfferLoading(false);
     }
   }, [currentClientId]);
 
-  useEffect(() => { load(period); loadOfferStats(period); }, [period, load, loadOfferStats]);
+  const loadEmailStats = useCallback(async (p) => {
+    if (!currentClientId) return;
+    try {
+      const res = await fetch(`${BASE}/api/email/stats?client_id=${currentClientId}&period=${p}`);
+      if (res.ok) setEmailData(await res.json());
+    } catch { /* email stats are optional */ }
+  }, [currentClientId]);
 
-  const term = cfg.terminology?.contacts || 'Contacts';
+  useEffect(() => {
+    loadOfferStats(period);
+    loadEmailStats(period);
+  }, [period, loadOfferStats, loadEmailStats]);
 
   // ── Styles ────────────────────────────────────────────────────
   const card = {
@@ -175,13 +156,12 @@ export default function Dashboard({ onClose, onViewContact }) {
   return (
     <div style={{ padding: '0 2rem 2rem', maxWidth: '960px' }}>
 
-      {/* Header row */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingTop: '1rem' }}>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}>← Back</button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Dashboard</h2>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentClient?.name}</span>
 
-        {/* Period switcher */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.2rem' }}>
           {PERIODS.map(p => (
             <button key={p.value} onClick={() => setPeriod(p.value)} style={{
@@ -196,130 +176,51 @@ export default function Dashboard({ onClose, onViewContact }) {
         </div>
       </div>
 
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          Loading…
-        </div>
-      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-      {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '1rem', color: '#f87171', fontSize: '0.875rem' }}>
-          Failed to load stats: {error}
-        </div>
-      )}
-
-      {!loading && data && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-          {/* ── Top KPI row ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
-            <KpiCard label="Texts Sent" value={data.sentThisPeriod} color="#60a5fa" sub={`${data.totalSent} all-time`} style={card} bigNum={bigNum} cardLabel={cardLabel} />
-            <KpiCard label="Replies" value={data.repliesThisPeriod} color="#34d399"
-              sub={data.replyRate !== null ? `${data.replyRate}% reply rate` : 'No data yet'} style={card} bigNum={bigNum} cardLabel={cardLabel} />
-            <KpiCard label="Delivery Rate" value={data.deliveryRate !== null ? `${data.deliveryRate}%` : '—'} color="#fbbf24"
-              sub={`${data.totalSent} total sent`} style={card} bigNum={bigNum} cardLabel={cardLabel} />
-            <KpiCard label="Pending Queue" value={data.pendingFollowUps} color="#a78bfa"
-              sub={`${data.totalContacts} ${term.toLowerCase()}`} style={card} bigNum={bigNum} cardLabel={cardLabel} />
+        {/* ── Offers ── */}
+        <div style={card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+            <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
+            {offerStats && (
+              <button
+                onClick={() => downloadOffersReport(offerStats.recent || [], period)}
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                ↓ Download Report
+              </button>
+            )}
           </div>
 
-          {/* ── Middle row: Contact breakdown + Reply intent ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          {offerLoading && (
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading…</div>
+          )}
 
-            {/* SMS status breakdown */}
-            <div style={card}>
-              <div style={sectionTitle}>SMS Status Breakdown</div>
-              {Object.keys(data.smsStatusCounts || {}).length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No data yet</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {Object.entries(data.smsStatusCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([status, count]) => {
-                      const pct = Math.round((count / data.totalContacts) * 100);
-                      const colors = {
-                        eligible: '#6b7280', contacted: '#3b82f6', interested: '#10b981',
-                        not_interested: '#6b7280', do_not_contact: '#ef4444', unclear: '#f59e0b',
-                      };
-                      const c = colors[status] || '#6b7280';
-                      return (
-                        <div key={status}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', fontSize: '0.8rem' }}>
-                            <span style={{ color: 'var(--text)', textTransform: 'capitalize' }}>{status.replace(/_/g, ' ')}</span>
-                            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{count} <span style={{ opacity: 0.5 }}>({pct}%)</span></span>
-                          </div>
-                          <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: '2px', transition: 'width 0.4s ease' }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
+          {offerError && (
+            <div style={{ color: '#f87171', fontSize: '0.875rem' }}>Failed to load offers: {offerError}</div>
+          )}
 
-            {/* Reply intent breakdown */}
-            <div style={card}>
-              <div style={sectionTitle}>Reply Intent — {PERIODS.find(p => p.value === period)?.label}</div>
-              {Object.keys(data.intentBreakdown || {}).length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No replies in this period</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {Object.entries(data.intentBreakdown)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([intent, count]) => {
-                      const meta = INTENT_LABELS[intent] || { label: intent, color: '#6b7280' };
-                      const pct = data.repliesThisPeriod > 0 ? Math.round((count / data.repliesThisPeriod) * 100) : 0;
-                      return (
-                        <div key={intent}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', fontSize: '0.8rem' }}>
-                            <span style={{ color: meta.color, fontWeight: 500 }}>{meta.label}</span>
-                            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{count} <span style={{ opacity: 0.5 }}>({pct}%)</span></span>
-                          </div>
-                          <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: meta.color, borderRadius: '2px', transition: 'width 0.4s ease' }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          </div>
-
-
-
-          {/* ── Offers ── */}
-          {offerStats !== null && (
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-                <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
-                <button
-                  onClick={() => downloadOffersReport(offerStats.recent || [], [], period)}
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  ↓ Download Report
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
+          {!offerLoading && offerStats && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (offerStats.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
-                  <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats?.count || 0}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats?.totalCount || 0} total offer{offerStats?.totalCount !== 1 ? 's' : ''}</div>
+                  <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats.count}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats.totalCount} total offer{offerStats.totalCount !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
-                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${(offerStats?.totalValue || 0).toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${offerStats.totalValue.toLocaleString()}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Accepted Value</div>
-                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${(offerStats?.acceptedValue || 0).toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${offerStats.acceptedValue.toLocaleString()}</div>
                 </div>
               </div>
 
-              {/* Status breakdown */}
-              {Object.keys(offerStats?.byStatus || {}).length > 0 && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: (offerStats?.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
-                  {Object.entries(offerStats?.byStatus || {}).map(([status, count]) => {
+              {Object.keys(offerStats.byStatus).length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: offerStats.totalCount > 0 ? '1.25rem' : 0 }}>
+                  {Object.entries(offerStats.byStatus).map(([status, count]) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     const c = colors[status] || '#6b7280';
                     return (
@@ -332,14 +233,13 @@ export default function Dashboard({ onClose, onViewContact }) {
                 </div>
               )}
 
-              {/* Recent offers list */}
-              {(offerStats?.recent || []).length > 0 && (
+              {offerStats.recent.length > 0 && (
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.5rem' }}>Recent Offers</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
                     <span>Contact</span><span>County</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
-                  {(offerStats?.recent || []).map((o, i) => {
+                  {offerStats.recent.map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
@@ -356,37 +256,38 @@ export default function Dashboard({ onClose, onViewContact }) {
                   })}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── Email section ── */}
-          {emailData && (
-            <div style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                <div style={sectionTitle}>Email — {PERIODS.find(p => p.value === period)?.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: emailData.autoEnabled ? '#10b981' : '#6b7280', display: 'inline-block' }} />
-                  {emailData.autoEnabled ? 'Automation on' : 'Automation off'}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <KpiCard label="Sent" value={emailData.sentThisPeriod} color="#60a5fa" sub={`${emailData.totalSent} all-time`} style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-                <KpiCard label="Verified" value={emailData.verifiedCount} color="#10b981" sub="safe to send" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-                <KpiCard label="Blocked" value={emailData.blockedCount} color="#f87171" sub="do not email" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-                <KpiCard label="Unverified" value={emailData.unverifiedCount} color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-                <KpiCard label="Unknown" value={emailData.unknownCount || 0} color="#6b7280" sub="unverifiable" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-              </div>
-              {emailData.sentThisPeriod === 0 && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>
+              {offerStats.totalCount === 0 && (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No offers in this period.</div>
               )}
-            </div>
+            </>
           )}
-
-
-
         </div>
-      )}
+
+        {/* ── Email ── */}
+        {emailData && (
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={sectionTitle}>Email — {PERIODS.find(p => p.value === period)?.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: emailData.autoEnabled ? '#10b981' : '#6b7280', display: 'inline-block' }} />
+                {emailData.autoEnabled ? 'Automation on' : 'Automation off'}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <KpiCard label="Sent"       value={emailData.sentThisPeriod}    color="#60a5fa" sub={`${emailData.totalSent} all-time`} style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+              <KpiCard label="Verified"   value={emailData.verifiedCount}     color="#10b981" sub="safe to send"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+              <KpiCard label="Blocked"    value={emailData.blockedCount}      color="#f87171" sub="do not email"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+              <KpiCard label="Unverified" value={emailData.unverifiedCount}   color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+              <KpiCard label="Unknown"    value={emailData.unknownCount || 0} color="#6b7280" sub="unverifiable"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
+            </div>
+            {emailData.sentThisPeriod === 0 && (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>
+            )}
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
@@ -397,14 +298,6 @@ function KpiCard({ label, value, color, sub, style, bigNum, cardLabel }) {
       <div style={cardLabel}>{label}</div>
       <div style={{ ...bigNum, color }}>{value ?? '—'}</div>
       {sub && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{sub}</div>}
-    </div>
-  );
-}
-
-function NumCell({ value, color }) {
-  return (
-    <div style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: color || 'var(--text)', fontFamily: 'var(--mono)' }}>
-      {value ?? '—'}
     </div>
   );
 }
