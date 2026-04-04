@@ -94,7 +94,7 @@ export default function EmailTab({ contact }) {
 
   if (!connected) return (
     <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-      No Outlook account connected. Go to <strong>Settings → Email Settings</strong> to connect.
+      No email account connected. Go to <strong>Settings → Email Settings</strong> to connect Gmail or Outlook.
     </div>
   );
 

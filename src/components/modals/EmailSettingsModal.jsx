@@ -8,6 +8,7 @@ export default function EmailSettingsModal({ open, onClose }) {
   const { currentClientId } = useApp();
   const [connected, setConnected]         = useState(false);
   const [connEmail, setConnEmail]         = useState(null);
+  const [provider, setProvider]           = useState(null); // 'outlook' | 'gmail'
   const [templates, setTemplates]         = useState([]);
   const [loading, setLoading]             = useState(true);
   const [editing, setEditing]             = useState(null);
@@ -41,6 +42,7 @@ export default function EmailSettingsModal({ open, onClose }) {
     const verify    = await verifyRes.json().catch(() => ({}));
     setConnected(status.connected);
     setConnEmail(status.email);
+    setProvider(status.provider || null);
     setTemplates(Array.isArray(tmpl) ? tmpl : []);
     setAutoEnabled(autoSett?.value === 'true');
     setDailyLimit(limitSett?.value || '25');
@@ -65,10 +67,28 @@ export default function EmailSettingsModal({ open, onClose }) {
     window.addEventListener('message', handler);
   }
 
+  async function connectGmail() {
+    const res = await fetch(`${BASE}/api/email/gmail-auth-url?client_id=${currentClientId}`);
+    const { url } = await res.json();
+    const popup = window.open(url, 'google_auth', 'width=600,height=700,scrollbars=yes');
+    const handler = async (e) => {
+      if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        window.removeEventListener('message', handler);
+        popup?.close();
+        await loadAll();
+      } else if (e.data?.type === 'GOOGLE_AUTH_ERROR') {
+        window.removeEventListener('message', handler);
+        alert('Connection failed: ' + e.data.error);
+      }
+    };
+    window.addEventListener('message', handler);
+  }
+
   async function disconnect() {
-    if (!confirm('Disconnect Outlook?')) return;
+    const label = provider === 'gmail' ? 'Gmail' : 'Outlook';
+    if (!confirm(`Disconnect ${label}?`)) return;
     await fetch(`${BASE}/api/email/disconnect?client_id=${currentClientId}`, { method: 'DELETE' });
-    setConnected(false); setConnEmail(null);
+    setConnected(false); setConnEmail(null); setProvider(null);
   }
 
   function openAdd() {
@@ -173,13 +193,16 @@ export default function EmailSettingsModal({ open, onClose }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-          {/* Outlook connection */}
+          {/* Email account connection */}
           <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
-            <div style={{ ...lbl, marginBottom: '0.75rem' }}>Outlook Account</div>
+            <div style={{ ...lbl, marginBottom: '0.75rem' }}>Email Account</div>
             {connected ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase' }}>
+                    {provider === 'gmail' ? 'Gmail' : 'Outlook'}
+                  </span>
                   <span style={{ fontSize: '0.875rem' }}>{connEmail || 'Connected'}</span>
                 </div>
                 <button onClick={disconnect} style={{ fontSize: '0.75rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '5px', padding: '0.3rem 0.75rem', cursor: 'pointer' }}>Disconnect</button>
@@ -187,9 +210,14 @@ export default function EmailSettingsModal({ open, onClose }) {
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>No account connected</span>
-                <button onClick={connectOutlook} style={{ fontSize: '0.875rem', background: '#0078d4', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  Connect Outlook
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={connectGmail} style={{ fontSize: '0.875rem', background: '#ea4335', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Connect Gmail
+                  </button>
+                  <button onClick={connectOutlook} style={{ fontSize: '0.875rem', background: '#0078d4', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Connect Outlook
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -244,7 +272,7 @@ export default function EmailSettingsModal({ open, onClose }) {
 
             {autoEnabled && !connected && (
               <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: '#fbbf24' }}>
-                ⚠ Connect your Outlook account above for automation to work
+                ⚠ Connect an email account above for automation to work
               </div>
             )}
             {autoEnabled && connected && templates.length === 0 && (
