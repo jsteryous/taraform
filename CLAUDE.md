@@ -65,6 +65,7 @@ All client-specific UI (statuses, colors, tabs, visible fields) comes from `reso
 All calls to the Railway server go through `src/lib/api.js`.
 Every request automatically attaches the Supabase session JWT as `Authorization: Bearer <token>`.
 Server base URL: `https://taraform-server-production.up.railway.app`
+Server repo: https://github.com/jsteryous/taraform-server (main server file: api.js)
 
 ## Multi-tenancy architecture
 Access control is enforced at two layers:
@@ -96,6 +97,22 @@ contact_offers status values: Pending | Accepted | Rejected | Countered
 Note: client_id is not reliably populated on all rows — always join through property_crm_contacts when filtering by client
 
 email_status values: eligible | verified | do_not_email | unknown | contacted | replied
+
+### clients table columns
+- id (uuid, PK)
+- name, twilio_number, created_at
+- config (JSONB) — stores type, terminology, statuses, statsPills, tabs, visibleFields, listColumns
+- custom_field_definitions (TEXT) — stores a JSON array string: `[{"key":"acreage","label":"Acreage"}]`
+  - Always parse on read: the server returns it as a raw JSON string, not a parsed array
+  - Frontend reads it as: `JSON.parse(currentClient.custom_field_definitions || '[]')`
+  - Sent to server as a JS array; server stringifies before storing
+
+### sms_settings table
+- Stores key/value pairs per client (key + client_id should be unique, but no DB constraint enforces it)
+- Never use Supabase `.upsert()` without `onConflict` — it will insert duplicates instead of updating
+- Use select-then-update/insert pattern in the server (see PUT /api/settings/:key in api.js)
+- Keys used: `automation_paused`, `email_automation_enabled`
+- `automation_paused` is seeded on client creation; `email_automation_enabled` may not exist — always use `.maybeSingle()` when reading settings, never `.single()`
 
 ## Code style
 - Functional components with hooks only
