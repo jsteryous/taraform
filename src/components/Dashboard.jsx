@@ -61,7 +61,6 @@ export default function Dashboard({ onClose, onViewContact }) {
     else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
 
     try {
-      // Same join pattern as StatsBar (confirmed working)
       let q = supabase
         .from('contact_offers')
         .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
