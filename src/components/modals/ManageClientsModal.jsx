@@ -48,9 +48,16 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   }
 
   async function saveClientConfig(clientId, patch) {
-    await updateClient(clientId, patch);
-    await refresh();
-    showToast('Saved');
+    console.log('[ManageClients] saving client', clientId, patch);
+    try {
+      const result = await updateClient(clientId, patch);
+      console.log('[ManageClients] save result', result);
+      await refresh();
+      showToast('Saved');
+    } catch (err) {
+      console.error('[ManageClients] save failed', err);
+      showToast('Save failed — check console');
+    }
   }
 
   function handleToggleEditor(clientId) {

@@ -5,6 +5,13 @@ const BASE = 'https://taraform-server-production.up.railway.app';
 async function req(path, options = {}) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
+
+  const method = options.method || 'GET';
+  const body   = options.body;
+  if (body) {
+    console.log(`[api] ${method} ${path}`, JSON.parse(body));
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -12,8 +19,18 @@ async function req(path, options = {}) {
     },
     ...options,
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error(`[api] ${method} ${path} → ${res.status}`, text);
+    throw new Error(text);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 // Clients
