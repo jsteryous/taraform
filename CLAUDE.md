@@ -88,6 +88,9 @@ Key tables: property_crm_contacts, sms_messages, sms_templates, sms_followup_que
             sms_settings, clients, client_users, email_tokens, email_templates,
             email_messages, email_followup_queue, contact_offers
 
+property_crm_contacts.id is bigint (NOT uuid) with a sequence default (property_crm_contacts_id_seq).
+Never pass id manually on insert — let Postgres generate it.
+
 contact_offers columns: id, contact_id, client_id (may be null on older rows), amount, status, notes, created_at
 contact_offers status values: Pending | Accepted | Rejected | Countered
 Note: client_id is not reliably populated on all rows — always join through property_crm_contacts when filtering by client
