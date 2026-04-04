@@ -89,7 +89,7 @@ export default function Dashboard({ onClose, onViewContact }) {
       const byStatus = {};
       for (const o of offers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
 
-      const recent = offers.slice(0, 10).map(o => ({
+      const recent = offers.map(o => ({
         contactId:   o.contact_id,
         contactName: o.contactName,
         county:      o.county,
@@ -225,6 +225,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
                     <span>Contact</span><span>County</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
                   </div>
+                  <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
                   {offerStats.recent.map((o, i) => {
                     const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
@@ -240,6 +241,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               )}
 
