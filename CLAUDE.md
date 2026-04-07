@@ -9,6 +9,14 @@ Taraform is a multi-tenant SMS/email outreach CRM for land acquisition. The prim
 - Deployed via GitHub Pages (branch: main, repo: jsteryous/taraform)
 - No TypeScript — plain JSX throughout
 
+## Environment
+Supabase credentials are in `.env.local` (gitignored). Required vars:
+```
+VITE_SUPABASE_URL=https://ykuenmwfxecmmqichwit.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key>
+```
+The anon key is the public Supabase key — security is enforced by RLS, not by keeping the key secret. Never hardcode it back into source.
+
 ## Project structure
 ```
 src/
@@ -49,6 +57,10 @@ src/
 ```
 
 ## Key patterns
+
+### Saving contacts
+`saveContact(contact)` in AppContext is async and throws on error. Always `await` it.
+In ContactDetail, `update` / `updateMultiple` / `updateCustomField` do optimistic UI updates and revert + show a toast if the save fails. Follow this same pattern anywhere else that calls `saveContact`.
 
 ### Server-side pagination
 Contacts load 50 at a time via `loadContacts(clientId, filters)` in AppContext.
