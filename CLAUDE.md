@@ -92,6 +92,35 @@ Server repo: https://github.com/jsteryous/taraform-server (main server file: api
 
 Errors from `api.js` throw with a clean message extracted from `json.error` / `json.message`, falling back to `"${status} ${statusText}"`. Raw HTML error pages are never surfaced to users.
 
+Never call `fetch()` directly for Railway endpoints — always use the exports from `api.js`. Available exports:
+```
+// Clients
+getClients, createClient, updateClient, deleteClient
+getClientUsers, addClientUser, removeClientUser
+
+// SMS
+getTemplates, createTemplate, updateTemplate, deleteTemplate
+getSetting, putSetting
+getMessages, sendMessage
+
+// Offers
+addOffer, updateOffer, deleteOffer
+
+// Email — connection
+getEmailStatus(clientId), getEmailAuthUrl(clientId), getGmailAuthUrl(clientId), disconnectEmail(clientId)
+
+// Email — templates
+getEmailTemplates(clientId), createEmailTemplate(body), updateEmailTemplate(id, body), deleteEmailTemplate(id)
+
+// Email — verification
+startEmailVerify(body), getEmailVerifyStatus(clientId), resetEmailVerifyJob(clientId), reprocessEmailVerify(body)
+
+// Email — sending & stats
+getEmailMessages(contactId, clientId), sendEmailOne(body), sendEmailBatch(body), getEmailStats(clientId, period)
+```
+
+Settings (`getSetting`) may return 404 for keys that haven't been seeded yet — use `Promise.allSettled` when loading multiple settings so one missing key doesn't abort the whole load.
+
 ### Error feedback
 Use `showToast` from `useApp()` for all user-facing errors — never `alert()`. The `showToast` function is available in every component that uses `useApp`.
 
@@ -148,8 +177,9 @@ email_status values: eligible | verified | do_not_email | unknown | contacted | 
 - Stores key/value pairs per client (key + client_id should be unique, but no DB constraint enforces it)
 - Never use Supabase `.upsert()` without `onConflict` — it will insert duplicates instead of updating
 - Use select-then-update/insert pattern in the server (see PUT /api/settings/:key in api.js)
-- Keys used: `automation_paused`, `email_automation_enabled`
-- `automation_paused` is seeded on client creation; `email_automation_enabled` may not exist — always use `.maybeSingle()` when reading settings, never `.single()`
+- Keys used: `automation_paused`, `email_automation_enabled`, `email_daily_limit`, `send_start_hour`, `send_end_hour`, `daily_limit`
+- `automation_paused` is seeded on client creation; other keys may not exist — always use `.maybeSingle()` when reading settings via Supabase directly, never `.single()`
+- Via `api.js`, `getSetting` throws on 404 — use `Promise.allSettled` when loading optional settings in bulk
 
 ## Code style
 - Functional components with hooks only
