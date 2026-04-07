@@ -30,6 +30,8 @@ export default function StatsBar({ onFilterStatus }) {
       const map = {};
       results.forEach(r => { map[r.label] = r.count; });
       setCounts(map);
+    }).catch(() => {
+      // silently ignore — counts stay at previous value
     });
   }, [currentClientId]); // eslint-disable-line
 

@@ -37,7 +37,7 @@ export default function EmailTab({ contact }) {
     }
   }
 
-  async function send(force = false) {
+  async function send() {
     if (!contact.email) return;
     setSending(true);
     try {
@@ -52,19 +52,17 @@ export default function EmailTab({ contact }) {
         body    = customBody;
       }
 
-      const data = await sendEmailOne({
+      const payload = {
         client_id:   currentClientId,
         contact_id:  contact.id,
         template_id: mode === 'template' ? selectedTemplate : null,
         subject,
         body,
-        force,
-      });
+      };
+      let data = await sendEmailOne({ ...payload, force: false });
       if (data.unverified) {
-        if (confirm('This email address has not been verified. Send anyway?')) {
-          await send(true);
-        }
-        return;
+        if (!confirm('This email address has not been verified. Send anyway?')) return;
+        data = await sendEmailOne({ ...payload, force: true });
       }
       if (data.success) {
         setCustomSubject(''); setCustomBody(''); setSelectedTemplate('');
