@@ -26,7 +26,7 @@ src/
   lib/
     supabase.js         — Supabase client
     api.js              — fetch wrappers for Railway server (always sends JWT)
-    utils.js            — formatPhone, normalizeCounty, mapDbContact, mapContactToDb
+    utils.js            — formatPhone, normalizeCounty, mapDbContact, mapContactToDb, parseCustomFieldDefs
     clientConfig.js     — LAND_CONFIG, resolveConfig, getStatusColor, statsPills
   context/
     AppContext.jsx       — global state: contacts (paginated 50/page), currentContact,
@@ -62,6 +62,9 @@ src/
 `saveContact(contact)` in AppContext is async and throws on error. Always `await` it.
 In ContactDetail, `update` / `updateMultiple` / `updateCustomField` do optimistic UI updates and revert + show a toast if the save fails. Follow this same pattern anywhere else that calls `saveContact`.
 
+### Parsing custom_field_definitions
+`custom_field_definitions` on the clients object is a raw JSON string from the server (TEXT column). Always parse it with `parseCustomFieldDefs(raw)` from utils.js — never bare `JSON.parse`. The utility handles null, already-parsed arrays, and malformed JSON (returns `[]` on error).
+
 ### Server-side pagination
 Contacts load 50 at a time via `loadContacts(clientId, filters)` in AppContext.
 Filters (status, county, search, phone, email) are passed as Supabase query params — never filter in JS.
@@ -86,6 +89,11 @@ All calls to the Railway server go through `src/lib/api.js`.
 Every request automatically attaches the Supabase session JWT as `Authorization: Bearer <token>`.
 Server base URL: `https://taraform-server-production.up.railway.app`
 Server repo: https://github.com/jsteryous/taraform-server (main server file: api.js)
+
+Errors from `api.js` throw with a clean message extracted from `json.error` / `json.message`, falling back to `"${status} ${statusText}"`. Raw HTML error pages are never surfaced to users.
+
+### Error feedback
+Use `showToast` from `useApp()` for all user-facing errors — never `alert()`. The `showToast` function is available in every component that uses `useApp`.
 
 ## Multi-tenancy architecture
 Access control is enforced at two layers:
@@ -133,8 +141,7 @@ email_status values: eligible | verified | do_not_email | unknown | contacted | 
 - name, twilio_number, created_at
 - config (JSONB) — stores type, terminology, statuses, statsPills, tabs, visibleFields, listColumns
 - custom_field_definitions (TEXT) — stores a JSON array string: `[{"key":"acreage","label":"Acreage"}]`
-  - Always parse on read: the server returns it as a raw JSON string, not a parsed array
-  - Frontend reads it as: `JSON.parse(currentClient.custom_field_definitions || '[]')`
+  - Always parse on read using `parseCustomFieldDefs()` from utils.js — never bare `JSON.parse`
   - Sent to server as a JS array; server stringifies before storing
 
 ### sms_settings table
