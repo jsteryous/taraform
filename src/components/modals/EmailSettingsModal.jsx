@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 
@@ -20,11 +20,18 @@ export default function EmailSettingsModal({ open, onClose }) {
   const [verifyJob, setVerifyJob]         = useState(null);
   const [verifying, setVerifying]         = useState(false);
   const [verifyLimit, setVerifyLimit]     = useState('100');
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
     if (!open || !currentClientId) return;
     loadAll();
   }, [open, currentClientId]);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
   async function loadAll() {
     setLoading(true);
@@ -56,14 +63,21 @@ export default function EmailSettingsModal({ open, onClose }) {
     const popup = window.open(url, 'ms_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
       if (e.data?.type === 'MS_AUTH_SUCCESS') {
-        window.removeEventListener('message', handler);
+        cleanup();
         popup?.close();
         await loadAll();
       } else if (e.data?.type === 'MS_AUTH_ERROR') {
-        window.removeEventListener('message', handler);
+        cleanup();
         alert('Connection failed: ' + e.data.error);
       }
     };
+    const popupCheck = setInterval(() => {
+      if (popup?.closed) cleanup();
+    }, 500);
+    function cleanup() {
+      clearInterval(popupCheck);
+      window.removeEventListener('message', handler);
+    }
     window.addEventListener('message', handler);
   }
 
@@ -73,14 +87,21 @@ export default function EmailSettingsModal({ open, onClose }) {
     const popup = window.open(url, 'google_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
       if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        window.removeEventListener('message', handler);
+        cleanup();
         popup?.close();
         await loadAll();
       } else if (e.data?.type === 'GOOGLE_AUTH_ERROR') {
-        window.removeEventListener('message', handler);
+        cleanup();
         alert('Connection failed: ' + e.data.error);
       }
     };
+    const popupCheck = setInterval(() => {
+      if (popup?.closed) cleanup();
+    }, 500);
+    function cleanup() {
+      clearInterval(popupCheck);
+      window.removeEventListener('message', handler);
+    }
     window.addEventListener('message', handler);
   }
 
@@ -141,16 +162,19 @@ export default function EmailSettingsModal({ open, onClose }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setVerifyJob({ status: 'running', total: data.total, checked: 0 });
-      // Poll for updates every 30s
       const TERMINAL = ['completed', 'partial', 'failed', 'timeout', 'idle'];
-      const interval = setInterval(async () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = setInterval(async () => {
         try {
           const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
           const j = await r.json();
           setVerifyJob(j);
-          if (TERMINAL.includes(j.status)) clearInterval(interval);
+          if (TERMINAL.includes(j.status)) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
         } catch (e) { /* ignore */ }
-      }, 10000); // poll every 10s instead of 30s
+      }, 10000);
     } catch (e) {
       alert('Verification failed: ' + e.message);
     } finally {

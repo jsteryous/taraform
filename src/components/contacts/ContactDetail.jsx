@@ -43,25 +43,46 @@ export default function ContactDetail({ onClose }) {
 
   if (!currentContact || !draft) return null;
 
-  function update(field, value) {
+  async function update(field, value) {
+    const prev = draft;
     const updated = { ...draft, [field]: value, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    saveContact(updated);
+    try {
+      await saveContact(updated);
+    } catch {
+      showToast('Save failed — try again');
+      setDraft(prev);
+      setCurrentContact(prev);
+    }
   }
 
-  function updateMultiple(fields) {
+  async function updateMultiple(fields) {
+    const prev = draft;
     const updated = { ...draft, ...fields, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    saveContact(updated);
+    try {
+      await saveContact(updated);
+    } catch {
+      showToast('Save failed — try again');
+      setDraft(prev);
+      setCurrentContact(prev);
+    }
   }
 
-  function updateCustomField(key, value) {
+  async function updateCustomField(key, value) {
+    const prev = draft;
     const updated = { ...draft, customFields: { ...draft.customFields, [key]: value }, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    saveContact(updated);
+    try {
+      await saveContact(updated);
+    } catch {
+      showToast('Save failed — try again');
+      setDraft(prev);
+      setCurrentContact(prev);
+    }
   }
 
   async function handleDelete() {
