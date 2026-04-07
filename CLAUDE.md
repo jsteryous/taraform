@@ -121,6 +121,45 @@ getEmailMessages(contactId, clientId), sendEmailOne(body), sendEmailBatch(body),
 
 Settings (`getSetting`) may return 404 for keys that haven't been seeded yet — use `Promise.allSettled` when loading multiple settings so one missing key doesn't abort the whole load.
 
+### Async loading state
+When an async function owns a loading/sending flag (e.g. `setSending(true/false)` in a try/finally), never recurse into it for retry or force-send flows — the outer `finally` fires after the inner call, causing the flag to flip at the wrong time. Instead, inline the second API call:
+
+```js
+// BAD — outer finally fires before recursive call truly finishes
+async function send(force = false) {
+  setSending(true);
+  try {
+    const data = await sendEmailOne({ ...payload, force });
+    if (data.unverified && confirm('Send anyway?')) await send(true); // recursive!
+  } finally { setSending(false); }
+}
+
+// GOOD — single try/finally, flag fires exactly once
+async function send() {
+  setSending(true);
+  try {
+    let data = await sendEmailOne({ ...payload, force: false });
+    if (data.unverified && confirm('Send anyway?')) {
+      data = await sendEmailOne({ ...payload, force: true }); // inline
+    }
+    // handle data.success / data.error
+  } finally { setSending(false); }
+}
+```
+
+`sendEmailOne` returns `{ unverified: true }` when the email address hasn't been verified. Pass `force: true` to send anyway.
+
+### Promise.all error handling
+Always add `.catch()` to `Promise.all()` chains that update UI state. Without it, a single failed query leaves state permanently stale (e.g. StatsBar counts stuck at `…`):
+
+```js
+Promise.all([...]).then(results => {
+  // update state
+}).catch(() => {
+  // at minimum a no-op; optionally showToast
+});
+```
+
 ### Error feedback
 Use `showToast` from `useApp()` for all user-facing errors — never `alert()`. The `showToast` function is available in every component that uses `useApp`.
 
