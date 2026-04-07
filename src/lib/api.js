@@ -9,7 +9,7 @@ async function req(path, options = {}) {
   const method = options.method || 'GET';
   const body   = options.body;
   if (body) {
-    console.log(`[api] ${method} ${path}`, JSON.parse(body));
+    try { console.log(`[api] ${method} ${path}`, JSON.parse(body)); } catch { console.log(`[api] ${method} ${path}`, body); }
   }
 
   const res = await fetch(`${BASE}${path}`, {
@@ -23,7 +23,14 @@ async function req(path, options = {}) {
   const text = await res.text();
   if (!res.ok) {
     console.error(`[api] ${method} ${path} → ${res.status}`, text);
-    throw new Error(text);
+    let errMsg;
+    try {
+      const json = JSON.parse(text);
+      errMsg = json.error || json.message || `${res.status} ${res.statusText}`;
+    } catch {
+      errMsg = `${res.status} ${res.statusText}`;
+    }
+    throw new Error(errMsg);
   }
 
   try {

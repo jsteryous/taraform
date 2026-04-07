@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../lib/api';
+import { parseCustomFieldDefs } from '../../lib/utils';
 
 const TOUCH_LABELS = {
   1: 'Touch 1 — Initial Outreach',
@@ -20,11 +21,7 @@ export default function TemplatesModal({ open, onClose }) {
   const [form, setForm]           = useState({ name: '', body: '', touch_number: 1 });
   const bodyRef = useRef(null);
 
-  const rawCustomDefs = currentClient?.custom_field_definitions;
-  const customVars = (rawCustomDefs
-    ? (typeof rawCustomDefs === 'string' ? JSON.parse(rawCustomDefs) : rawCustomDefs)
-    : []
-  ).map(d => d.key);
+  const customVars = parseCustomFieldDefs(currentClient?.custom_field_definitions).map(d => d.key);
 
   useEffect(() => {
     if (open && currentClientId) {

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
-import { normalizeCounty, mapDbContact, formatPhone } from '../../lib/utils';
+import { normalizeCounty, mapDbContact, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
@@ -89,11 +89,7 @@ export default function ImportModal({ open, onClose }) {
   const [importing, setImporting] = useState(false);
   const fileRef = useRef(null);
 
-  const fieldDefs = currentClient?.custom_field_definitions
-    ? (typeof currentClient.custom_field_definitions === 'string'
-        ? JSON.parse(currentClient.custom_field_definitions)
-        : currentClient.custom_field_definitions)
-    : [];
+  const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
 
   function reset() {
     setStep('upload'); setHeaders([]); setRows([]); setMapping({});

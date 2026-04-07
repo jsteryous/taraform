@@ -112,6 +112,12 @@ export function mapContactToDb(contact, userId, clientId) {
   };
 }
 
+export function parseCustomFieldDefs(raw) {
+  if (!raw) return [];
+  if (typeof raw !== 'string') return raw;
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 export function parseCSV(text) {
   const lines = text.trim().split('\n');
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));

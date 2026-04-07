@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 const BASE = 'https://taraform-server-production.up.railway.app';
 
 export default function EmailTab({ contact }) {
-  const { currentClientId } = useApp();
+  const { currentClientId, showToast } = useApp();
   const [messages, setMessages] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [connected, setConnected] = useState(false);
@@ -65,10 +65,8 @@ export default function EmailTab({ contact }) {
       });
       const data = await res.json();
       if (data.unverified) {
-        // Ask user to confirm sending to unverified email
-        setSending(false);
         if (confirm('This email address has not been verified. Send anyway?')) {
-          send(true);
+          await send(true);
         }
         return;
       }
@@ -76,7 +74,7 @@ export default function EmailTab({ contact }) {
         setCustomSubject(''); setCustomBody(''); setSelectedTemplate('');
         await loadAll();
       } else if (data.error) {
-        alert(data.error);
+        showToast(data.error);
       }
     } finally {
       setSending(false);

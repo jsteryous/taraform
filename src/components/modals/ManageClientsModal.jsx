@@ -3,6 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser } from '../../lib/api';
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
+import { parseCustomFieldDefs } from '../../lib/utils';
 
 const ALL_TABS      = ['notes', 'sms', 'email', 'offers'];
 const TAB_LABELS    = { notes: 'Notes & Activity', sms: 'SMS', email: 'Email', offers: 'Offers' };
@@ -384,8 +385,7 @@ function MembersEditor({ client, showToast }) {
 function FieldEditor({ client, onSave }) {
   const [defs, setDefs] = useState(() => {
     const raw = client.custom_field_definitions;
-    if (!raw) return [];
-    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parseCustomFieldDefs(raw);
   });
 
   function add() { setDefs(d => [...d, { key: '', label: '' }]); }

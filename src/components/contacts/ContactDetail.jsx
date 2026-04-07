@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getStatusClass, formatPhone } from '../../lib/utils';
+import { getStatusClass, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import SmsTab from './SmsTab';
@@ -30,11 +30,7 @@ export default function ContactDetail({ onClose }) {
   const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
   const [draft, setDraft] = useState(null);
 
-  const fieldDefs = currentClient?.custom_field_definitions
-    ? (typeof currentClient.custom_field_definitions === 'string'
-        ? JSON.parse(currentClient.custom_field_definitions)
-        : currentClient.custom_field_definitions)
-    : [];
+  const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
   const visibleFields = cfg.visibleFields;
 
   useEffect(() => {

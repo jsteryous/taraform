@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-import { normalizeCounty } from '../../lib/utils';
+import { normalizeCounty, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
@@ -26,11 +26,7 @@ export default function AddContactModal({ open, onClose }) {
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
   const term = cfg.terminology?.contact || 'Contact';
-  const fieldDefs = currentClient?.custom_field_definitions
-    ? (typeof currentClient.custom_field_definitions === 'string'
-        ? JSON.parse(currentClient.custom_field_definitions)
-        : currentClient.custom_field_definitions)
-    : [];
+  const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
 
   const [form, setForm] = useState(defaultForm(statuses));
   const [dupeWarning, setDupeWarning] = useState(null);

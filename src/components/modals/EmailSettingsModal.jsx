@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 const BASE = 'https://taraform-server-production.up.railway.app';
 
 export default function EmailSettingsModal({ open, onClose }) {
-  const { currentClientId } = useApp();
+  const { currentClientId, showToast } = useApp();
   const [connected, setConnected]         = useState(false);
   const [connEmail, setConnEmail]         = useState(null);
   const [provider, setProvider]           = useState(null); // 'outlook' | 'gmail'
@@ -68,7 +68,7 @@ export default function EmailSettingsModal({ open, onClose }) {
         await loadAll();
       } else if (e.data?.type === 'MS_AUTH_ERROR') {
         cleanup();
-        alert('Connection failed: ' + e.data.error);
+        showToast('Connection failed: ' + e.data.error);
       }
     };
     const popupCheck = setInterval(() => {
@@ -92,7 +92,7 @@ export default function EmailSettingsModal({ open, onClose }) {
         await loadAll();
       } else if (e.data?.type === 'GOOGLE_AUTH_ERROR') {
         cleanup();
-        alert('Connection failed: ' + e.data.error);
+        showToast('Connection failed: ' + e.data.error);
       }
     };
     const popupCheck = setInterval(() => {
@@ -176,7 +176,7 @@ export default function EmailSettingsModal({ open, onClose }) {
         } catch (e) { /* ignore */ }
       }, 10000);
     } catch (e) {
-      alert('Verification failed: ' + e.message);
+      showToast('Verification failed: ' + e.message);
     } finally {
       setVerifying(false);
     }
@@ -374,10 +374,10 @@ export default function EmailSettingsModal({ open, onClose }) {
                       body: JSON.stringify({ client_id: currentClientId }),
                     });
                     const d = await r.json();
-                    if (d.error) { alert(d.error); return; }
+                    if (d.error) { showToast(d.error); return; }
                     setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
-                    alert(`Done — ${d.verified} verified, ${d.blocked} blocked, ${d.skipped} unknown`);
-                  } catch (e) { alert('Reprocess failed: ' + e.message); }
+                    showToast(`Done — ${d.verified} verified, ${d.blocked} blocked, ${d.skipped} unknown`);
+                  } catch (e) { showToast('Reprocess failed: ' + e.message); }
                 }} style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                   ↻ Re-fetch & apply results from Reoon
                 </button>
@@ -394,10 +394,10 @@ export default function EmailSettingsModal({ open, onClose }) {
                       body: JSON.stringify({ client_id: currentClientId }),
                     });
                     const d = await r.json();
-                    if (d.error) { alert(d.error); return; }
+                    if (d.error) { showToast(d.error); return; }
                     setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
-                    alert(`Done — ${d.verified} verified, ${d.blocked} blocked`);
-                  } catch (e) { alert('Reprocess failed: ' + e.message); }
+                    showToast(`Done — ${d.verified} verified, ${d.blocked} blocked`);
+                  } catch (e) { showToast('Reprocess failed: ' + e.message); }
                 }} style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                   ↻ Try to re-fetch results from Reoon
                 </button>
