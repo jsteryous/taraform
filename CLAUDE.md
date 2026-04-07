@@ -228,7 +228,21 @@ email_status values: eligible | verified | do_not_email | unknown | contacted | 
 - Keep components focused — if a component is doing too much, split it
 
 ## Deploying
+**Do NOT use `npx gh-pages -d dist`** — it has been observed producing builds that strip env vars (supabaseUrl undefined error in production).
+
+Use the git worktree method instead:
 ```bash
-npm run build && npx gh-pages -d dist
+npm run build
+
+# verify env var is baked in before deploying
+grep -o "ykuenmwfxecmmqichwit" dist/assets/*.js
+
+git fetch origin gh-pages
+git worktree add /tmp/gh-pages-deploy origin/gh-pages
+rm -f /tmp/gh-pages-deploy/assets/*
+cp dist/assets/* /tmp/gh-pages-deploy/assets/
+cp dist/index.html /tmp/gh-pages-deploy/
+cd /tmp/gh-pages-deploy && git add -A && git commit -m "deploy: <commit-sha>" && git push origin HEAD:gh-pages
+cd - && git worktree remove /tmp/gh-pages-deploy --force
 ```
 GitHub Pages serves from the `gh-pages` branch automatically.
