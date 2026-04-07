@@ -111,7 +111,7 @@ export function AppProvider({ children }) {
   // ── Load full contact (with JSONB) for detail view ────────
   const loadFullContact = useCallback(async (contactId) => {
     const { data, error } = await supabase
-      .from('property_crm_contacts').select('*').eq('id', contactId).single();
+      .from('property_crm_contacts').select('*').eq('id', contactId).maybeSingle();
     if (error || !data) { console.error('loadFullContact contact error:', error); return null; }
     const full = mapDbContact(data);
     const { data: offerRows, error: offersError } = await supabase

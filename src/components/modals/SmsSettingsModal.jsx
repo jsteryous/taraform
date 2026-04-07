@@ -11,26 +11,30 @@ export default function SmsSettingsModal({ open, onClose }) {
 
   useEffect(() => {
     if (!open || !currentClientId) return;
-    Promise.all([
+    Promise.allSettled([
       getSetting('send_start_hour', currentClientId),
       getSetting('send_end_hour', currentClientId),
       getSetting('daily_limit', currentClientId),
     ]).then(([s, e, l]) => {
-      setStart(s.value || '8');
-      setEnd(e.value || '17');
-      setLimit(l.value || '50');
-    }).catch(() => {});
+      setStart(s.status === 'fulfilled' ? (s.value?.value || '8') : '8');
+      setEnd(e.status === 'fulfilled' ? (e.value?.value || '17') : '17');
+      setLimit(l.status === 'fulfilled' ? (l.value?.value || '50') : '50');
+    });
   }, [open, currentClientId]);
 
   async function save() {
     if (parseInt(end) <= parseInt(start)) { showToast('End hour must be after start hour.'); return; }
-    await Promise.all([
-      putSetting('send_start_hour', start, currentClientId),
-      putSetting('send_end_hour', end, currentClientId),
-      putSetting('daily_limit', limit, currentClientId),
-    ]);
-    showToast('Schedule saved');
-    onClose();
+    try {
+      await Promise.all([
+        putSetting('send_start_hour', start, currentClientId),
+        putSetting('send_end_hour', end, currentClientId),
+        putSetting('daily_limit', limit, currentClientId),
+      ]);
+      showToast('Schedule saved');
+      onClose();
+    } catch (e) {
+      showToast(e.message || 'Failed to save settings');
+    }
   }
 
   return (
