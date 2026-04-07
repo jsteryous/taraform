@@ -25,7 +25,7 @@ export default function TemplatesModal({ open, onClose }) {
 
   useEffect(() => {
     if (open && currentClientId) {
-      getTemplates(currentClientId).then(setTemplates).catch(() => {});
+      getTemplates(currentClientId).then(setTemplates).catch(e => showToast('Failed to load templates: ' + e.message));
     }
   }, [open, currentClientId]);
 

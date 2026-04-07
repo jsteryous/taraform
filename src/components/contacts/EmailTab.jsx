@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-
-const BASE = 'https://taraform-server-production.up.railway.app';
+import { getEmailStatus, getEmailTemplates, getEmailMessages, sendEmailOne } from '../../lib/api';
 
 export default function EmailTab({ contact }) {
   const { currentClientId, showToast } = useApp();
@@ -22,18 +21,20 @@ export default function EmailTab({ contact }) {
 
   async function loadAll() {
     setLoading(true);
-    const [statusRes, templatesRes, messagesRes] = await Promise.all([
-      fetch(`${BASE}/api/email/status?client_id=${currentClientId}`),
-      fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`),
-      fetch(`${BASE}/api/email/messages?contact_id=${contact.id}&client_id=${currentClientId}`),
-    ]);
-    const status   = await statusRes.json();
-    const tmpl     = await templatesRes.json();
-    const msgs     = await messagesRes.json();
-    setConnected(status.connected);
-    setTemplates(Array.isArray(tmpl) ? tmpl : []);
-    setMessages(Array.isArray(msgs) ? msgs : []);
-    setLoading(false);
+    try {
+      const [status, tmpl, msgs] = await Promise.all([
+        getEmailStatus(currentClientId),
+        getEmailTemplates(currentClientId),
+        getEmailMessages(contact.id, currentClientId),
+      ]);
+      setConnected(status.connected);
+      setTemplates(Array.isArray(tmpl) ? tmpl : []);
+      setMessages(Array.isArray(msgs) ? msgs : []);
+    } catch (e) {
+      showToast('Failed to load email data: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function send(force = false) {
@@ -51,19 +52,14 @@ export default function EmailTab({ contact }) {
         body    = customBody;
       }
 
-      const res = await fetch(`${BASE}/api/email/send-one`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id:   currentClientId,
-          contact_id:  contact.id,
-          template_id: mode === 'template' ? selectedTemplate : null,
-          subject,
-          body,
-          force,
-        }),
+      const data = await sendEmailOne({
+        client_id:   currentClientId,
+        contact_id:  contact.id,
+        template_id: mode === 'template' ? selectedTemplate : null,
+        subject,
+        body,
+        force,
       });
-      const data = await res.json();
       if (data.unverified) {
         if (confirm('This email address has not been verified. Send anyway?')) {
           await send(true);

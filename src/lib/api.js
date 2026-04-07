@@ -69,3 +69,29 @@ export const sendMessage     = (body)       => req('/api/send', { method: 'POST'
 export const addOffer    = (contactId, body)              => req(`/api/contacts/${contactId}/offers`, { method: 'POST', body: JSON.stringify(body) });
 export const updateOffer = (contactId, offerId, body)     => req(`/api/contacts/${contactId}/offers/${offerId}`, { method: 'PUT', body: JSON.stringify(body) });
 export const deleteOffer = (contactId, offerId, clientId) => req(`/api/contacts/${contactId}/offers/${offerId}?client_id=${clientId}`, { method: 'DELETE' });
+
+// Email connection
+export const getEmailStatus      = (clientId)       => req(`/api/email/status?client_id=${clientId}`);
+export const getEmailAuthUrl     = (clientId)       => req(`/api/email/auth-url?client_id=${clientId}`);
+export const getGmailAuthUrl     = (clientId)       => req(`/api/email/gmail-auth-url?client_id=${clientId}`);
+export const disconnectEmail     = (clientId)       => req(`/api/email/disconnect?client_id=${clientId}`, { method: 'DELETE' });
+
+// Email templates
+export const getEmailTemplates   = (clientId)       => req(`/api/email/templates?client_id=${clientId}`);
+export const createEmailTemplate = (body)           => req('/api/email/templates', { method: 'POST', body: JSON.stringify(body) });
+export const updateEmailTemplate = (id, body)       => req(`/api/email/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+export const deleteEmailTemplate = (id)             => req(`/api/email/templates/${id}`, { method: 'DELETE' });
+
+// Email verification
+export const startEmailVerify      = (body)         => req('/api/email/verify-start', { method: 'POST', body: JSON.stringify(body) });
+export const getEmailVerifyStatus  = (clientId)     => req(`/api/email/verify-status?client_id=${clientId}`);
+export const resetEmailVerifyJob   = (clientId)     => req(`/api/email/verify-reset?client_id=${clientId}`, { method: 'DELETE' });
+export const reprocessEmailVerify  = (body)         => req('/api/email/verify-reprocess', { method: 'POST', body: JSON.stringify(body) });
+
+// Email stats
+export const getEmailStats         = (clientId, period) => req(`/api/email/stats?client_id=${clientId}&period=${period}`);
+
+// Email sending
+export const getEmailMessages      = (contactId, clientId) => req(`/api/email/messages?contact_id=${contactId}&client_id=${clientId}`);
+export const sendEmailOne          = (body)                => req('/api/email/send-one', { method: 'POST', body: JSON.stringify(body) });
+export const sendEmailBatch        = (body)                => req('/api/email/send-batch', { method: 'POST', body: JSON.stringify(body) });

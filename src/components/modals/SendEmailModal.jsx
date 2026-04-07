@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-
-const BASE = 'https://taraform-server-production.up.railway.app';
+import { getEmailTemplates, sendEmailBatch } from '../../lib/api';
 
 export default function SendEmailModal({ open, onClose, selectedContacts }) {
-  const { currentClientId } = useApp();
+  const { currentClientId, showToast } = useApp();
   const [templates, setTemplates]   = useState([]);
   const [templateId, setTemplateId] = useState('');
   const [status, setStatus]         = useState(null);
@@ -14,9 +13,9 @@ export default function SendEmailModal({ open, onClose, selectedContacts }) {
   useEffect(() => {
     if (!open || !currentClientId) return;
     setStatus(null); setTemplateId('');
-    fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`)
-      .then(r => r.json())
-      .then(d => { setTemplates(Array.isArray(d) ? d : []); setLoading(false); });
+    getEmailTemplates(currentClientId)
+      .then(d => { setTemplates(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(e => { showToast('Failed to load templates: ' + e.message); setLoading(false); });
   }, [open, currentClientId]);
 
   const withEmail    = selectedContacts.filter(c => c.email);
@@ -25,17 +24,17 @@ export default function SendEmailModal({ open, onClose, selectedContacts }) {
   async function send() {
     if (!templateId || withEmail.length === 0) return;
     setStatus('sending');
-    const res = await fetch(`${BASE}/api/email/send-batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      const data = await sendEmailBatch({
         client_id:   currentClientId,
         contact_ids: withEmail.map(c => c.id),
         template_id: templateId,
-      }),
-    });
-    const data = await res.json();
-    setStatus(data);
+      });
+      setStatus(data);
+    } catch (e) {
+      showToast('Failed to send emails: ' + e.message);
+      setStatus(null);
+    }
   }
 
   return (

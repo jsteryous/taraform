@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-
-const BASE = 'https://taraform-server-production.up.railway.app';
+import {
+  getEmailStatus, getEmailAuthUrl, getGmailAuthUrl, disconnectEmail,
+  getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate,
+  startEmailVerify, getEmailVerifyStatus, resetEmailVerifyJob, reprocessEmailVerify,
+  getSetting, putSetting,
+} from '../../lib/api';
 
 export default function EmailSettingsModal({ open, onClose }) {
   const { currentClientId, showToast } = useApp();
@@ -35,31 +39,41 @@ export default function EmailSettingsModal({ open, onClose }) {
 
   async function loadAll() {
     setLoading(true);
-    const [statusRes, templatesRes, autoRes, limitRes, verifyRes] = await Promise.all([
-      fetch(`${BASE}/api/email/status?client_id=${currentClientId}`),
-      fetch(`${BASE}/api/email/templates?client_id=${currentClientId}`),
-      fetch(`${BASE}/api/settings/email_automation_enabled?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
-      fetch(`${BASE}/api/settings/email_daily_limit?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
-      fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`).catch(() => ({ json: () => ({}) })),
-    ]);
-    const status    = await statusRes.json();
-    const tmpl      = await templatesRes.json();
-    const autoSett  = await autoRes.json().catch(() => ({}));
-    const limitSett = await limitRes.json().catch(() => ({}));
-    const verify    = await verifyRes.json().catch(() => ({}));
-    setConnected(status.connected);
-    setConnEmail(status.email);
-    setProvider(status.provider || null);
-    setTemplates(Array.isArray(tmpl) ? tmpl : []);
-    setAutoEnabled(autoSett?.value === 'true');
-    setDailyLimit(limitSett?.value || '25');
-    setVerifyJob(verify?.status !== 'idle' ? verify : null);
-    setLoading(false);
+    try {
+      const [status, tmpl] = await Promise.all([
+        getEmailStatus(currentClientId),
+        getEmailTemplates(currentClientId),
+      ]);
+      const [autoResult, limitResult, verifyResult] = await Promise.allSettled([
+        getSetting('email_automation_enabled', currentClientId),
+        getSetting('email_daily_limit', currentClientId),
+        getEmailVerifyStatus(currentClientId),
+      ]);
+      const autoSett  = autoResult.status  === 'fulfilled' ? autoResult.value  : {};
+      const limitSett = limitResult.status === 'fulfilled' ? limitResult.value : {};
+      const verify    = verifyResult.status === 'fulfilled' ? verifyResult.value : {};
+      setConnected(status.connected);
+      setConnEmail(status.email);
+      setProvider(status.provider || null);
+      setTemplates(Array.isArray(tmpl) ? tmpl : []);
+      setAutoEnabled(autoSett?.value === 'true');
+      setDailyLimit(limitSett?.value || '25');
+      setVerifyJob(verify?.status !== 'idle' ? verify : null);
+    } catch (e) {
+      showToast('Failed to load email settings: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function connectOutlook() {
-    const res = await fetch(`${BASE}/api/email/auth-url?client_id=${currentClientId}`);
-    const { url } = await res.json();
+    let url;
+    try {
+      ({ url } = await getEmailAuthUrl(currentClientId));
+    } catch (e) {
+      showToast('Failed to start Outlook connection: ' + e.message);
+      return;
+    }
     const popup = window.open(url, 'ms_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
       if (e.data?.type === 'MS_AUTH_SUCCESS') {
@@ -82,8 +96,13 @@ export default function EmailSettingsModal({ open, onClose }) {
   }
 
   async function connectGmail() {
-    const res = await fetch(`${BASE}/api/email/gmail-auth-url?client_id=${currentClientId}`);
-    const { url } = await res.json();
+    let url;
+    try {
+      ({ url } = await getGmailAuthUrl(currentClientId));
+    } catch (e) {
+      showToast('Failed to start Gmail connection: ' + e.message);
+      return;
+    }
     const popup = window.open(url, 'google_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
       if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
@@ -108,8 +127,12 @@ export default function EmailSettingsModal({ open, onClose }) {
   async function disconnect() {
     const label = provider === 'gmail' ? 'Gmail' : 'Outlook';
     if (!confirm(`Disconnect ${label}?`)) return;
-    await fetch(`${BASE}/api/email/disconnect?client_id=${currentClientId}`, { method: 'DELETE' });
-    setConnected(false); setConnEmail(null); setProvider(null);
+    try {
+      await disconnectEmail(currentClientId);
+      setConnected(false); setConnEmail(null); setProvider(null);
+    } catch (e) {
+      showToast('Failed to disconnect: ' + e.message);
+    }
   }
 
   function openAdd() {
@@ -126,28 +149,32 @@ export default function EmailSettingsModal({ open, onClose }) {
 
   async function saveTemplate() {
     if (!form.name || !form.subject || !form.body) return;
-    if (editing) {
-      const res = await fetch(`${BASE}/api/email/templates/${editing}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const updated = await res.json();
-      setTemplates(ts => ts.map(t => t.id === editing ? updated : t));
-    } else {
-      const res = await fetch(`${BASE}/api/email/templates`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, client_id: currentClientId }),
-      });
-      const created = await res.json();
-      setTemplates(ts => [...ts, created]);
+    const prev = templates;
+    try {
+      if (editing) {
+        const updated = await updateEmailTemplate(editing, form);
+        setTemplates(ts => ts.map(t => t.id === editing ? updated : t));
+      } else {
+        const created = await createEmailTemplate({ ...form, client_id: currentClientId });
+        setTemplates(ts => [...ts, created]);
+      }
+      setShowForm(false);
+    } catch (e) {
+      setTemplates(prev);
+      showToast('Failed to save template: ' + e.message);
     }
-    setShowForm(false);
   }
 
   async function deleteTemplate(id) {
     if (!confirm('Delete this template?')) return;
-    await fetch(`${BASE}/api/email/templates/${id}`, { method: 'DELETE' });
+    const prev = templates;
     setTemplates(ts => ts.filter(t => t.id !== id));
+    try {
+      await deleteEmailTemplate(id);
+    } catch (e) {
+      setTemplates(prev);
+      showToast('Failed to delete template: ' + e.message);
+    }
   }
 
   async function startVerification() {
@@ -155,25 +182,19 @@ export default function EmailSettingsModal({ open, onClose }) {
     if (!confirm(`Verify up to ${limit} unverified emails using Reoon? This uses ${limit} credits.`)) return;
     setVerifying(true);
     try {
-      const res = await fetch(`${BASE}/api/email/verify-start`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: currentClientId, limit }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const data = await startEmailVerify({ client_id: currentClientId, limit });
       setVerifyJob({ status: 'running', total: data.total, checked: 0 });
       const TERMINAL = ['completed', 'partial', 'failed', 'timeout', 'idle'];
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const r = await fetch(`${BASE}/api/email/verify-status?client_id=${currentClientId}`);
-          const j = await r.json();
+          const j = await getEmailVerifyStatus(currentClientId);
           setVerifyJob(j);
           if (TERMINAL.includes(j.status)) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore poll errors */ }
       }, 10000);
     } catch (e) {
       showToast('Verification failed: ' + e.message);
@@ -184,17 +205,16 @@ export default function EmailSettingsModal({ open, onClose }) {
 
   async function saveAutomation(enabled, limit) {
     setSavingAuto(true);
-    await Promise.all([
-      fetch(`${BASE}/api/settings/email_automation_enabled`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: enabled.toString(), client_id: currentClientId }),
-      }),
-      fetch(`${BASE}/api/settings/email_daily_limit`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: limit.toString(), client_id: currentClientId }),
-      }),
-    ]);
-    setSavingAuto(false);
+    try {
+      await Promise.all([
+        putSetting('email_automation_enabled', enabled.toString(), currentClientId),
+        putSetting('email_daily_limit', limit.toString(), currentClientId),
+      ]);
+    } catch (e) {
+      showToast('Failed to save automation settings: ' + e.message);
+    } finally {
+      setSavingAuto(false);
+    }
   }
 
   const inp = {
@@ -351,7 +371,7 @@ export default function EmailSettingsModal({ open, onClose }) {
                 </div>
                 <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 <button onClick={async () => {
-                  await fetch(`${BASE}/api/email/verify-reset?client_id=${currentClientId}`, { method: 'DELETE' });
+                  try { await resetEmailVerifyJob(currentClientId); } catch { /* best effort */ }
                   setVerifyJob(null);
                 }} style={{ fontSize: '0.72rem', color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                   Job stuck? Reset and try again
@@ -369,12 +389,7 @@ export default function EmailSettingsModal({ open, onClose }) {
                 </div>
                 <button onClick={async () => {
                   try {
-                    const r = await fetch(`${BASE}/api/email/verify-reprocess`, {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ client_id: currentClientId }),
-                    });
-                    const d = await r.json();
-                    if (d.error) { showToast(d.error); return; }
+                    const d = await reprocessEmailVerify({ client_id: currentClientId });
                     setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
                     showToast(`Done — ${d.verified} verified, ${d.blocked} blocked, ${d.skipped} unknown`);
                   } catch (e) { showToast('Reprocess failed: ' + e.message); }
@@ -389,12 +404,7 @@ export default function EmailSettingsModal({ open, onClose }) {
                 <div style={{ color: '#f87171', marginBottom: '0.4rem' }}>⚠ Job failed: {verifyJob.reason}</div>
                 <button onClick={async () => {
                   try {
-                    const r = await fetch(`${BASE}/api/email/verify-reprocess`, {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ client_id: currentClientId }),
-                    });
-                    const d = await r.json();
-                    if (d.error) { showToast(d.error); return; }
+                    const d = await reprocessEmailVerify({ client_id: currentClientId });
                     setVerifyJob(prev => ({ ...prev, ...d, status: 'completed' }));
                     showToast(`Done — ${d.verified} verified, ${d.blocked} blocked`);
                   } catch (e) { showToast('Reprocess failed: ' + e.message); }

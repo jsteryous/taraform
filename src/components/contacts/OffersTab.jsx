@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
 
 export default function OffersTab({ contact, onChange, onChangeMultiple, onOffersChange }) {
-  const { loadFullContact } = useApp();
+  const { loadFullContact, showToast } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
   const [form, setForm]           = useState({ amount: '', status: 'Pending', notes: '' });
@@ -46,8 +46,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
       }
       setShowModal(false);
     } catch (e) {
-      console.error(e);
-      alert('Failed to save offer');
+      showToast('Failed to save offer: ' + e.message);
     }
   }
 
@@ -58,8 +57,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
       // Update immediately
       if (onOffersChange) onOffersChange(offers.filter(o => o.id !== id));
     } catch (e) {
-      console.error(e);
-      alert('Failed to remove offer');
+      showToast('Failed to remove offer: ' + e.message);
     }
   }
 

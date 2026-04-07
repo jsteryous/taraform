@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { resolveConfig } from '../lib/clientConfig';
 import { supabase } from '../lib/supabase';
-
-const BASE = 'https://taraform-server-production.up.railway.app';
+import { getEmailStats } from '../lib/api';
 
 const PERIODS = [
   { value: 'today',   label: 'Today' },
@@ -112,8 +111,7 @@ export default function Dashboard({ onClose, onViewContact }) {
   const loadEmailStats = useCallback(async (p) => {
     if (!currentClientId) return;
     try {
-      const res = await fetch(`${BASE}/api/email/stats?client_id=${currentClientId}&period=${p}`);
-      if (res.ok) setEmailData(await res.json());
+      setEmailData(await getEmailStats(currentClientId, p));
     } catch { /* email stats are optional */ }
   }, [currentClientId]);
 

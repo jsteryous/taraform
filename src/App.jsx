@@ -12,7 +12,7 @@ import Toast from './components/shared/Toast';
 import { mapDbContact } from './lib/utils';
 
 function CRM() {
-  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact } = useApp();
+  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact, showToast } = useApp();
 
   async function handleExport(selectedContacts) {
     let source = selectedContacts?.length ? selectedContacts : null;
@@ -105,16 +105,16 @@ function CRM() {
       <div className="container">
         <Header
           onAddContact={() => {
-            if (!currentClientId) { alert('Select a client first.'); return; }
+            if (!currentClientId) { showToast('Select a client first.'); return; }
             setShowAdd(true);
           }}
           onImport={() => {
-            if (!currentClientId) { alert('Select a client first.'); return; }
+            if (!currentClientId) { showToast('Select a client first.'); return; }
             setShowImport(true);
           }}
           onExport={handleExport}
           onDashboard={() => {
-            if (!currentClientId) { alert('Select a client first.'); return; }
+            if (!currentClientId) { showToast('Select a client first.'); return; }
             setShowDashboard(d => !d);
           }}
           dashboardActive={showDashboard}

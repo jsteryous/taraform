@@ -21,7 +21,7 @@ function parseCSV(text) {
 }
 
 export default function EmailVerificationImportModal({ open, onClose }) {
-  const { setContacts, currentClientId } = useApp();
+  const { setContacts, currentClientId, showToast } = useApp();
   const [step, setStep]       = useState('upload'); // upload | preview | done
   const [preview, setPreview] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -65,11 +65,11 @@ export default function EmailVerificationImportModal({ open, onClose }) {
       const safeIdx = h.indexOf('is_safe_to_send');
 
       if (emailIdx === -1) {
-        alert('Could not find Email column.');
+        showToast('Could not find Email column.');
         return;
       }
       if (reoonStatusIdx === -1 && safeIdx === -1) {
-        alert('Could not find a verification status column. Make sure this is a Reoon/NeverBounce export.');
+        showToast('Could not find a verification status column. Make sure this is a Reoon/NeverBounce export.');
         return;
       }
 

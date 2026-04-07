@@ -23,7 +23,7 @@ export default function SmsSettingsModal({ open, onClose }) {
   }, [open, currentClientId]);
 
   async function save() {
-    if (parseInt(end) <= parseInt(start)) { alert('End hour must be after start hour.'); return; }
+    if (parseInt(end) <= parseInt(start)) { showToast('End hour must be after start hour.'); return; }
     await Promise.all([
       putSetting('send_start_hour', start, currentClientId),
       putSetting('send_end_hour', end, currentClientId),
