@@ -22,7 +22,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **`contact_offers.client_id` is unreliable** (null on older rows). Always join through `property_crm_contacts` when filtering by client.
 
-**`property_crm_contacts.id` is bigint** with a sequence default. Never pass `id` manually on insert.
+**`property_crm_contacts.id` is bigint.** `saveContact` upserts with `onConflict: 'id'` — always pass a numeric `id`. New contacts use `Date.now()` as a client-generated numeric ID (avoids sequence conflicts at timestamp scale). Never pass a string (e.g. UUID) — bigint column will reject it.
 
 **No recursive `setSending` pattern.** If a send function owns a `setSending(true/false)` try/finally, inline any second API call — don't call the function recursively.
 
@@ -30,7 +30,11 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **Config system:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
 
-**AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs (`loadingRef`, `contactsRef`) and functional setState to stay stable. Don't add state to their dep arrays.
+**AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs (`loadingRef`, `contactsRef`) and functional setState to stay stable. Don't add state to their dep arrays. All have empty `[]` dep arrays with eslint-disable — this is intentional, don't "fix" it without understanding the ref pattern.
+
+**Array fields in ContactDetail save on blur, not on change.** Phones, taxMapIds, and propertyAddresses update draft state on `onChange` and call `update()`/`updateMultiField()` on `onBlur`. This matches the pattern for all other text fields. Don't revert to calling save on `onChange`.
+
+**`activityLog` entry IDs use `crypto.randomUUID()`.** These are client-side IDs stored in a JSON column — strings are fine. The contact-level `id` must stay numeric (`Date.now()`) since the DB column is bigint.
 
 ## Multi-tenancy
 

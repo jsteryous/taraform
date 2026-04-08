@@ -42,7 +42,7 @@ export default function AddContactModal({ open, onClose }) {
       return;
     }
     const contact = {
-      id: crypto.randomUUID(),
+      id: Date.now(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phones: form.phones.map(p => p.trim()).filter(Boolean),
