@@ -119,7 +119,7 @@ export function parseCustomFieldDefs(raw) {
 }
 
 export function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  const lines = text.trim().replace(/\r/g, '').split('\n');
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   return {
     headers,

@@ -12,7 +12,7 @@ const FIELD_LABELS = {
 };
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  const lines = text.trim().replace(/\r/g, '').split('\n');
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   const rows = lines.slice(1).map(line => {
     const values = [];
@@ -64,17 +64,35 @@ function autoMapCustomFields(headers, fieldDefs) {
   return cm;
 }
 
-function findDuplicates(contact, existing) {
-  return existing.filter(c => {
-    const nameMatch = contact.firstName && contact.lastName &&
-      c.firstName?.toLowerCase() === contact.firstName.toLowerCase() &&
-      c.lastName?.toLowerCase() === contact.lastName.toLowerCase();
-    const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
-      contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
-    const taxMatch = contact.taxMapIds?.length && c.taxMapIds?.length &&
-      contact.taxMapIds.some(t1 => c.taxMapIds.some(t2 => t1.toLowerCase() === t2.toLowerCase()));
-    return nameMatch || addressMatch || taxMatch;
-  });
+// Build O(1) lookup maps from existing contacts — used in handlePreview
+function buildLookupMaps(contacts) {
+  const byName = new Map();
+  const byAddress = new Map();
+  const byTaxId = new Map();
+  for (const c of contacts) {
+    if (c.firstName && c.lastName) {
+      byName.set(`${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}`, c);
+    }
+    for (const a of c.propertyAddresses || []) byAddress.set(a.toLowerCase(), c);
+    for (const t of c.taxMapIds || []) byTaxId.set(t.toLowerCase(), c);
+  }
+  return { byName, byAddress, byTaxId };
+}
+
+function findDuplicate(contact, { byName, byAddress, byTaxId }) {
+  if (contact.firstName && contact.lastName) {
+    const match = byName.get(`${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`);
+    if (match) return match;
+  }
+  for (const a of contact.propertyAddresses || []) {
+    const match = byAddress.get(a.toLowerCase());
+    if (match) return match;
+  }
+  for (const t of contact.taxMapIds || []) {
+    const match = byTaxId.get(t.toLowerCase());
+    if (match) return match;
+  }
+  return null;
 }
 
 export default function ImportModal({ open, onClose }) {
@@ -208,13 +226,13 @@ export default function ImportModal({ open, onClose }) {
 
   function handlePreview() {
     const parsed = buildContacts();
+    const maps = buildLookupMaps(contacts);
     const toAdd = [], toUpdate = [], toSkip = [];
     for (const c of parsed) {
-      const dupes = findDuplicates(c, contacts);
-      if (dupes.length === 0) {
+      const existing = findDuplicate(c, maps);
+      if (!existing) {
         toAdd.push(c);
       } else {
-        const existing = dupes[0];
         const newPhones = c.phones.filter(p => !(existing.phones || []).includes(p));
         if (newPhones.length > 0) {
           toUpdate.push({ existing, newPhones });
@@ -232,8 +250,9 @@ export default function ImportModal({ open, onClose }) {
     setImporting(true);
     try {
       const { toAdd, toUpdate } = preview;
+      const CHUNK = 500;
 
-      // Bulk insert new contacts
+      // Bulk insert new contacts in chunks of 500
       if (toAdd.length > 0) {
         const records = toAdd.map((c) => ({
           user_id: user.id,
@@ -253,20 +272,25 @@ export default function ImportModal({ open, onClose }) {
           created_at: c.createdAt,
           updated_at: c.updatedAt,
         }));
-        const { data, error } = await supabase.from('property_crm_contacts').insert(records).select();
-        if (error) {
-          console.error('Import error — message:', error.message);
-          console.error('Import error — code:', error.code);
-          console.error('Import error — details:', error.details);
-          console.error('Import error — hint:', error.hint);
-          console.error('First record sample:', JSON.stringify(records[0], null, 2));
-          throw error;
+
+        let allInserted = [];
+        for (let i = 0; i < records.length; i += CHUNK) {
+          const { data, error } = await supabase
+            .from('property_crm_contacts')
+            .insert(records.slice(i, i + CHUNK))
+            .select();
+          if (error) {
+            console.error('Import error — message:', error.message, 'code:', error.code, 'details:', error.details);
+            console.error('Chunk start index:', i, 'sample:', JSON.stringify(records[i], null, 2));
+            throw error;
+          }
+          allInserted = allInserted.concat(data || []);
         }
-        setContacts(prev => [...(data || []).map(mapDbContact), ...prev]);
+        setContacts(prev => [...allInserted.map(mapDbContact), ...prev]);
       }
 
-      // Update phones on duplicates
-      for (const { existing, newPhones } of toUpdate) {
+      // Update phones on duplicates — all in parallel
+      await Promise.all(toUpdate.map(async ({ existing, newPhones }) => {
         const merged = [...new Set([...(existing.phones || []), ...newPhones])];
         const { error } = await supabase
           .from('property_crm_contacts')
@@ -274,7 +298,7 @@ export default function ImportModal({ open, onClose }) {
           .eq('id', existing.id);
         if (error) throw error;
         setContacts(prev => prev.map(c => c.id === existing.id ? { ...c, phones: merged } : c));
-      }
+      }));
 
       showToast(`✓ ${toAdd.length} added · ${toUpdate.length} updated · ${preview.toSkip.length} skipped`);
       handleClose();
