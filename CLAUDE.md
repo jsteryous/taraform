@@ -32,9 +32,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs (`loadingRef`, `contactsRef`) and functional setState to stay stable. Don't add state to their dep arrays. All have empty `[]` dep arrays with eslint-disable — this is intentional, don't "fix" it without understanding the ref pattern.
 
-**Array fields in ContactDetail save on blur, not on change.** Phones, taxMapIds, and propertyAddresses update draft state on `onChange` and call `update()`/`updateMultiField()` on `onBlur`. This matches the pattern for all other text fields. Don't revert to calling save on `onChange`.
-
-**`activityLog` entry IDs use `crypto.randomUUID()`.** These are client-side IDs stored in a JSON column — strings are fine. The contact-level `id` must stay numeric (`Date.now()`) since the DB column is bigint.
+**All fields in ContactDetail save on blur, not on change.** Draft state updates on `onChange`; `update()`/`updateMultiField()` fires on `onBlur`. Don't revert to saving on `onChange`.
 
 ## Multi-tenancy
 
