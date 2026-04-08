@@ -76,13 +76,21 @@ export default function SmsTab({ contact }) {
         <div className="sms-opt-out-warning">⛔ This contact has opted out — sending is disabled.</div>
       ) : (
         <div className="sms-send-bar">
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Type a message..."
-            rows={2}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Type a message..."
+              rows={2}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            />
+            {text.length > 0 && (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                {text.length} chars · {Math.ceil(text.length / 160)} SMS{Math.ceil(text.length / 160) !== 1 ? 's' : ''}
+                {text.length > 160 && <span style={{ color: 'var(--warning)', marginLeft: '0.4rem' }}>({160 - (text.length % 160) || 160} remaining in segment)</span>}
+              </div>
+            )}
+          </div>
           <button className="btn-primary" onClick={handleSend} disabled={sending || !text.trim()}>
             {sending ? '...' : 'Send'}
           </button>

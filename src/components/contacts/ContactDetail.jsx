@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getStatusClass, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
@@ -29,6 +29,8 @@ export default function ContactDetail({ onClose }) {
   const STATUSES = cfg.statuses.map(s => s.value);
   const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
   const [draft, setDraft] = useState(null);
+  const [saveStatus, setSaveStatus] = useState(''); // '' | 'saving' | 'saved'
+  const saveTimer = useRef(null);
 
   const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
   const visibleFields = cfg.visibleFields;
@@ -39,15 +41,24 @@ export default function ContactDetail({ onClose }) {
 
   if (!currentContact || !draft) return null;
 
+  function flashSaved() {
+    setSaveStatus('saving');
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => setSaveStatus('saved'), 400);
+    saveTimer.current = setTimeout(() => setSaveStatus(''), 2200);
+  }
+
   async function update(field, value) {
     const prev = draft;
     const updated = { ...draft, [field]: value, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
+    flashSaved();
     try {
       await saveContact(updated);
     } catch {
       showToast('Save failed — try again');
+      setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
     }
@@ -58,10 +69,12 @@ export default function ContactDetail({ onClose }) {
     const updated = { ...draft, ...fields, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
+    flashSaved();
     try {
       await saveContact(updated);
     } catch {
       showToast('Save failed — try again');
+      setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
     }
@@ -72,10 +85,12 @@ export default function ContactDetail({ onClose }) {
     const updated = { ...draft, customFields: { ...draft.customFields, [key]: value }, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
+    flashSaved();
     try {
       await saveContact(updated);
     } catch {
       showToast('Save failed — try again');
+      setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
     }
@@ -129,7 +144,13 @@ export default function ContactDetail({ onClose }) {
       <div className="detail-page-header">
         <button className="back-button" onClick={onClose}>← Back</button>
         <span className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</span>
-        <button onClick={handleDelete} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.4rem 0.875rem', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+        {saveStatus === 'saving' && (
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Saving…</span>
+        )}
+        {saveStatus === 'saved' && (
+          <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontFamily: 'var(--mono)' }}>✓ Saved</span>
+        )}
+        <button onClick={handleDelete} style={{ marginLeft: 'auto', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.4rem 0.875rem', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
       </div>
 
       <div className="detail-page-content">
@@ -370,16 +391,36 @@ export default function ContactDetail({ onClose }) {
 
         {/* ── Main area ── */}
         <div className="notes-main-area">
-          <div className="detail-tabs">
+          <div className="detail-tabs" role="tablist" aria-label="Contact sections">
             {cfg.tabs.filter(t => t !== 'offers').map(t => (
-              <button key={t} className={`detail-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+              <button key={t}
+                role="tab"
+                id={`tab-${t}`}
+                aria-selected={tab === t}
+                aria-controls={`tabpanel-${t}`}
+                tabIndex={tab === t ? 0 : -1}
+                className={`detail-tab${tab === t ? ' active' : ''}`}
+                onClick={() => setTab(t)}
+                onKeyDown={e => {
+                  const tabs = cfg.tabs.filter(x => x !== 'offers');
+                  const idx = tabs.indexOf(t);
+                  if (e.key === 'ArrowRight') { e.preventDefault(); setTab(tabs[(idx + 1) % tabs.length]); }
+                  if (e.key === 'ArrowLeft')  { e.preventDefault(); setTab(tabs[(idx - 1 + tabs.length) % tabs.length]); }
+                }}
+              >
                 {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : '✉ Email'}
               </button>
             ))}
           </div>
-          {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
-          {tab === 'sms'   && <SmsTab   contact={draft} />}
-          {tab === 'email' && <EmailTab contact={draft} />}
+          <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
+            {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
+          </div>
+          <div role="tabpanel" id="tabpanel-sms" aria-labelledby="tab-sms" hidden={tab !== 'sms'}>
+            {tab === 'sms' && <SmsTab contact={draft} />}
+          </div>
+          <div role="tabpanel" id="tabpanel-email" aria-labelledby="tab-email" hidden={tab !== 'email'}>
+            {tab === 'email' && <EmailTab contact={draft} />}
+          </div>
         </div>
 
         {/* ── Offers — equal split right column ── */}

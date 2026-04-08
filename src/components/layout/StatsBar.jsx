@@ -51,15 +51,16 @@ export default function StatsBar({ onFilterStatus }) {
           ? (totalCount ?? '…')
           : (counts[label] ?? '…');
         return (
-          <div key={label}
+          <button key={label}
             onClick={() => onFilterStatus(status)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 0.75rem', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--surface)', transition: 'background 0.15s' }}
+            aria-label={`Filter by ${label}: ${count}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 0.75rem', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--surface)', transition: 'background 0.15s', fontFamily: 'inherit' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
             onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}
           >
             <span style={{ fontWeight: 700, fontSize: '0.9rem', color }}>{count}</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{label}</span>
-          </div>
+          </button>
         );
       })}
     </div>

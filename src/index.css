@@ -243,6 +243,17 @@ button:hover, .btn:hover {
     border-color: var(--text-muted);
 }
 
+/* ── Focus rings for keyboard navigation ── */
+button:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .btn-primary {
     background: var(--accent);
     border-color: var(--accent);
@@ -795,9 +806,16 @@ select.detail-input {
 
 /* ── Tabs in detail view ── */
 .detail-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:1.25rem; }
-.detail-tab { padding:0.6rem 1.1rem; font-size:0.875rem; font-weight:500; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; background:none; border-top:none; border-left:none; border-right:none; font-family:var(--sans); transition:color 0.15s; }
+.detail-tab { padding:0.6rem 1.1rem; font-size:0.875rem; font-weight:500; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; background:none; border-top:none; border-left:none; border-right:none; font-family:var(--sans); transition:color 0.15s, border-color 0.15s; }
 .detail-tab:hover { color:var(--text); }
+.detail-tab:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; border-radius:3px 3px 0 0; }
 .detail-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+/* ── Dropdown filter items: highlight on keyboard focus too ── */
+.filter-dropdown-item:hover,
+.filter-dropdown-item:focus-within {
+    background: var(--surface-hover);
+}
 
 /* ── SMS thread ── */
 .sms-thread { display:flex; flex-direction:column; gap:0.625rem; margin-bottom:1rem; }
@@ -922,8 +940,16 @@ input[type="file"] {
 
 @media (max-width: 768px) {
     .contact-item {
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
+        grid-template-columns: 4px 36px 1fr 120px;
+        gap: 0 0.75rem;
+    }
+
+    .contact-county {
+        display: none;
+    }
+
+    .contact-phones {
+        font-size: 0.8rem;
     }
 
     .form-row {
@@ -936,6 +962,17 @@ input[type="file"] {
 
     .controls {
         flex-direction: column;
+    }
+
+    .modal-content {
+        margin: 0.5rem;
+        max-width: calc(100vw - 1rem) !important;
+        border-radius: 10px;
+    }
+
+    .modal {
+        padding: 0.5rem;
+        align-items: flex-end;
     }
 }
 

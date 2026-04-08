@@ -247,9 +247,7 @@ export default function ContactList({ onView, onExport }) {
                 <button className="btn-small" onClick={() => setFilterStatuses([])}>None</button>
               </div>
               {ALL_STATUSES.map(s => (
-                <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <label key={s} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
                   <input type="checkbox" checked={selectedStatuses.has(s)} onChange={() => toggleStatus(s)} style={{ width: '14px', height: '14px' }} />
                   {s}
                 </label>
@@ -271,9 +269,7 @@ export default function ContactList({ onView, onExport }) {
                   <button className="btn-small" onClick={() => setFilterCounties([])}>All</button>
                 </div>
                 {counties.map(c => (
-                  <label key={c} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <label key={c} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
                     <input type="checkbox" checked={selectedCounties.has(c)} onChange={() => toggleCounty(c)} style={{ width: '14px', height: '14px' }} />
                     {c}
                   </label>
@@ -293,27 +289,21 @@ export default function ContactList({ onView, onExport }) {
             <div style={{ ...dropStyle, minWidth: '240px' }}>
               <div style={{ padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Phone</div>
               {PHONE_OPTIONS.map(o => (
-                <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
                   <input type="radio" name="phone_filter" checked={phoneFilter === o.value} onChange={() => setFilterPhone(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
               <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Email</div>
               {EMAIL_OPTIONS.map(o => (
-                <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
                   <input type="radio" name="email_filter" checked={emailFilter === o.value} onChange={() => setFilterEmail(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
               <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Activity</div>
               {ACTIVITY_OPTIONS.map(o => (
-                <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
                   <input type="radio" name="activity_filter" checked={activityFilter === o.value} onChange={() => setFilterActivity(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
