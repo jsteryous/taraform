@@ -1,10 +1,14 @@
 # Taraform Frontend
 
-Multi-tenant SMS/email outreach CRM for land acquisition. React 18 + Vite, Supabase direct DB, deployed to GitHub Pages (taraform.org) via CI on push to `main`. No TypeScript — plain JSX. Primary client: Table Rock Partners (UUID: `f3a69c31-8e40-4ea0-865a-d8bd9214376d`).
+Multi-tenant SMS/email outreach CRM for land acquisition. React 18 + Vite + React Router, Supabase direct DB, deployed to GitHub Pages (taraform.org) via CI on push to `main`. No TypeScript — plain JSX. Primary client: Table Rock Partners (UUID: `f3a69c31-8e40-4ea0-865a-d8bd9214376d`).
 
 Supabase credentials in `.env.local` (gitignored). Security enforced by RLS — never hardcode credentials.
 
 Railway server: `https://taraform-server-production.up.railway.app` (repo: jsteryous/taraform-server)
+
+## Routing
+
+Uses `HashRouter` (GitHub Pages compatible). Routes: `/#/` (list), `/#/contact/:id` (detail overlay), `/#/dashboard`. All navigation via `useNavigate` — never manipulate `window.location` for these paths. Contact detail is a full-screen overlay, not a separate page. Back button closes it via the URL sync effect in App.jsx.
 
 ## Gotchas & required patterns
 
@@ -13,8 +17,6 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 **`saveContact` is async and throws.** Always `await` it. Follow the optimistic update pattern in ContactDetail (`update`/`updateMultiple`/`updateCustomField`): apply locally, revert + `showToast` on catch.
 
 **`custom_field_definitions` is a TEXT column** (not JSONB). Always parse with `parseCustomFieldDefs(raw)` from utils.js — never bare `JSON.parse`. Handles null, already-parsed arrays, and malformed JSON (returns `[]`).
-
-**Data mapping:** DB is snake_case, frontend is camelCase. Always use `mapDbContact` / `mapContactToDb` in utils.js.
 
 **All Railway calls go through `src/lib/api.js`.** Never call `fetch()` directly for Railway endpoints. `getSetting` may return 404 for unseeded keys — use `Promise.allSettled` when loading multiple settings in parallel.
 
@@ -30,7 +32,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **Config system:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
 
-**Error feedback:** `showToast` from `useApp()` for all user-facing errors — never `alert()`. Use `Promise.allSettled` (not `Promise.all`) for parallel fetches that update independent UI state.
+**Error feedback:** `showToast` from `useApp()` for all user-facing errors — never `alert()`.
 
 **AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs (`loadingRef`, `contactsRef`) and functional setState to stay stable with `[]` deps. Don't add state to their dep arrays.
 
