@@ -243,6 +243,6 @@ rm -f /tmp/gh-pages-deploy/assets/*
 cp dist/assets/* /tmp/gh-pages-deploy/assets/
 cp dist/index.html /tmp/gh-pages-deploy/
 cd /tmp/gh-pages-deploy && git add -A && git commit -m "deploy: <commit-sha>" && git push origin HEAD:gh-pages
-cd - && git worktree remove /tmp/gh-pages-deploy --force
+cd - && rm -rf /tmp/gh-pages-deploy
 ```
 GitHub Pages serves from the `gh-pages` branch automatically.
