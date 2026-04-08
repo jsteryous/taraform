@@ -22,16 +22,14 @@ export default function EmailTab({ contact }) {
   async function loadAll() {
     setLoading(true);
     try {
-      const [status, tmpl, msgs] = await Promise.all([
+      const [statusRes, tmplRes, msgsRes] = await Promise.allSettled([
         getEmailStatus(currentClientId),
         getEmailTemplates(currentClientId),
         getEmailMessages(contact.id, currentClientId),
       ]);
-      setConnected(status.connected);
-      setTemplates(Array.isArray(tmpl) ? tmpl : []);
-      setMessages(Array.isArray(msgs) ? msgs : []);
-    } catch (e) {
-      showToast('Failed to load email data: ' + e.message);
+      if (statusRes.status === 'fulfilled') setConnected(statusRes.value.connected);
+      setTemplates(tmplRes.status === 'fulfilled' && Array.isArray(tmplRes.value) ? tmplRes.value : []);
+      setMessages(msgsRes.status === 'fulfilled' && Array.isArray(msgsRes.value) ? msgsRes.value : []);
     } finally {
       setLoading(false);
     }

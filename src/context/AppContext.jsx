@@ -70,6 +70,20 @@ export function AppProvider({ children }) {
     // Email filter
     if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
     if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
+    // Activity filter — SMS handled server-side via last_sms_at
+    if (filters.activity) {
+      const [type, period] = filters.activity.split('_');
+      if (type === 'sms') {
+        if (period === 'never') {
+          q = q.is('last_sms_at', null);
+        } else {
+          const days = parseInt(period, 10);
+          const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+          q = q.gte('last_sms_at', cutoff);
+        }
+      }
+    }
+
     // Search (name, phone, county, tax map id)
     if (filters.search) {
       const s = filters.search.toLowerCase().trim();

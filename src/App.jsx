@@ -80,7 +80,7 @@ function CRM() {
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('contact');
     if (id && contacts.length) {
-      const found = contacts.find(c => c.id == id);
+      const found = contacts.find(c => c.id === Number(id));
       if (found) {
         setCurrentContact(found);
         loadFullContact(found.id);
@@ -130,7 +130,7 @@ function CRM() {
             }} />
           : <ContactList
               onView={async id => {
-                const c = contacts.find(c => c.id == id);
+                const c = contacts.find(c => c.id === id);
                 if (c) setCurrentContact(c); // show immediately with list data
                 const full = await loadFullContact(id); // then enrich with full data
                 if (full) setCurrentContact(full);

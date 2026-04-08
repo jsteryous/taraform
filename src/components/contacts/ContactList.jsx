@@ -75,6 +75,7 @@ export default function ContactList({ onView, onExport,
     phone:     phoneFilter || null,
     email:     emailFilter || null,
     search:    search || null,
+    activity:  activityFilter || null,
   };
 
   // Reload when filters change
@@ -89,7 +90,7 @@ export default function ContactList({ onView, onExport,
     } else {
       loadContacts(currentClientId, serverFilters);
     }
-  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail]); // eslint-disable-line
+  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail, filterActivity]); // eslint-disable-line
 
   // Reset on client change
   useEffect(() => {
@@ -135,7 +136,8 @@ export default function ContactList({ onView, onExport,
     setFilterActivity('');
   }
 
-  // Activity filter is still client-side (requires activityLog/lastSmsAt)
+  // Note activity filter is client-side (activityLog JSONB not fetched in list query).
+  // SMS activity filters are handled server-side via last_sms_at in buildQuery.
   const filtered = activityFilter ? contacts.filter(c => {
     const [type, period] = activityFilter.split('_');
     if (type === 'note') {
@@ -144,12 +146,6 @@ export default function ContactList({ onView, onExport,
       if (period === 'never' && lastNote) return false;
       if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
       if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
-    }
-    if (type === 'sms') {
-      const lastSms = c.lastSmsAt ? new Date(c.lastSmsAt) : null;
-      if (period === 'never' && lastSms) return false;
-      if (period === '7'  && (!lastSms || lastSms < daysAgo(7)))  return false;
-      if (period === '30' && (!lastSms || lastSms < daysAgo(30))) return false;
     }
     return true;
   }) : contacts;

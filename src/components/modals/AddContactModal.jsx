@@ -37,6 +37,10 @@ export default function AddContactModal({ open, onClose }) {
 
   async function handleSave(e) {
     e.preventDefault();
+    if (!form.firstName.trim() && !form.lastName.trim()) {
+      alert('Please enter at least a first or last name.');
+      return;
+    }
     const contact = {
       id: Date.now(),
       firstName: form.firstName.trim(),
