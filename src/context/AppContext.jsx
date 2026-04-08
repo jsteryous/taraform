@@ -116,6 +116,8 @@ export function AppProvider({ children }) {
       setTotalCount(count || 0);
     } catch (e) {
       console.error('loadContacts error:', e.message);
+      setToast('Failed to load contacts — check your connection');
+      setTimeout(() => setToast(null), 2500);
     } finally {
       setLoading(false);
     }
@@ -133,6 +135,8 @@ export function AppProvider({ children }) {
       _setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
     } catch (e) {
       console.error('loadMoreContacts error:', e.message);
+      setToast('Failed to load more contacts');
+      setTimeout(() => setToast(null), 2500);
     } finally {
       setLoading(false);
     }
@@ -142,7 +146,12 @@ export function AppProvider({ children }) {
   const loadFullContact = useCallback(async (contactId) => {
     const { data, error } = await supabase
       .from('property_crm_contacts').select('*').eq('id', contactId).maybeSingle();
-    if (error || !data) { console.error('loadFullContact contact error:', error); return null; }
+    if (error || !data) {
+      console.error('loadFullContact contact error:', error);
+      setToast('Failed to load contact');
+      setTimeout(() => setToast(null), 2500);
+      return null;
+    }
     const full = mapDbContact(data);
     const { data: offerRows, error: offersError } = await supabase
       .from('contact_offers')

@@ -138,17 +138,19 @@ export default function ContactList({ onView, onExport,
 
   // Note activity filter is client-side (activityLog JSONB not fetched in list query).
   // SMS activity filters are handled server-side via last_sms_at in buildQuery.
-  const filtered = activityFilter ? contacts.filter(c => {
+  const filtered = useMemo(() => {
+    if (!activityFilter) return contacts;
     const [type, period] = activityFilter.split('_');
-    if (type === 'note') {
+    if (type !== 'note') return contacts;
+    return contacts.filter(c => {
       const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
       const lastNote = notes.map(e => new Date(e.timestamp || e.createdAt)).filter(d => !isNaN(d)).sort((a,b) => b-a)[0];
       if (period === 'never' && lastNote) return false;
       if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
       if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
-    }
-    return true;
-  }) : contacts;
+      return true;
+    });
+  }, [contacts, activityFilter]);
 
   // Get unique counties from loaded contacts for the dropdown
   const counties = [...new Set(contacts.map(c => c.county).filter(Boolean))].sort();
@@ -171,9 +173,9 @@ export default function ContactList({ onView, onExport,
     next.has(c) ? next.delete(c) : next.add(c);
     setFilterCounties([...next]);
   }
-  function toggleSelect(id) {
+  const toggleSelect = useCallback((id) => {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  }
+  }, []);
   function toggleSelectAll() {
     setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
   }
