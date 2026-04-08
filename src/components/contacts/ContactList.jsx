@@ -28,23 +28,22 @@ const EMAIL_OPTIONS = [
 
 function daysAgo(n) { return new Date(Date.now() - n * 24 * 60 * 60 * 1000); }
 
-export default function ContactList({ onView, onExport,
-  filterSearch, setFilterSearch,
-  filterStatuses, setFilterStatuses,
-  filterCounties, setFilterCounties,
-  filterPhone, setFilterPhone,
-  filterActivity, setFilterActivity,
-  filterEmail, setFilterEmail,
-}) {
+export default function ContactList({ onView, onExport }) {
   const {
     contacts, totalCount, loadingContacts,
     currentClientId, currentClient,
     deleteContact, showToast,
     loadContacts, loadMoreContacts,
+    filterSearch, setFilterSearch,
+    filterStatuses, setFilterStatuses,
+    filterCounties, setFilterCounties,
+    filterPhone, setFilterPhone,
+    filterActivity, setFilterActivity,
+    filterEmail, setFilterEmail,
   } = useApp();
 
   const cfg          = resolveConfig(currentClient);
-  const ALL_STATUSES = cfg.statuses.map(s => s.value);
+  const ALL_STATUSES = useMemo(() => cfg.statuses.map(s => s.value), [cfg]);
 
   // Local UI state
   const [selected,      setSelected]      = useState(new Set());
@@ -65,43 +64,28 @@ export default function ContactList({ onView, onExport,
   const emailFilter      = filterEmail    ?? '';
 
   // Memoize Sets — avoids new object identity on every render
-  const selectedStatuses = useMemo(() => new Set(filterStatuses ?? ALL_STATUSES), [filterStatuses, ALL_STATUSES.join(',')]); // eslint-disable-line
+  const selectedStatuses = useMemo(() => new Set(filterStatuses ?? ALL_STATUSES), [filterStatuses, ALL_STATUSES]);
   const selectedCounties = useMemo(() => new Set(filterCounties ?? []), [filterCounties]);
-
-  // Build filters object for server query
-  const serverFilters = {
-    statuses:  filterStatuses ?? null, // null = all
-    counties:  filterCounties?.length ? filterCounties : null,
-    phone:     phoneFilter || null,
-    email:     emailFilter || null,
-    search:    search || null,
-    activity:  activityFilter || null,
-  };
 
   // Reload when filters change
   useEffect(() => {
     if (!currentClientId) return;
+    const filters = {
+      statuses: filterStatuses ?? null, // null = all
+      counties: filterCounties?.length ? filterCounties : null,
+      phone:    phoneFilter || null,
+      email:    emailFilter || null,
+      search:   search || null,
+      activity: activityFilter || null,
+    };
     clearTimeout(searchTimer.current);
     if (search) {
       // Debounce search
-      searchTimer.current = setTimeout(() => {
-        loadContacts(currentClientId, serverFilters);
-      }, 300);
+      searchTimer.current = setTimeout(() => loadContacts(currentClientId, filters), 300);
     } else {
-      loadContacts(currentClientId, serverFilters);
+      loadContacts(currentClientId, filters);
     }
-  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail, filterActivity]); // eslint-disable-line
-
-  // Reset on client change
-  useEffect(() => {
-    setFilterStatuses(null);
-    setFilterCounties([]);
-    setFilterSearch('');
-    setFilterPhone('');
-    setFilterEmail('');
-    setFilterActivity('');
-    setSelected(new Set());
-  }, [currentClientId]); // eslint-disable-line
+  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail, filterActivity, loadContacts]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -198,6 +182,16 @@ export default function ContactList({ onView, onExport,
 
   const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0);
 
+  // Current filter snapshot — used for load-more to continue with same query params
+  const serverFilters = {
+    statuses: filterStatuses ?? null,
+    counties: filterCounties?.length ? filterCounties : null,
+    phone:    phoneFilter || null,
+    email:    emailFilter || null,
+    search:   search || null,
+    activity: activityFilter || null,
+  };
+
   const filterBtn = (active) => ({
     display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '140px',
     justifyContent: 'space-between',
@@ -242,7 +236,7 @@ export default function ContactList({ onView, onExport,
 
         {/* Status */}
         <div ref={statusRef} style={{ position: 'relative' }}>
-          <button onClick={() => setStatusOpen(o => !o)} style={filterBtn(selectedStatuses.size < ALL_STATUSES.length)}>
+          <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" style={filterBtn(selectedStatuses.size < ALL_STATUSES.length)}>
             <span style={{ fontSize: '0.875rem' }}>{statusLabel}</span>
             <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
           </button>
@@ -267,7 +261,7 @@ export default function ContactList({ onView, onExport,
         {/* County */}
         {counties.length > 0 && (
           <div ref={countyRef} style={{ position: 'relative' }}>
-            <button onClick={() => setCountyOpen(o => !o)} style={filterBtn(selectedCounties.size > 0)}>
+            <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" style={filterBtn(selectedCounties.size > 0)}>
               <span style={{ fontSize: '0.875rem' }}>{countyLabel}</span>
               <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
             </button>
@@ -291,7 +285,7 @@ export default function ContactList({ onView, onExport,
 
         {/* More filters */}
         <div ref={moreRef} style={{ position: 'relative' }}>
-          <button onClick={() => setMoreOpen(o => !o)} style={{ ...filterBtn(moreActiveCount > 0), minWidth: 'auto', gap: '0.4rem' }}>
+          <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" style={{ ...filterBtn(moreActiveCount > 0), minWidth: 'auto', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.875rem' }}>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
             <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
           </button>

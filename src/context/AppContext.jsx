@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { mapDbContact, mapContactToDb } from '../lib/utils';
 
@@ -21,6 +21,14 @@ export function AppProvider({ children }) {
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [currentFilters, setCurrentFilters]   = useState(null);
 
+  // Filter state — lives here so it survives contact navigation and doesn't need prop drilling
+  const [filterSearch,   setFilterSearch]   = useState('');
+  const [filterStatuses, setFilterStatuses] = useState(null); // null = all statuses
+  const [filterCounties, setFilterCounties] = useState([]);
+  const [filterPhone,    setFilterPhone]    = useState('');
+  const [filterActivity, setFilterActivity] = useState('');
+  const [filterEmail,    setFilterEmail]    = useState('');
+
   // Refs so callbacks don't need state in their dep arrays
   const loadingRef  = useRef(false);
   const contactsRef = useRef([]);
@@ -38,6 +46,16 @@ export function AppProvider({ children }) {
   };
 
   const currentClient = clientsList.find(c => c.id === currentClientId) || null;
+
+  // Reset filters when the client changes
+  useEffect(() => {
+    setFilterSearch('');
+    setFilterStatuses(null);
+    setFilterCounties([]);
+    setFilterPhone('');
+    setFilterEmail('');
+    setFilterActivity('');
+  }, [currentClientId]);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
 
@@ -202,6 +220,12 @@ export function AppProvider({ children }) {
       theme, setTheme,
       toast, showToast,
       loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
+      filterSearch, setFilterSearch,
+      filterStatuses, setFilterStatuses,
+      filterCounties, setFilterCounties,
+      filterPhone, setFilterPhone,
+      filterActivity, setFilterActivity,
+      filterEmail, setFilterEmail,
     }}>
       {children}
     </AppContext.Provider>

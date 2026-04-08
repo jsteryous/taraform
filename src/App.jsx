@@ -52,14 +52,6 @@ function CRM() {
   const [showAdd, setShowAdd]     = useState(false);
   const [showImport, setShowImport] = useState(false);
 
-  // Persistent filter state — survives contact navigation
-  const [filterSearch,   setFilterSearch]   = useState('');
-  const [filterStatuses, setFilterStatuses] = useState(null); // null = all statuses
-  const [filterCounties, setFilterCounties] = useState([]);
-  const [filterPhone,    setFilterPhone]    = useState('');
-  const [filterActivity, setFilterActivity] = useState('');
-  const [filterEmail,    setFilterEmail]    = useState('');
-
   useEffect(() => {
     // Apply saved theme
     const saved = localStorage.getItem('taraform_theme') || 'dark';
@@ -146,18 +138,6 @@ function CRM() {
                 if (full) setCurrentContact(full);
               }}
               onExport={handleExport}
-              filterSearch={filterSearch}
-              setFilterSearch={setFilterSearch}
-              filterStatuses={filterStatuses}
-              setFilterStatuses={setFilterStatuses}
-              filterCounties={filterCounties}
-              setFilterCounties={setFilterCounties}
-              filterPhone={filterPhone}
-              setFilterPhone={setFilterPhone}
-              filterActivity={filterActivity}
-              setFilterActivity={setFilterActivity}
-              filterEmail={filterEmail}
-              setFilterEmail={setFilterEmail}
             />
         }
       </div>
