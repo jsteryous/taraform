@@ -204,26 +204,10 @@ Status values: Pending | Accepted | Rejected | Countered
 - Keep components focused — if a component is doing too much, split it
 
 ## Deploying
-**Do NOT use `npx gh-pages -d dist`** — strips env vars (supabaseUrl becomes undefined in production).
+Push to `main` — GitHub Actions builds and deploys to the `gh-pages` branch automatically (`.github/workflows/deploy.yml`).
 
-**CRITICAL: Always build from the main project directory** (`C:/Users/alexs/OneDrive/Desktop/taraform-react`), never from inside a git worktree subdirectory. Worktrees don't have `.env.local` (it's gitignored), so a build from a worktree produces a bundle with `supabaseUrl = undefined`.
+The build requires two repository secrets set in **GitHub → Settings → Secrets → Actions**:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-**CRITICAL: The env-var verification step below is REQUIRED — do not skip it.** If `grep` returns no output, the build is broken and must not be deployed.
-
-Use the git worktree method:
-```bash
-# Run from the MAIN project directory only
-npm run build
-
-# REQUIRED: verify env var is baked in — if this prints nothing, STOP and do not deploy
-grep -o "ykuenmwfxecmmqichwit" dist/assets/*.js
-
-git fetch origin gh-pages
-git worktree add /tmp/gh-pages-deploy origin/gh-pages
-rm -f /tmp/gh-pages-deploy/assets/*
-cp dist/assets/* /tmp/gh-pages-deploy/assets/
-cp dist/index.html /tmp/gh-pages-deploy/
-cd /tmp/gh-pages-deploy && git add -A && git commit -m "deploy: <commit-sha>" && git push origin HEAD:gh-pages
-cd - && rm -rf /tmp/gh-pages-deploy
-```
-GitHub Pages serves from the `gh-pages` branch automatically.
+If these secrets are missing the deployed bundle will have `supabaseUrl = undefined` and the app will crash on load.
