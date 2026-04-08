@@ -6,7 +6,7 @@ export default function NotesTab({ contact, onChange }) {
   function saveNote() {
     if (!newNote.trim()) return;
     const entry = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       text: newNote.trim(),
       timestamp: new Date().toISOString(),
       createdAt: new Date().toISOString(),

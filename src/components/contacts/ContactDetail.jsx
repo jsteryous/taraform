@@ -204,12 +204,15 @@ export default function ContactDetail({ onClose }) {
             {(draft.phones?.length ? draft.phones : ['']).map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                 <input type="tel" value={p} placeholder="(864) 555-1234" style={{ ...inlineInput, flex: 1 }}
-                  onChange={e => updatePhone(i, e.target.value)}
+                  onChange={e => {
+                    const phones = [...(draft.phones || [])];
+                    phones[i] = e.target.value;
+                    setDraft(d => ({ ...d, phones }));
+                  }}
                   onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                   onBlur={e => {
                     e.target.style.borderBottomColor = 'transparent';
-                    const formatted = formatPhone(e.target.value);
-                    if (formatted !== e.target.value) updatePhone(i, formatted);
+                    updatePhone(i, formatPhone(e.target.value));
                   }}
                 />
                 {p && <button onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem' }}>📋</button>}
@@ -256,9 +259,16 @@ export default function ContactDetail({ onClose }) {
               {(draft.taxMapIds || []).filter(Boolean).map((t, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                   <input value={t} style={{ ...inlineInput, flex: 1, ...fieldValue }}
-                    onChange={e => updateMultiField('taxMapIds', i, e.target.value)}
+                    onChange={e => {
+                      const arr = [...(draft.taxMapIds || [])];
+                      arr[i] = e.target.value;
+                      setDraft(d => ({ ...d, taxMapIds: arr }));
+                    }}
                     onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                    onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+                    onBlur={e => {
+                      e.target.style.borderBottomColor = 'transparent';
+                      updateMultiField('taxMapIds', i, e.target.value);
+                    }}
                     placeholder="—"
                   />
                   <button onClick={() => removeFromMultiField('taxMapIds', i)} style={removeBtn}>×</button>
@@ -303,9 +313,16 @@ export default function ContactDetail({ onClose }) {
                   {(draft.propertyAddresses || []).filter(Boolean).map((a, i) => (
                     <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <input value={a} style={{ ...inlineInput, flex: 1, ...fieldValue }}
-                        onChange={e => updateMultiField('propertyAddresses', i, e.target.value)}
+                        onChange={e => {
+                          const arr = [...(draft.propertyAddresses || [])];
+                          arr[i] = e.target.value;
+                          setDraft(d => ({ ...d, propertyAddresses: arr }));
+                        }}
                         onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                        onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+                        onBlur={e => {
+                          e.target.style.borderBottomColor = 'transparent';
+                          updateMultiField('propertyAddresses', i, e.target.value);
+                        }}
                         placeholder="—"
                       />
                       <button onClick={() => removeFromMultiField('propertyAddresses', i)} style={removeBtn}>×</button>

@@ -43,10 +43,12 @@ function CRM() {
     ]);
     const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
     const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.href = url;
     a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
     a.click();
+    URL.revokeObjectURL(url);
   }  const [authReady, setAuthReady] = useState(false);
   const [showAdd, setShowAdd]     = useState(false);
   const [showImport, setShowImport] = useState(false);

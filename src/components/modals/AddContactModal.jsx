@@ -42,7 +42,7 @@ export default function AddContactModal({ open, onClose }) {
       return;
     }
     const contact = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phones: form.phones.map(p => p.trim()).filter(Boolean),
@@ -52,7 +52,7 @@ export default function AddContactModal({ open, onClose }) {
       taxMapIds: form.taxMapIds.filter(Boolean),
       status: form.status,
       notes: form.notes.trim(),
-      activityLog: form.notes ? [{ id: Date.now(), text: form.notes, timestamp: new Date().toISOString(), type: 'note' }] : [],
+      activityLog: form.notes ? [{ id: crypto.randomUUID(), text: form.notes, timestamp: new Date().toISOString(), type: 'note' }] : [],
       customFields: {},
       smsStatus: 'eligible',
       createdAt: new Date().toISOString(),
