@@ -21,7 +21,7 @@ function findDuplicates(contact, existing) {
 }
 
 export default function AddContactModal({ open, onClose }) {
-  const { saveContact, currentClientId, contacts, currentClient } = useApp();
+  const { saveContact, currentClientId, contacts, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
@@ -38,7 +38,7 @@ export default function AddContactModal({ open, onClose }) {
   async function handleSave(e) {
     e.preventDefault();
     if (!form.firstName.trim() && !form.lastName.trim()) {
-      alert('Please enter at least a first or last name.');
+      showToast('Please enter at least a first or last name.');
       return;
     }
     const contact = {

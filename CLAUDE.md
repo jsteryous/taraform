@@ -68,9 +68,11 @@ In ContactDetail, `update` / `updateMultiple` / `updateCustomField` do optimisti
 ### Parsing custom_field_definitions
 `custom_field_definitions` on the clients object is a raw JSON string from the server (TEXT column). Always parse it with `parseCustomFieldDefs(raw)` from utils.js — never bare `JSON.parse`. The utility handles null, already-parsed arrays, and malformed JSON (returns `[]` on error).
 
-### Server-side pagination
-Contacts load 50 at a time via `loadContacts(clientId, filters)` in AppContext.
-Filters (status, county, search, phone, email) are passed as Supabase query params — never filter in JS.
+### Server-side filtering and pagination
+Contacts load 50 at a time via `loadContacts(clientId, filters)` in AppContext. All filters are passed as Supabase query params — never filter in JS. Supported filters: status, county, search, phone, email, activity.
+
+Activity filters: SMS filters (`sms_7`, `sms_30`, `sms_never`) are server-side via `last_sms_at` in `buildQuery`. Note filters (`note_7`, `note_30`, `note_never`) are client-side only — `activityLog` is not included in the list query (`LIST_FIELDS`), so note filters only work on contacts already loaded with full data.
+
 `loadFullContact(id)` fetches all fields including JSONB when opening a contact detail.
 
 ### Data mapping
@@ -99,7 +101,7 @@ Server repo: https://github.com/jsteryous/taraform-server (main server file: api
 
 Never call `fetch()` directly for Railway endpoints — always use the exports from `api.js`. See that file for the full export list.
 
-Settings (`getSetting`) may return 404 for keys that haven't been seeded yet — use `Promise.allSettled` when loading multiple settings so one missing key doesn't abort the whole load.
+Settings (`getSetting`) may return 404 for keys that haven't been seeded yet — use `Promise.allSettled` when loading multiple settings in parallel so one missing key doesn't abort the rest.
 
 ### Async loading state
 Never recurse into a function that owns a `setSending(true/false)` try/finally — the outer `finally` fires after the inner call. Inline the second API call instead:
@@ -116,11 +118,10 @@ async function send() {
 ```
 `sendEmailOne` returns `{ unverified: true }` when the address hasn't been verified. Pass `force: true` to send anyway.
 
-### Promise.all error handling
-Always add `.catch()` to `Promise.all()` chains that update UI state — a single failed query will otherwise leave state permanently stale (e.g. StatsBar counts stuck at `…`).
-
 ### Error feedback
 Use `showToast` from `useApp()` for all user-facing errors — never `alert()`.
+
+Use `Promise.allSettled` (not `Promise.all`) for parallel fetches that update independent UI state. A single failed query with `Promise.all` leaves all state permanently stale.
 
 ## Multi-tenancy architecture
 Access control is enforced at two layers:
