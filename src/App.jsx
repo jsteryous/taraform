@@ -9,6 +9,7 @@ import AddContactModal from './components/modals/AddContactModal';
 import ImportModal from './components/modals/ImportModal';
 import Dashboard from './components/Dashboard';
 import Toast from './components/shared/Toast';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 import { mapDbContact } from './lib/utils';
 
 function CRM() {
@@ -96,7 +97,9 @@ function CRM() {
       {/* ContactDetail — shown on top when a contact is selected */}
       {currentContact && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg)', overflowY: 'auto' }}>
-          <ContactDetail onClose={() => setCurrentContact(null)} />
+          <ErrorBoundary>
+            <ContactDetail onClose={() => setCurrentContact(null)} />
+          </ErrorBoundary>
           <Toast />
         </div>
       )}
@@ -157,8 +160,10 @@ function CRM() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <CRM />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <CRM />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

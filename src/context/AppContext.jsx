@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { mapDbContact, mapContactToDb } from '../lib/utils';
 
@@ -20,6 +20,22 @@ export function AppProvider({ children }) {
   const [totalCount, setTotalCount]   = useState(0);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [currentFilters, setCurrentFilters]   = useState(null);
+
+  // Refs so callbacks don't need state in their dep arrays
+  const loadingRef  = useRef(false);
+  const contactsRef = useRef([]);
+
+  function setLoading(val) {
+    loadingRef.current = val;
+    setLoadingContacts(val);
+  }
+  const _setContacts = (updater) => {
+    setContacts(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      contactsRef.current = next;
+      return next;
+    });
+  };
 
   const currentClient = clientsList.find(c => c.id === currentClientId) || null;
 
@@ -76,37 +92,37 @@ export function AppProvider({ children }) {
   // ── Load first page with filters ──────────────────────────
   const loadContacts = useCallback(async (clientId, filters = {}) => {
     if (!clientId) return;
-    setLoadingContacts(true);
+    setLoading(true);
     setCurrentFilters(filters);
     try {
       const { data, count, error } = await buildQuery(clientId, filters)
         .range(0, PAGE_SIZE - 1);
       if (error) throw error;
-      setContacts((data || []).map(mapDbContact));
+      _setContacts((data || []).map(mapDbContact));
       setTotalCount(count || 0);
     } catch (e) {
       console.error('loadContacts error:', e.message);
     } finally {
-      setLoadingContacts(false);
+      setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line
 
   // ── Load next page (append) ───────────────────────────────
   const loadMoreContacts = useCallback(async (clientId, filters = {}) => {
-    if (!clientId || loadingContacts) return;
-    setLoadingContacts(true);
+    if (!clientId || loadingRef.current) return;
+    setLoading(true);
     try {
-      const from = contacts.length;
+      const from = contactsRef.current.length;
       const { data, error } = await buildQuery(clientId, filters)
         .range(from, from + PAGE_SIZE - 1);
       if (error) throw error;
-      setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
+      _setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
     } catch (e) {
       console.error('loadMoreContacts error:', e.message);
     } finally {
-      setLoadingContacts(false);
+      setLoading(false);
     }
-  }, [contacts.length, loadingContacts]);
+  }, []); // eslint-disable-line
 
   // ── Load full contact (with JSONB) for detail view ────────
   const loadFullContact = useCallback(async (contactId) => {
@@ -123,10 +139,10 @@ export function AppProvider({ children }) {
     full.offers = offersError
       ? []
       : (offerRows || []).map(row => ({ id: row.id, amount: row.amount, status: row.status, notes: row.notes, createdAt: row.created_at }));
-    setContacts(prev => prev.map(c => c.id === full.id ? full : c));
+    _setContacts(prev => prev.map(c => c.id === full.id ? full : c));
     setCurrentContact(prev => prev?.id === full.id ? full : prev);
     return full;
-  }, []);
+  }, []); // eslint-disable-line
 
   const saveContact = useCallback(async (contact) => {
     if (!user || !currentClientId) return;
@@ -134,21 +150,21 @@ export function AppProvider({ children }) {
     const { error } = await supabase.from('property_crm_contacts')
       .upsert({ ...record, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (error) throw error;
-    setContacts(prev => {
+    _setContacts(prev => {
       const idx = prev.findIndex(c => c.id === contact.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = contact; return next; }
       return [contact, ...prev];
     });
-    if (currentContact?.id === contact.id) setCurrentContact(contact);
-  }, [user, currentClientId, currentContact]);
+    setCurrentContact(prev => prev?.id === contact.id ? contact : prev);
+  }, [user, currentClientId]); // removed currentContact dep — uses functional setState
 
   const deleteContact = useCallback(async (id) => {
     const { error } = await supabase.from('property_crm_contacts').delete().eq('id', id);
     if (error) throw error;
-    setContacts(prev => prev.filter(c => c.id !== id));
+    _setContacts(prev => prev.filter(c => c.id !== id));
     setTotalCount(prev => prev - 1);
-    if (currentContact?.id === id) setCurrentContact(null);
-  }, [currentContact]);
+    setCurrentContact(prev => prev?.id === id ? null : prev);
+  }, []); // removed currentContact dep — uses functional setState
 
   return (
     <AppContext.Provider value={{

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
@@ -60,11 +60,13 @@ export default function ContactList({ onView, onExport,
 
   // Derive working values from props
   const search           = filterSearch   ?? '';
-  const selectedStatuses = new Set(filterStatuses ?? ALL_STATUSES);
-  const selectedCounties = new Set(filterCounties ?? []);
   const phoneFilter      = filterPhone    ?? '';
   const activityFilter   = filterActivity ?? '';
   const emailFilter      = filterEmail    ?? '';
+
+  // Memoize Sets — avoids new object identity on every render
+  const selectedStatuses = useMemo(() => new Set(filterStatuses ?? ALL_STATUSES), [filterStatuses, ALL_STATUSES.join(',')]); // eslint-disable-line
+  const selectedCounties = useMemo(() => new Set(filterCounties ?? []), [filterCounties]);
 
   // Build filters object for server query
   const serverFilters = {
@@ -180,10 +182,11 @@ export default function ContactList({ onView, onExport,
     setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
   }
   async function deleteSelected() {
-    if (!selected.size || !confirm(`Delete ${selected.size} contacts?`)) return;
-    for (const id of selected) await deleteContact(id);
+    const count = selected.size;
+    if (!count || !confirm(`Delete ${count} contacts?`)) return;
+    await Promise.all([...selected].map(id => deleteContact(id)));
     setSelected(new Set());
-    showToast(`${selected.size} contacts deleted`);
+    showToast(`${count} contacts deleted`);
   }
 
   const statusLabel = selectedStatuses.size === ALL_STATUSES.length ? 'All Statuses'
