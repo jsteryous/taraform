@@ -20,9 +20,8 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
       className={`contact-item${selected ? ' selected' : ''}`}
       onClick={e => {
         if (e.metaKey || e.ctrlKey) {
-          const url = new URL(window.location.href);
-          url.searchParams.set('contact', contact.id);
-          window.open(url.toString(), '_blank');
+          const url = `${window.location.origin}${window.location.pathname}#/contact/${contact.id}`;
+          window.open(url, '_blank');
         } else {
           onClick(contact.id);
         }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { AppProvider, useApp } from './context/AppContext';
 import LoginScreen from './components/auth/LoginScreen';
@@ -14,6 +15,9 @@ import { mapDbContact } from './lib/utils';
 
 function CRM() {
   const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact, showToast } = useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const showDashboard = location.pathname === '/dashboard';
 
   async function handleExport(selectedContacts) {
     let source = selectedContacts?.length ? selectedContacts : null;
@@ -44,10 +48,9 @@ function CRM() {
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
     a.click();
-  }  const [authReady, setAuthReady]         = useState(false);
-  const [showAdd, setShowAdd]             = useState(false);
-  const [showImport, setShowImport]       = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
+  }  const [authReady, setAuthReady] = useState(false);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Persistent filter state — survives contact navigation
   const [filterSearch,   setFilterSearch]   = useState('');
@@ -76,17 +79,23 @@ function CRM() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle URL contact param
+  // Restore contact from route on deeplink or page reload
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('contact');
-    if (id && contacts.length) {
-      const found = contacts.find(c => c.id === Number(id));
-      if (found) {
-        setCurrentContact(found);
-        loadFullContact(found.id);
+    const match = location.pathname.match(/^\/contact\/(\d+)$/);
+    if (match && contacts.length) {
+      const id = Number(match[1]);
+      if (!currentContact || currentContact.id !== id) {
+        const found = contacts.find(c => c.id === id);
+        if (found) { setCurrentContact(found); loadFullContact(found.id); }
       }
     }
-  }, [contacts]);
+  }, [contacts, location.pathname]); // eslint-disable-line
+
+  // Sync contact state with URL — clears overlay when user hits back
+  useEffect(() => {
+    const isContactRoute = /^\/contact\/\d+$/.test(location.pathname);
+    if (!isContactRoute && currentContact) setCurrentContact(null);
+  }, [location.pathname]); // eslint-disable-line
 
 
   if (!authReady) return null;
@@ -98,7 +107,7 @@ function CRM() {
       {currentContact && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg)', overflowY: 'auto' }}>
           <ErrorBoundary>
-            <ContactDetail onClose={() => setCurrentContact(null)} />
+            <ContactDetail onClose={() => navigate('/')} />
           </ErrorBoundary>
           <Toast />
         </div>
@@ -118,13 +127,13 @@ function CRM() {
           onExport={handleExport}
           onDashboard={() => {
             if (!currentClientId) { showToast('Select a client first.'); return; }
-            setShowDashboard(d => !d);
+            navigate(showDashboard ? '/' : '/dashboard');
           }}
           dashboardActive={showDashboard}
         />
         {showDashboard
-          ? <Dashboard onClose={() => setShowDashboard(false)} onViewContact={async c => {
-              setShowDashboard(false);
+          ? <Dashboard onClose={() => navigate('/')} onViewContact={async c => {
+              navigate('/contact/' + c.id);
               const full = await loadFullContact(c.id);
               if (full) setCurrentContact(full);
             }} />
@@ -132,6 +141,7 @@ function CRM() {
               onView={async id => {
                 const c = contacts.find(c => c.id === id);
                 if (c) setCurrentContact(c); // show immediately with list data
+                navigate('/contact/' + id);
                 const full = await loadFullContact(id); // then enrich with full data
                 if (full) setCurrentContact(full);
               }}
