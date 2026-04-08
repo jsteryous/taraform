@@ -15,7 +15,7 @@ Supabase credentials are in `.env.local` (gitignored). Required vars:
 VITE_SUPABASE_URL=https://ykuenmwfxecmmqichwit.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
-The anon key is the public Supabase key — security is enforced by RLS, not by keeping the key secret. Never hardcode it back into source.
+Security is enforced by RLS, not by keeping the key secret. Never hardcode it back into source.
 
 ## Project structure
 ```
@@ -31,6 +31,8 @@ src/
   context/
     AppContext.jsx       — global state: contacts (paginated 50/page), currentContact,
                           currentClientId, loadContacts, loadMoreContacts, loadFullContact
+                          Callbacks use refs (loadingRef, contactsRef) and functional setState
+                          so saveContact/deleteContact/loadMoreContacts are stable references.
   components/
     auth/LoginScreen.jsx
     layout/Header.jsx         — SMS dot + Email dot, automation toggles
@@ -53,6 +55,7 @@ src/
     modals/SmsSettingsModal.jsx
     shared/Modal.jsx
     shared/Toast.jsx
+    shared/ErrorBoundary.jsx  — class component; wraps root app and ContactDetail separately
     Dashboard.jsx       — pipeline, SMS KPIs, offer stats (Supabase direct), email stats
 ```
 
@@ -79,14 +82,12 @@ ImportModal uses three tiers for mapping CSV columns:
 2. **Client custom fields** — pulled from `currentClient.custom_field_definitions` at runtime, auto-mapped by label/key. Stored in `custom_fields` JSONB.
 3. **Ad-hoc extra fields** — user clicks "+ Add field", types a name, picks a CSV column. Stored in `custom_fields` JSONB with a slugified key.
 
-No DB schema changes needed — `property_crm_contacts.custom_fields` is already JSONB and the insert always writes it.
-
 ### CSV import data rules
-- Both `parseCSV` functions (utils.js and ImportModal.jsx) strip `\r` before splitting on `\n` — required for Excel/Windows CSVs.
-- Duplicate detection uses Map-based lookups (O(n+m)) keyed by name, property address, and tax map ID. Do not revert to array `.filter()` scan — it's O(n²) and freezes on large imports.
+- Both `parseCSV` functions strip `\r` before splitting on `\n` — required for Excel/Windows CSVs.
+- Duplicate detection uses Map-based lookups (O(n+m)) keyed by name, property address, and tax map ID. Do not revert to `.filter()` scan — O(n²) freezes on large imports.
 - Bulk inserts are chunked at 500 rows. Do not send all rows in a single Supabase `.insert()` call.
 - Duplicate phone updates run via `Promise.all` — do not use a sequential `for...of await` loop.
-- Only one email per contact (`email` column). `email2` is used as fallback if `email1` is empty — this is intentional, not a bug.
+- Only one email per contact (`email` column). `email2` is used as fallback if `email1` is empty — intentional.
 
 ### Config system
 All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in clientConfig.js. Never hardcode status names or colors.
@@ -96,37 +97,12 @@ All calls to the Railway server go through `src/lib/api.js`. Every request autom
 Server base URL: `https://taraform-server-production.up.railway.app`
 Server repo: https://github.com/jsteryous/taraform-server (main server file: api.js)
 
-Never call `fetch()` directly for Railway endpoints — always use the exports from `api.js`:
-```
-// Clients
-getClients, createClient, updateClient, deleteClient
-getClientUsers, addClientUser, removeClientUser
-
-// SMS
-getTemplates, createTemplate, updateTemplate, deleteTemplate
-getSetting, putSetting
-getMessages, sendMessage
-
-// Offers
-addOffer, updateOffer, deleteOffer
-
-// Email — connection
-getEmailStatus(clientId), getEmailAuthUrl(clientId), getGmailAuthUrl(clientId), disconnectEmail(clientId)
-
-// Email — templates
-getEmailTemplates(clientId), createEmailTemplate(body), updateEmailTemplate(id, body), deleteEmailTemplate(id)
-
-// Email — verification
-startEmailVerify(body), getEmailVerifyStatus(clientId), resetEmailVerifyJob(clientId), reprocessEmailVerify(body)
-
-// Email — sending & stats
-getEmailMessages(contactId, clientId), sendEmailOne(body), sendEmailBatch(body), getEmailStats(clientId, period)
-```
+Never call `fetch()` directly for Railway endpoints — always use the exports from `api.js`. See that file for the full export list.
 
 Settings (`getSetting`) may return 404 for keys that haven't been seeded yet — use `Promise.allSettled` when loading multiple settings so one missing key doesn't abort the whole load.
 
 ### Async loading state
-Never recurse into a function that owns a `setSending(true/false)` try/finally — the outer `finally` fires after the inner call, flipping the flag at the wrong time. Inline the second API call instead:
+Never recurse into a function that owns a `setSending(true/false)` try/finally — the outer `finally` fires after the inner call. Inline the second API call instead:
 ```js
 async function send() {
   setSending(true);
@@ -150,7 +126,7 @@ Use `showToast` from `useApp()` for all user-facing errors — never `alert()`.
 Access control is enforced at two layers:
 
 **Railway server** — `/api/clients` reads the JWT, looks up `client_users` for that user's client IDs, and returns only those clients. All client management routes are gated by membership checks server-side.
-> ⚠️ **Known gap**: as of early 2025, `getClients` on the server may return all clients regardless of membership — RLS is the real enforcement layer. Verify server-side gating before adding new users or exposing client management to untrusted users.
+> ⚠️ **Known gap**: `getClients` on the server may return all clients regardless of membership — RLS is the real enforcement layer. Verify server-side gating before adding new users or exposing client management to untrusted users.
 
 **Supabase RLS** — Row Level Security is enabled on:
 - `property_crm_contacts` — users can only read/write contacts belonging to clients they're a member of
@@ -177,14 +153,6 @@ Status values: Pending | Accepted | Rejected | Countered
 
 `email_status` values: eligible | verified | do_not_email | unknown | contacted | replied
 
-### email_tokens table
-- Stores OAuth tokens per client: client_id, provider ('outlook' | 'gmail'), access_token, refresh_token, email
-- GET /api/email/status returns `{ connected, email, provider }` — frontend uses provider to show "GMAIL" or "OUTLOOK" badge
-- OAuth popup flow: opener listens for postMessage `GOOGLE_AUTH_SUCCESS` / `GOOGLE_AUTH_ERROR` (Gmail) or `MS_AUTH_SUCCESS` / `MS_AUTH_ERROR` (Outlook)
-- Gmail endpoints: GET /api/email/gmail-auth-url?client_id=, callback at /auth/google/callback
-- Outlook endpoints: GET /api/email/auth-url?client_id=, disconnect: DELETE /api/email/disconnect?client_id=
-- Railway env vars required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
-
 ### clients table
 - id (uuid, PK), name, twilio_number, created_at
 - config (JSONB) — stores type, terminology, statuses, statsPills, tabs, visibleFields, listColumns
@@ -196,6 +164,10 @@ Status values: Pending | Accepted | Rejected | Countered
 - Known keys: `automation_paused`, `email_automation_enabled`, `email_daily_limit`, `send_start_hour`, `send_end_hour`, `daily_limit`
 - `automation_paused` is seeded on client creation; others may not exist — always use `.maybeSingle()` on direct Supabase reads, never `.single()`.
 
+### email_tokens table
+- Stores OAuth tokens per client: client_id, provider ('outlook' | 'gmail'), access_token, refresh_token, email
+- OAuth popup flow: opener listens for postMessage `GOOGLE_AUTH_SUCCESS`/`GOOGLE_AUTH_ERROR` (Gmail) or `MS_AUTH_SUCCESS`/`MS_AUTH_ERROR` (Outlook)
+
 ## Code style
 - Functional components with hooks only
 - Inline styles throughout (no CSS modules, no Tailwind)
@@ -204,10 +176,7 @@ Status values: Pending | Accepted | Rejected | Countered
 - Keep components focused — if a component is doing too much, split it
 
 ## Deploying
-Push to `main` — GitHub Actions builds and deploys to the `gh-pages` branch automatically (`.github/workflows/deploy.yml`).
+Push to `main` — GitHub Actions builds and deploys to the `gh-pages` branch automatically.
 
-The build requires two repository secrets set in **GitHub → Settings → Secrets → Actions**:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-
-If these secrets are missing the deployed bundle will have `supabaseUrl = undefined` and the app will crash on load.
+The build requires two repository secrets: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+If missing, the deployed bundle will have `supabaseUrl = undefined` and crash on load.
