@@ -23,12 +23,11 @@ function CRM() {
     let source = selectedContacts?.length ? selectedContacts : null;
     if (!source) {
       // Fetch all contacts for export
-      const { data } = await import('./lib/supabase').then(m =>
-        m.supabase.from('property_crm_contacts')
-          .select('*')
-          .eq('client_id', currentClientId)
-          .order('updated_at', { ascending: false })
-      );
+      const { data } = await supabase
+        .from('property_crm_contacts')
+        .select('*')
+        .eq('client_id', currentClientId)
+        .order('updated_at', { ascending: false });
       source = (data || []).map(d => ({
         firstName: d.first_name, lastName: d.last_name,
         phones: d.phones || [], email: d.email || '',

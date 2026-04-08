@@ -9,7 +9,7 @@ import EmailSettingsModal from '../modals/EmailSettingsModal';
 import EmailVerificationImportModal from '../modals/EmailVerificationImportModal';
 
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
-  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts } = useApp();
+  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast } = useApp();
   const [dropOpen, setDropOpen]           = useState(false);
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
@@ -32,8 +32,8 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
         loadContacts(clients[0].id);
       }
       if (clients.length === 0) setShowClients(true);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => showToast('Failed to load clients — check your connection'));
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     if (!currentClientId) return;
@@ -57,11 +57,8 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
 
   async function handleClientSwitch(id) {
     setCurrentClientId(id);
-    if (id) {
-      loadContacts(id);
-      getSetting('automation_paused', id).then(d => setPaused(d.value === 'true')).catch(() => {});
-      getSetting('email_automation_enabled', id).then(d => setEmailAuto(d.value === 'true')).catch(() => {});
-    }
+    if (id) loadContacts(id);
+    // settings are re-fetched by the useEffect on currentClientId
   }
 
   async function handleLogout() {
@@ -84,7 +81,12 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                 onClick={async () => {
                   const next = !emailAuto;
                   setEmailAuto(next);
-                  await putSetting('email_automation_enabled', next.toString(), currentClientId);
+                  try {
+                    await putSetting('email_automation_enabled', next.toString(), currentClientId);
+                  } catch {
+                    setEmailAuto(!next);
+                    showToast('Failed to update email automation');
+                  }
                 }}
                 style={{
                   width: '8px', height: '8px', borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
@@ -161,15 +163,25 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                   <hr className="menu-divider" />
                   <button onClick={async () => {
                     const next = !paused;
-                    await putSetting('automation_paused', next.toString(), currentClientId);
                     setPaused(next); setDropOpen(false);
+                    try {
+                      await putSetting('automation_paused', next.toString(), currentClientId);
+                    } catch {
+                      setPaused(!next);
+                      showToast('Failed to update SMS automation');
+                    }
                   }}>
                     {paused ? '▶  Resume SMS' : '⏸  Pause SMS'}
                   </button>
                   <button onClick={async () => {
                     const next = !emailAuto;
-                    await putSetting('email_automation_enabled', next.toString(), currentClientId);
                     setEmailAuto(next); setDropOpen(false);
+                    try {
+                      await putSetting('email_automation_enabled', next.toString(), currentClientId);
+                    } catch {
+                      setEmailAuto(!next);
+                      showToast('Failed to update email automation');
+                    }
                   }}>
                     {emailAuto ? '⏸  Pause Email' : '▶  Resume Email'}
                   </button>
