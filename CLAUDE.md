@@ -14,13 +14,15 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 - **Icons:** Use Lucide React — never emoji icons.
 - **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
-- **Config:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
+- **Config:** All client-specific UI (statuses, colors, tabs, visible fields, `leadSourceOptions`, `contactMethodOptions`) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode these values.
 - **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur`. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
 - **CSS/JSX sync:** Run `npm run check-css` after adding or renaming a `className`. Flags missing classes and raw rem font-sizes (both exit 1). Dead CSS is informational only.
 
 ## Gotchas
 
 **Contacts are paginated 50/page.** `loadContacts(clientId, filters)` loads page 1; `loadMoreContacts` appends. All filters go as Supabase query params — never filter in JS. SMS activity filters (`sms_7/30/never`) are server-side via `last_sms_at`. Note filters (`note_7/30/never`) are client-side only — `activityLog` isn't in `LIST_FIELDS`.
+
+**Filter state** is a single `filters` object in AppContext (`{ search, statuses, counties, phone, activity, email }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all.
 
 **`saveContact` is async and throws.** Always `await` it. Follow the optimistic update pattern in ContactDetail (`update`/`updateMultiple`/`updateCustomField`): apply locally, revert + `showToast` on catch.
 
@@ -38,7 +40,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **No recursive `setSending` pattern.** If a send function owns a `setSending(true/false)` try/finally, inline any second API call — don't call the function recursively.
 
-**CSV import:** Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan (O(n²) freezes on large imports). Bulk inserts chunked at 500 rows.
+**CSV import:** `parseCSVRaw` (utils.js) returns indexed rows for ImportModal's column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan. Bulk inserts chunked at 500 rows.
 
 **AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs and functional setState. All have empty `[]` dep arrays with eslint-disable — intentional, don't "fix" it.
 
