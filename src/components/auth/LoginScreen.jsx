@@ -15,7 +15,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <div id="loginScreen" style={{ display: 'flex' }}>
+    <div className="login-container">
       <div className="login-box">
         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>Taraform</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.875rem' }}>CRM & SMS Outreach</p>

@@ -45,11 +45,10 @@ export default function ContactDetail({ onClose }) {
 
   if (!currentContact || !draft) return null;
 
-  function flashSaved() {
-    setSaveStatus('saving');
+  function markSaved() {
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => setSaveStatus('saved'), 400);
-    saveTimer.current = setTimeout(() => setSaveStatus(''), 2200);
+    setSaveStatus('saved');
+    saveTimer.current = setTimeout(() => setSaveStatus(''), 1800);
   }
 
   async function update(field, value) {
@@ -57,9 +56,11 @@ export default function ContactDetail({ onClose }) {
     const updated = { ...draft, [field]: value, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    flashSaved();
+    clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
     try {
       await saveContact(updated);
+      markSaved();
     } catch {
       showToast('Save failed — try again');
       setSaveStatus('');
@@ -73,9 +74,11 @@ export default function ContactDetail({ onClose }) {
     const updated = { ...draft, ...fields, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    flashSaved();
+    clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
     try {
       await saveContact(updated);
+      markSaved();
     } catch {
       showToast('Save failed — try again');
       setSaveStatus('');
@@ -89,9 +92,11 @@ export default function ContactDetail({ onClose }) {
     const updated = { ...draft, customFields: { ...draft.customFields, [key]: value }, updatedAt: new Date().toISOString() };
     setDraft(updated);
     setCurrentContact(updated);
-    flashSaved();
+    clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
     try {
       await saveContact(updated);
+      markSaved();
     } catch {
       showToast('Save failed — try again');
       setSaveStatus('');

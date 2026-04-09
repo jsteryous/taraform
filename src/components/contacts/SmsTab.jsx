@@ -58,9 +58,9 @@ export default function SmsTab({ contact }) {
           const isOut = msg.direction === 'out';
           const intent = INTENT_LABELS[msg.intent_category];
           return (
-            <div key={msg.id} className={`sms-bubble ${isOut ? 'sms-out' : 'sms-in'}`}>
+            <div key={msg.id} className={`sms-bubble ${isOut ? 'outbound' : 'inbound'}`}>
               <div className="sms-body">{msg.body}</div>
-              <div className="sms-meta">
+              <div className={`sms-meta${isOut ? ' outbound' : ''}`}>
                 {new Date(msg.sent_at || msg.received_at || msg.created_at).toLocaleString()}
                 {intent && <span style={{ marginLeft: '0.5rem', color: intent.color, fontSize: '0.7rem' }}>{intent.label}</span>}
                 {msg.status === 'delivered' && isOut && <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontSize: '0.7rem' }}>✓ delivered</span>}
