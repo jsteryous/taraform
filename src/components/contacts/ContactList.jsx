@@ -194,20 +194,7 @@ export default function ContactList({ onView, onExport }) {
     activity: activityFilter || null,
   };
 
-  const filterBtn = (active) => ({
-    display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '140px',
-    justifyContent: 'space-between',
-    background: active ? 'rgba(59,130,246,0.12)' : 'var(--surface)',
-    borderColor:  active ? 'rgba(59,130,246,0.5)' : 'var(--border)',
-    color:        active ? '#60a5fa' : 'var(--text)',
-  });
-
-  const dropStyle = {
-    position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: '210px',
-    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
-    zIndex: 500, padding: '0.5rem', maxHeight: '300px', overflowY: 'auto',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-  };
+  const filterBtnClass = (active) => `filter-btn${active ? ' active' : ''}`;
 
   if (!currentClientId) {
     return (
@@ -239,18 +226,18 @@ export default function ContactList({ onView, onExport }) {
 
         {/* Status */}
         <div ref={statusRef} style={{ position: 'relative' }}>
-          <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" style={filterBtn(selectedStatuses.size < ALL_STATUSES.length)}>
-            <span style={{ fontSize: '0.875rem' }}>{statusLabel}</span>
-            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
+          <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" className={filterBtnClass(selectedStatuses.size < ALL_STATUSES.length)}>
+            <span>{statusLabel}</span>
+            <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
           </button>
           {statusOpen && (
-            <div style={dropStyle}>
-              <div style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+            <div className="filter-dropdown">
+              <div className="filter-dropdown-actions">
                 <button className="btn-small" onClick={() => setFilterStatuses(null)}>All</button>
                 <button className="btn-small" onClick={() => setFilterStatuses([])}>None</button>
               </div>
               {ALL_STATUSES.map(s => (
-                <label key={s} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
+                <label key={s} className="filter-dropdown-item">
                   <input type="checkbox" checked={selectedStatuses.has(s)} onChange={() => toggleStatus(s)} style={{ width: '14px', height: '14px' }} />
                   {s}
                 </label>
@@ -262,17 +249,17 @@ export default function ContactList({ onView, onExport }) {
         {/* County */}
         {counties.length > 0 && (
           <div ref={countyRef} style={{ position: 'relative' }}>
-            <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" style={filterBtn(selectedCounties.size > 0)}>
-              <span style={{ fontSize: '0.875rem' }}>{countyLabel}</span>
-              <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
+            <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" className={filterBtnClass(selectedCounties.size > 0)}>
+              <span>{countyLabel}</span>
+              <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
             </button>
             {countyOpen && (
-              <div style={dropStyle}>
-                <div style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+              <div className="filter-dropdown">
+                <div className="filter-dropdown-actions">
                   <button className="btn-small" onClick={() => setFilterCounties([])}>All</button>
                 </div>
                 {counties.map(c => (
-                  <label key={c} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
+                  <label key={c} className="filter-dropdown-item">
                     <input type="checkbox" checked={selectedCounties.has(c)} onChange={() => toggleCounty(c)} style={{ width: '14px', height: '14px' }} />
                     {c}
                   </label>
@@ -284,29 +271,29 @@ export default function ContactList({ onView, onExport }) {
 
         {/* More filters */}
         <div ref={moreRef} style={{ position: 'relative' }}>
-          <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" style={{ ...filterBtn(moreActiveCount > 0), minWidth: 'auto', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.875rem' }}>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
-            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▾</span>
+          <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" className={filterBtnClass(moreActiveCount > 0)} style={{ minWidth: 'auto', gap: '0.4rem' }}>
+            <span>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
+            <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
           </button>
           {moreOpen && (
-            <div style={{ ...dropStyle, minWidth: '240px' }}>
-              <div style={{ padding: '0.25rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Phone</div>
+            <div className="filter-dropdown" style={{ minWidth: '240px' }}>
+              <div className="filter-dropdown-section">Phone</div>
               {PHONE_OPTIONS.map(o => (
-                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
+                <label key={o.value} className="filter-dropdown-item">
                   <input type="radio" name="phone_filter" checked={phoneFilter === o.value} onChange={() => setFilterPhone(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
-              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Email</div>
+              <div className="filter-dropdown-section">Email</div>
               {EMAIL_OPTIONS.map(o => (
-                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
+                <label key={o.value} className="filter-dropdown-item">
                   <input type="radio" name="email_filter" checked={emailFilter === o.value} onChange={() => setFilterEmail(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
               ))}
-              <div style={{ padding: '0.5rem 0.5rem 0.5rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem', marginTop: '0.5rem', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Activity</div>
+              <div className="filter-dropdown-section">Activity</div>
               {ACTIVITY_OPTIONS.map(o => (
-                <label key={o.value} className="filter-dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.4rem 0.5rem', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '4px' }}>
+                <label key={o.value} className="filter-dropdown-item">
                   <input type="radio" name="activity_filter" checked={activityFilter === o.value} onChange={() => setFilterActivity(o.value)} style={{ width: '14px', height: '14px' }} />
                   {o.label}
                 </label>
@@ -350,7 +337,18 @@ export default function ContactList({ onView, onExport }) {
       {/* List */}
       <div style={{ padding: '0 2rem' }}>
         {loadingContacts && contacts.length === 0 ? (
-          <div className="empty-state"><div className="empty-icon">⏳</div><p>Loading contacts…</p></div>
+          <div className="contact-skeleton-list">
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="contact-skeleton">
+                <div className="skeleton-bar" />
+                <div />
+                <div className="skeleton-bar" style={{ width: '70%' }} />
+                <div className="skeleton-bar" style={{ width: '55%' }} />
+                <div className="skeleton-bar" style={{ width: '45%' }} />
+                <div className="skeleton-bar" style={{ width: '80%' }} />
+              </div>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>

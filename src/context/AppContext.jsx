@@ -57,7 +57,7 @@ export function AppProvider({ children }) {
     setFilterActivity('');
   }, [currentClientId]);
 
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
+  function showToast(msg, variant = 'default') { setToast({ msg, variant }); setTimeout(() => setToast(null), 2500); }
 
   function setTheme(name) {
     setThemeState(name);
@@ -136,7 +136,7 @@ export function AppProvider({ children }) {
       setTotalCount(count || 0);
     } catch (e) {
       console.error('loadContacts error:', e.message);
-      showToast('Failed to load contacts — check your connection');
+      showToast('Failed to load contacts — check your connection', 'error');
     } finally {
       setLoading(false);
     }
@@ -154,7 +154,7 @@ export function AppProvider({ children }) {
       _setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
     } catch (e) {
       console.error('loadMoreContacts error:', e.message);
-      showToast('Failed to load more contacts');
+      showToast('Failed to load more contacts', 'error');
     } finally {
       setLoading(false);
     }
@@ -166,7 +166,7 @@ export function AppProvider({ children }) {
       .from('property_crm_contacts').select('*').eq('id', contactId).maybeSingle();
     if (error || !data) {
       console.error('loadFullContact contact error:', error);
-      showToast('Failed to load contact');
+      showToast('Failed to load contact', 'error');
       return null;
     }
     const full = mapDbContact(data);

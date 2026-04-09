@@ -62,7 +62,7 @@ export default function ContactDetail({ onClose }) {
       await saveContact(updated);
       markSaved();
     } catch {
-      showToast('Save failed — try again');
+      showToast('Save failed — try again', 'error');
       setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
@@ -80,7 +80,7 @@ export default function ContactDetail({ onClose }) {
       await saveContact(updated);
       markSaved();
     } catch {
-      showToast('Save failed — try again');
+      showToast('Save failed — try again', 'error');
       setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
@@ -98,7 +98,7 @@ export default function ContactDetail({ onClose }) {
       await saveContact(updated);
       markSaved();
     } catch {
-      showToast('Save failed — try again');
+      showToast('Save failed — try again', 'error');
       setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);

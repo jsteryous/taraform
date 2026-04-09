@@ -82,6 +82,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
               <div className={`sms-status-dot${paused ? ' paused' : ''}`} title={paused ? 'SMS paused' : 'SMS active'} />
               <div
                 title={emailAuto ? 'Email automation on' : 'Email automation off'}
+                className={`email-status-dot ${emailAuto ? 'on' : 'off'}`}
                 onClick={async () => {
                   const next = !emailAuto;
                   setEmailAuto(next);
@@ -89,33 +90,22 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                     await putSetting('email_automation_enabled', next.toString(), currentClientId);
                   } catch {
                     setEmailAuto(!next);
-                    showToast('Failed to update email automation');
+                    showToast('Failed to update email automation', 'error');
                   }
-                }}
-                style={{
-                  width: '8px', height: '8px', borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
-                  background: emailAuto ? '#10b981' : '#6b7280',
-                  boxShadow: emailAuto ? '0 0 0 2px rgba(16,185,129,0.25)' : 'none',
-                  transition: 'all 0.2s',
                 }}
               />
               <div ref={clientDropRef} style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setClientDropOpen(o => !o)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', color: 'var(--text)', fontSize: '0.875rem', fontWeight: 500, fontFamily: 'var(--sans)', minWidth: '160px', justifyContent: 'space-between' }}
-                >
+                <button className="client-drop-btn" onClick={() => setClientDropOpen(o => !o)}>
                   <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
                   <ChevronDown size={12} style={{ opacity: 0.5, flexShrink: 0 }} />
                 </button>
                 {clientDropOpen && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: '200px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 600, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
-                    <div style={{ padding: '0.35rem 0.75rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', userSelect: 'none' }}>— Select Client —</div>
+                  <div className="client-drop-menu">
+                    <div className="client-drop-label">— Select Client —</div>
                     {clientsList.map(c => (
                       <div key={c.id}
+                        className={`client-drop-item${c.id === currentClientId ? ' active' : ''}`}
                         onClick={() => { handleClientSwitch(c.id); setClientDropOpen(false); }}
-                        style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', color: c.id === currentClientId ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', fontWeight: c.id === currentClientId ? 600 : 400, background: c.id === currentClientId ? 'rgba(59,130,246,0.08)' : 'transparent' }}
-                        onMouseEnter={e => { if (c.id !== currentClientId) e.currentTarget.style.background = 'var(--surface-hover)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = c.id === currentClientId ? 'rgba(59,130,246,0.08)' : 'transparent'; }}
                       >
                         {c.name}
                       </div>
@@ -172,7 +162,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                       await putSetting('automation_paused', next.toString(), currentClientId);
                     } catch {
                       setPaused(!next);
-                      showToast('Failed to update SMS automation');
+                      showToast('Failed to update SMS automation', 'error');
                     }
                   }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{paused ? <Play size={14} /> : <Pause size={14} />} {paused ? 'Resume SMS' : 'Pause SMS'}</span>
