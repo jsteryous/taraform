@@ -16,6 +16,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
 - **Config:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
 - **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur`. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
+- **CSS/JSX sync:** After adding or renaming a `className`, run `npm run check-css`. Exit 1 means a class is referenced in JSX but not defined in `index.css` — that's a bug. The script also lists CSS classes with no JSX reference (dead CSS, informational).
 
 ## Gotchas
 
