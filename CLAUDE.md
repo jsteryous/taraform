@@ -15,7 +15,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 - **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
 - **Config:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
-- **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()`/`updateMultiField()` fires on `onBlur`.
+- **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur`. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
 
 ## Gotchas
 
