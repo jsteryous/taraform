@@ -10,6 +10,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 ## UI patterns
 
+- **Font sizes:** Use CSS tokens (`--text-xs` → `--text-xl` defined in `:root`) — never arbitrary `rem` values.
 - **Icons:** Use Lucide React — never emoji icons.
 - **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
