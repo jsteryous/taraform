@@ -24,6 +24,8 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **`saveContact` is async and throws.** Always `await` it. Follow the optimistic update pattern in ContactDetail (`update`/`updateMultiple`/`updateCustomField`): apply locally, revert + `showToast` on catch.
 
+**`showToast(msg, variant?)`** — second arg is `'success' | 'error' | 'warning'` (default: neutral, no icon). Pass the right variant on catch/success so the toast renders a colored border and icon.
+
 **`custom_field_definitions` is a TEXT column** (not JSONB). Always parse with `parseCustomFieldDefs(raw)` from utils.js — never bare `JSON.parse`.
 
 **`getSetting` may return 404** for unseeded keys — use `Promise.allSettled` when loading multiple settings in parallel.
