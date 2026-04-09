@@ -27,10 +27,12 @@ const MISSING_ONLY = process.argv.includes('--missing-only');
 const DYNAMIC_PREFIXES = [
   'status-',  // getStatusClass() generates e.g. status-new-lead
   'sms-',     // sms-${contact.smsStatus} generates e.g. sms-do-not-contact
+  'bar-',     // getStatusClass() also returns bar-* for the color sidebar
+  'swatch-',  // swatch-${theme} in Header.jsx theme picker
 ];
 
 // Applied to <body> or <html> by JS, never appear in JSX className
-const APPLIED_TO_BODY = new Set(['theme-light', 'theme-dark']);
+const APPLIED_TO_BODY = new Set(['theme-light', 'theme-dark', 'theme-dim']);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isValidClassName(str) {
