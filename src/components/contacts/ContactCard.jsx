@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useAppData } from '../../context/AppContext';
 import { getStatusClass } from '../../lib/utils';
 import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
 
@@ -9,7 +9,7 @@ const SMS_LABELS = {
 };
 
 const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onClick }) {
-  const { currentClient } = useApp();
+  const { currentClient } = useAppData();
   const cfg = resolveConfig(currentClient);
   const smsLabel = SMS_LABELS[contact.smsStatus];
   const barColor = getStatusColor(cfg, contact.status);

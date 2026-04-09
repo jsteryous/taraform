@@ -59,10 +59,11 @@ export default function ContactList({ onView, onExport }) {
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [confirmBulkDelete, ConfirmUI]    = useConfirm();
 
-  const statusRef = useRef(null);
-  const countyRef = useRef(null);
-  const moreRef   = useRef(null);
-  const searchTimer = useRef(null);
+  const statusRef    = useRef(null);
+  const countyRef    = useRef(null);
+  const moreRef      = useRef(null);
+  const searchTimer  = useRef(null);
+  const selectAllRef = useRef(null);
 
   // Derive working values from props
   const search           = filterSearch   ?? '';
@@ -92,6 +93,13 @@ export default function ContactList({ onView, onExport }) {
       loadContacts(currentClientId, query);
     }
   }, [currentClientId, filters, loadContacts]);
+
+  // Indeterminate checkbox state can't be set via JSX — requires a DOM ref.
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < filtered.length;
+    }
+  }, [selected.size, filtered.length]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -322,7 +330,7 @@ export default function ContactList({ onView, onExport }) {
       {/* Select all */}
       <div style={{ padding: '0.5rem 2rem', borderBottom: '1px solid var(--border)' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
+          <input ref={selectAllRef} type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
           Select all {filtered.length}
         </label>
       </div>

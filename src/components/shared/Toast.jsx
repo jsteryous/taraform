@@ -1,5 +1,5 @@
 import { Check, X, AlertTriangle } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useAppUI } from '../../context/AppContext';
 
 const ICONS = {
   success: <Check size={14} className="toast-icon toast-icon-success" />,
@@ -8,7 +8,7 @@ const ICONS = {
 };
 
 export default function Toast() {
-  const { toast } = useApp();
+  const { toast } = useAppUI();
   if (!toast) return null;
   const { msg, variant } = toast;
   return (

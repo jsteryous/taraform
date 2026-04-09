@@ -2,7 +2,10 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { supabase } from '../lib/supabase';
 import { mapDbContact, mapContactToDb } from '../lib/utils';
 
-const AppContext = createContext(null);
+// Two contexts so UI-only state changes (toast, theme) don't re-render data consumers
+// and data changes don't re-render UI-only consumers (Toast).
+const AppDataContext = createContext(null);
+const AppUIContext   = createContext(null);
 
 const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
@@ -71,8 +74,8 @@ export function AppProvider({ children }) {
   const [toast, setToast]                     = useState(null);
 
   // Paginated contact state
-  const [contacts, setContacts]       = useState([]);
-  const [totalCount, setTotalCount]   = useState(0);
+  const [contacts, setContacts]               = useState([]);
+  const [totalCount, setTotalCount]           = useState(0);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
   // Filter state — single object so it survives contact navigation without prop drilling
@@ -83,7 +86,7 @@ export function AppProvider({ children }) {
   const loadingRef  = useRef(false);
   const contactsRef = useRef([]);
 
-  // Stable setter — both callbacks depend on it with [] dep arrays.
+  // Stable setter — callbacks depend on it with stable dep arrays.
   const setLoading = useCallback((val) => {
     loadingRef.current = val;
     setLoadingContacts(val);
@@ -189,7 +192,7 @@ export function AppProvider({ children }) {
       return [contact, ...prev];
     });
     setCurrentContact(prev => prev?.id === contact.id ? contact : prev);
-  }, [user, currentClientId]); // removed currentContact dep — uses functional setState
+  }, [user, currentClientId]);
 
   const deleteContact = useCallback(async (id) => {
     const { error } = await supabase.from('property_crm_contacts').delete().eq('id', id);
@@ -199,7 +202,9 @@ export function AppProvider({ children }) {
     setCurrentContact(prev => prev?.id === id ? null : prev);
   }, [_setContacts]);
 
-  const contextValue = useMemo(() => ({
+  // ── Split context values ──────────────────────────────────
+  // Data value: changes on contact/client/filter state — never on toast or theme.
+  const dataValue = useMemo(() => ({
     user, setUser,
     clientsList, setClientsList,
     currentClientId, setCurrentClientId,
@@ -208,17 +213,27 @@ export function AppProvider({ children }) {
     totalCount, setTotalCount,
     loadingContacts,
     currentContact, setCurrentContact,
-    theme, setTheme,
-    toast, showToast,
     loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
     filters, setFilters,
-  }), [user, clientsList, currentClientId, currentClient, contacts, totalCount, loadingContacts, currentContact, theme, toast, filters, showToast, setTheme, loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
+  }), [user, clientsList, currentClientId, currentClient, contacts, totalCount,
+      loadingContacts, currentContact, filters,
+      loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
+
+  // UI value: only changes on toast or theme — never on contact data.
+  const uiValue = useMemo(() => ({
+    toast, showToast, theme, setTheme,
+  }), [toast, showToast, theme, setTheme]);
 
   return (
-    <AppContext.Provider value={contextValue}>
-      {children}
-    </AppContext.Provider>
+    <AppDataContext.Provider value={dataValue}>
+      <AppUIContext.Provider value={uiValue}>
+        {children}
+      </AppUIContext.Provider>
+    </AppDataContext.Provider>
   );
 }
 
-export const useApp = () => useContext(AppContext);
+export const useAppData = () => useContext(AppDataContext);
+export const useAppUI   = () => useContext(AppUIContext);
+// Combined hook for components that need both — backwards-compatible with all existing callsites.
+export const useApp     = () => ({ ...useAppData(), ...useAppUI() });
