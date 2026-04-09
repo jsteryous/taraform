@@ -40,6 +40,8 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs and functional setState. All have empty `[]` dep arrays with eslint-disable — intentional, don't "fix" it.
 
+**`setContacts` from context is ref-syncing.** The context exposes `_setContacts` as `setContacts` — always use it instead of a local `useState` setter so `contactsRef.current` stays in sync with `loadMoreContacts`.
+
 ## Multi-tenancy
 
 > ⚠️ `getClients` on the Railway server may return all clients regardless of membership — RLS is the real enforcement layer. Verify server-side gating before adding new users.
