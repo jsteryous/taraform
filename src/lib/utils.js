@@ -136,3 +136,22 @@ export function parseCSV(text) {
     }),
   };
 }
+
+// Like parseCSV but returns rows as arrays of values (indexed by column position).
+// Used by ImportModal's column-mapping UI.
+export function parseCSVRaw(text) {
+  const lines = text.trim().replace(/\r/g, '').split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const rows = lines.slice(1).map(line => {
+    const values = [];
+    let current = '', inQuotes = false;
+    for (const char of line) {
+      if (char === '"') { inQuotes = !inQuotes; }
+      else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+      else { current += char; }
+    }
+    values.push(current.trim());
+    return values;
+  });
+  return { headers, rows };
+}

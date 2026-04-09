@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
-import { normalizeCounty, mapDbContact, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
+import { normalizeCounty, mapDbContact, formatPhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
@@ -10,23 +10,6 @@ const FIELD_LABELS = {
   email: 'Email', county: 'County', ownerAddress: 'Owner Address',
   propertyAddress: 'Property Address', taxMapId: 'Tax Map ID', acreage: 'Acreage',
 };
-
-function parseCSV(text) {
-  const lines = text.trim().replace(/\r/g, '').split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const rows = lines.slice(1).map(line => {
-    const values = [];
-    let current = '', inQuotes = false;
-    for (const char of line) {
-      if (char === '"') { inQuotes = !inQuotes; }
-      else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
-      else { current += char; }
-    }
-    values.push(current.trim());
-    return values;
-  });
-  return { headers, rows };
-}
 
 function autoMap(headers) {
   const mapping = {};
@@ -121,7 +104,7 @@ export default function ImportModal({ open, onClose }) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      const { headers, rows } = parseCSV(ev.target.result);
+      const { headers, rows } = parseCSVRaw(ev.target.result);
       setHeaders(headers);
       setRows(rows);
       setMapping(autoMap(headers));

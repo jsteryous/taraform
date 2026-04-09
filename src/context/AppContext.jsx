@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { mapDbContact, mapContactToDb } from '../lib/utils';
 
@@ -6,6 +6,8 @@ const AppContext = createContext(null);
 
 const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
+
+const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '' };
 
 export function AppProvider({ children }) {
   const [user, setUser]                       = useState(null);
@@ -19,15 +21,9 @@ export function AppProvider({ children }) {
   const [contacts, setContacts]       = useState([]);
   const [totalCount, setTotalCount]   = useState(0);
   const [loadingContacts, setLoadingContacts] = useState(false);
-  const [currentFilters, setCurrentFilters]   = useState(null);
 
-  // Filter state — lives here so it survives contact navigation and doesn't need prop drilling
-  const [filterSearch,   setFilterSearch]   = useState('');
-  const [filterStatuses, setFilterStatuses] = useState(null); // null = all statuses
-  const [filterCounties, setFilterCounties] = useState([]);
-  const [filterPhone,    setFilterPhone]    = useState('');
-  const [filterActivity, setFilterActivity] = useState('');
-  const [filterEmail,    setFilterEmail]    = useState('');
+  // Filter state — single object so it survives contact navigation without prop drilling
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   // Refs so callbacks don't need state in their dep arrays
   const loadingRef  = useRef(false);
@@ -37,35 +33,34 @@ export function AppProvider({ children }) {
     loadingRef.current = val;
     setLoadingContacts(val);
   }
-  const _setContacts = (updater) => {
+
+  const _setContacts = useCallback((updater) => {
     setContacts(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       contactsRef.current = next;
       return next;
     });
-  };
+  }, []);
 
   const currentClient = clientsList.find(c => c.id === currentClientId) || null;
 
   // Reset filters when the client changes
   useEffect(() => {
-    setFilterSearch('');
-    setFilterStatuses(null);
-    setFilterCounties([]);
-    setFilterPhone('');
-    setFilterEmail('');
-    setFilterActivity('');
+    setFilters(EMPTY_FILTERS);
   }, [currentClientId]);
 
-  function showToast(msg, variant = 'default') { setToast({ msg, variant }); setTimeout(() => setToast(null), 2500); }
+  const showToast = useCallback((msg, variant = 'default') => {
+    setToast({ msg, variant });
+    setTimeout(() => setToast(null), 2500);
+  }, []);
 
-  function setTheme(name) {
+  const setTheme = useCallback((name) => {
     setThemeState(name);
     localStorage.setItem('taraform_theme', name);
     document.body.classList.remove('theme-dim', 'theme-light');
     if (name === 'dim') document.body.classList.add('theme-dim');
     if (name === 'light') document.body.classList.add('theme-light');
-  }
+  }, []);
 
   // ── Build a Supabase query from filter state ──────────────
   function buildQuery(clientId, filters = {}) {
@@ -127,7 +122,6 @@ export function AppProvider({ children }) {
   const loadContacts = useCallback(async (clientId, filters = {}) => {
     if (!clientId) return;
     setLoading(true);
-    setCurrentFilters(filters);
     try {
       const { data, count, error } = await buildQuery(clientId, filters)
         .range(0, PAGE_SIZE - 1);
@@ -206,26 +200,23 @@ export function AppProvider({ children }) {
     setCurrentContact(prev => prev?.id === id ? null : prev);
   }, []); // removed currentContact dep — uses functional setState
 
+  const contextValue = useMemo(() => ({
+    user, setUser,
+    clientsList, setClientsList,
+    currentClientId, setCurrentClientId,
+    currentClient,
+    contacts, setContacts: _setContacts,
+    totalCount, setTotalCount,
+    loadingContacts,
+    currentContact, setCurrentContact,
+    theme, setTheme,
+    toast, showToast,
+    loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
+    filters, setFilters,
+  }), [user, clientsList, currentClientId, currentClient, contacts, totalCount, loadingContacts, currentContact, theme, toast, filters, showToast, setTheme, loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
+
   return (
-    <AppContext.Provider value={{
-      user, setUser,
-      clientsList, setClientsList,
-      currentClientId, setCurrentClientId,
-      currentClient,
-      contacts, setContacts: _setContacts,
-      totalCount, setTotalCount,
-      loadingContacts,
-      currentContact, setCurrentContact,
-      theme, setTheme,
-      toast, showToast,
-      loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
-      filterSearch, setFilterSearch,
-      filterStatuses, setFilterStatuses,
-      filterCounties, setFilterCounties,
-      filterPhone, setFilterPhone,
-      filterActivity, setFilterActivity,
-      filterEmail, setFilterEmail,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

@@ -16,15 +16,6 @@ const SMS_STATUS_COLORS = {
   do_not_contact: 'var(--danger)', unclear: 'var(--warning)',
 };
 
-const fieldLabel = {
-  fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.6px', color: 'var(--text-muted)', marginBottom: '0.3rem',
-  fontFamily: 'var(--mono)',
-};
-
-const fieldValue = {
-  fontSize: '0.875rem', color: 'var(--text)', lineHeight: 1.5,
-};
 
 export default function ContactDetail({ onClose }) {
   const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
@@ -130,37 +121,17 @@ export default function ContactDetail({ onClose }) {
   const smsStatus = draft.smsStatus || 'eligible';
   const smsColor = SMS_STATUS_COLORS[smsStatus] || 'var(--text-muted)';
 
-  const inlineInput = {
-    background: 'transparent', border: 'none', borderBottom: '1px solid transparent',
-    color: 'var(--text)', fontSize: '0.875rem', padding: '0.15rem 0',
-    width: '100%', outline: 'none', fontFamily: 'inherit',
-  };
-
-  const addBtn = {
-    width: '100%', marginTop: '0.4rem', padding: '0.35rem',
-    fontSize: '0.75rem', background: 'var(--bg)', border: '1px dashed var(--border)',
-    borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer',
-  };
-
-  const removeBtn = {
-    background: 'rgba(239,68,68,0.15)', border: 'none', borderRadius: '4px',
-    color: '#f87171', cursor: 'pointer', padding: '0.2rem 0.45rem', fontSize: '0.8rem', flexShrink: 0,
-  };
 
   return (
     <div id="contactDetailPage" className="active">
       {ConfirmUI}
       {/* Header */}
       <div className="detail-page-header">
-        <button className="back-button" onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ArrowLeft size={15} /> Back</button>
+        <button className="back-button" onClick={onClose}><ArrowLeft size={15} /> Back</button>
         <span className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</span>
-        {saveStatus === 'saving' && (
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Saving…</span>
-        )}
-        {saveStatus === 'saved' && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: 'var(--success)', fontFamily: 'var(--mono)' }}><Check size={12} /> Saved</span>
-        )}
-        <button onClick={handleDelete} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.4rem 0.875rem', cursor: 'pointer', fontSize: '0.8rem' }}><Trash2 size={13} /> Delete</button>
+        {saveStatus === 'saving' && <span className="save-indicator">Saving…</span>}
+        {saveStatus === 'saved' && <span className="save-indicator saved"><Check size={12} /> Saved</span>}
+        <button className="btn-danger-ghost" onClick={handleDelete}><Trash2 size={13} /> Delete</button>
       </div>
 
       <div className="detail-page-content">
@@ -173,18 +144,16 @@ export default function ContactDetail({ onClose }) {
               value={draft.firstName || ''}
               onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))}
               onBlur={e => update('firstName', e.target.value)}
-              onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-              onBlurCapture={e => e.target.style.borderBottomColor = 'transparent'}
               placeholder="First name"
-              style={{ ...inlineInput, fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.25rem' }}
+              className="inline-input name-input"
+              style={{ marginBottom: '0.25rem' }}
             />
             <input
               value={draft.lastName || ''}
               onChange={e => setDraft(d => ({ ...d, lastName: e.target.value }))}
               onBlur={e => update('lastName', e.target.value)}
-              onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
               placeholder="Last name"
-              style={{ ...inlineInput, fontSize: '1.3rem', fontWeight: 700 }}
+              className="inline-input name-input"
             />
           </div>
 
@@ -199,72 +168,58 @@ export default function ContactDetail({ onClose }) {
 
           {/* Status */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={fieldLabel}>Status</div>
-            <Select
-              value={draft.status || 'New Lead'}
-              onChange={v => update('status', v)}
-              options={STATUSES}
-              emptyLabel={null}
-            />
+            <div className="field-label">Status</div>
+            <Select value={draft.status || 'New Lead'} onChange={v => update('status', v)} options={STATUSES} emptyLabel={null} />
           </div>
 
           {/* Lead Source */}
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={fieldLabel}>Lead Source</div>
-            <Select
-              value={draft.leadSource || ''}
-              onChange={v => update('leadSource', v)}
-              options={['Launch Control', 'Snipe']}
-            />
-          </div>
+          {cfg.leadSourceOptions?.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <div className="field-label">Lead Source</div>
+              <Select value={draft.leadSource || ''} onChange={v => update('leadSource', v)} options={cfg.leadSourceOptions} />
+            </div>
+          )}
 
           {/* Contact Method */}
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={fieldLabel}>Contact Method</div>
-            <Select
-              value={draft.contactMethod || ''}
-              onChange={v => update('contactMethod', v)}
-              options={['Launch Control', 'Manual Text', 'Call']}
-            />
-          </div>
+          {cfg.contactMethodOptions?.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <div className="field-label">Contact Method</div>
+              <Select value={draft.contactMethod || ''} onChange={v => update('contactMethod', v)} options={cfg.contactMethodOptions} />
+            </div>
+          )}
 
           {/* Phones */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={fieldLabel}>Phones</div>
+            <div className="field-label">Phones</div>
             {(draft.phones?.length ? draft.phones : ['']).map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <input type="tel" value={p} placeholder="(864) 555-1234" style={{ ...inlineInput, flex: 1 }}
+                <input type="tel" value={p} placeholder="(864) 555-1234"
+                  className="inline-input" style={{ flex: 1 }}
                   onChange={e => {
                     const phones = [...(draft.phones || [])];
                     phones[i] = e.target.value;
                     setDraft(d => ({ ...d, phones }));
                   }}
-                  onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                  onBlur={e => {
-                    e.target.style.borderBottomColor = 'transparent';
-                    updatePhone(i, formatPhone(e.target.value));
-                  }}
+                  onBlur={e => updatePhone(i, formatPhone(e.target.value))}
                 />
-                {p && <button onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }} title="Copy"><Copy size={13} /></button>}
-                <button onClick={() => removePhone(i)} style={removeBtn}>×</button>
+                {p && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>}
+                <button className="remove-field-btn" onClick={() => removePhone(i)}>×</button>
               </div>
             ))}
-            <button style={addBtn} onClick={addPhone}>+ Add Phone</button>
+            <button className="add-field-btn" onClick={addPhone}>+ Add Phone</button>
           </div>
 
           {/* Email */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={fieldLabel}>Email</div>
+            <div className="field-label">Email</div>
             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <input type="email" value={draft.email || ''} placeholder="—"
-                style={{ ...inlineInput, flex: 1 }}
+                className="inline-input" style={{ flex: 1 }}
                 onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
                 onBlur={e => update('email', e.target.value)}
-                onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
               />
               {draft.email && (
-                <button onClick={() => { navigator.clipboard.writeText(draft.email); showToast('Copied!'); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }} title="Copy"><Copy size={13} /></button>
+                <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(draft.email); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>
               )}
             </div>
           </div>
@@ -272,11 +227,10 @@ export default function ContactDetail({ onClose }) {
           {/* County */}
           {visibleFields.includes('county') && (
             <div style={{ marginBottom: '1rem' }}>
-              <div style={fieldLabel}>County</div>
-              <input value={draft.county || ''} style={{ ...inlineInput, ...fieldValue }}
+              <div className="field-label">County</div>
+              <input value={draft.county || ''} className="inline-input"
                 onChange={e => setDraft(d => ({ ...d, county: e.target.value }))}
                 onBlur={e => update('county', e.target.value)}
-                onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                 placeholder="—"
               />
             </div>
@@ -285,37 +239,32 @@ export default function ContactDetail({ onClose }) {
           {/* Tax Map IDs */}
           {visibleFields.includes('taxMapIds') && (
             <div style={{ marginBottom: '1rem' }}>
-              <div style={fieldLabel}>Tax Map IDs</div>
+              <div className="field-label">Tax Map IDs</div>
               {(draft.taxMapIds || []).filter(Boolean).map((t, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
-                  <input value={t} style={{ ...inlineInput, flex: 1, ...fieldValue }}
+                  <input value={t} className="inline-input" style={{ flex: 1 }}
                     onChange={e => {
                       const arr = [...(draft.taxMapIds || [])];
                       arr[i] = e.target.value;
                       setDraft(d => ({ ...d, taxMapIds: arr }));
                     }}
-                    onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                    onBlur={e => {
-                      e.target.style.borderBottomColor = 'transparent';
-                      updateMultiField('taxMapIds', i, e.target.value);
-                    }}
+                    onBlur={e => updateMultiField('taxMapIds', i, e.target.value)}
                     placeholder="—"
                   />
-                  <button onClick={() => removeFromMultiField('taxMapIds', i)} style={removeBtn}>×</button>
+                  <button className="remove-field-btn" onClick={() => removeFromMultiField('taxMapIds', i)}>×</button>
                 </div>
               ))}
-              <button style={addBtn} onClick={() => addToMultiField('taxMapIds')}>+ Add Tax ID</button>
+              <button className="add-field-btn" onClick={() => addToMultiField('taxMapIds')}>+ Add Tax ID</button>
             </div>
           )}
 
           {/* Acreage */}
           {visibleFields.includes('acreage') && (
             <div style={{ marginBottom: '1rem' }}>
-              <div style={fieldLabel}>Acreage</div>
-              <input value={draft.acreage || ''} style={{ ...inlineInput, ...fieldValue }}
+              <div className="field-label">Acreage</div>
+              <input value={draft.acreage || ''} className="inline-input"
                 onChange={e => setDraft(d => ({ ...d, acreage: e.target.value }))}
                 onBlur={e => update('acreage', e.target.value)}
-                onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                 placeholder="—"
               />
             </div>
@@ -323,15 +272,14 @@ export default function ContactDetail({ onClose }) {
 
           {/* Addresses section */}
           {(visibleFields.includes('ownerAddress') || visibleFields.includes('propertyAddresses')) && (
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
+            <div className="sidebar-section">
 
               {visibleFields.includes('ownerAddress') && (
                 <div style={{ marginBottom: '1rem' }}>
-                  <div style={fieldLabel}>Owner Address</div>
-                  <input value={draft.ownerAddress || ''} style={{ ...inlineInput, ...fieldValue }}
+                  <div className="field-label">Owner Address</div>
+                  <input value={draft.ownerAddress || ''} className="inline-input"
                     onChange={e => setDraft(d => ({ ...d, ownerAddress: e.target.value }))}
                     onBlur={e => update('ownerAddress', e.target.value)}
-                    onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                     placeholder="—"
                   />
                 </div>
@@ -339,26 +287,22 @@ export default function ContactDetail({ onClose }) {
 
               {visibleFields.includes('propertyAddresses') && (
                 <div style={{ marginBottom: '1rem' }}>
-                  <div style={fieldLabel}>Property Addresses</div>
+                  <div className="field-label">Property Addresses</div>
                   {(draft.propertyAddresses || []).filter(Boolean).map((a, i) => (
                     <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <input value={a} style={{ ...inlineInput, flex: 1, ...fieldValue }}
+                      <input value={a} className="inline-input" style={{ flex: 1 }}
                         onChange={e => {
                           const arr = [...(draft.propertyAddresses || [])];
                           arr[i] = e.target.value;
                           setDraft(d => ({ ...d, propertyAddresses: arr }));
                         }}
-                        onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
-                        onBlur={e => {
-                          e.target.style.borderBottomColor = 'transparent';
-                          updateMultiField('propertyAddresses', i, e.target.value);
-                        }}
+                        onBlur={e => updateMultiField('propertyAddresses', i, e.target.value)}
                         placeholder="—"
                       />
-                      <button onClick={() => removeFromMultiField('propertyAddresses', i)} style={removeBtn}>×</button>
+                      <button className="remove-field-btn" onClick={() => removeFromMultiField('propertyAddresses', i)}>×</button>
                     </div>
                   ))}
-                  <button style={addBtn} onClick={() => addToMultiField('propertyAddresses')}>+ Add Property</button>
+                  <button className="add-field-btn" onClick={() => addToMultiField('propertyAddresses')}>+ Add Property</button>
                 </div>
               )}
             </div>
@@ -370,26 +314,24 @@ export default function ContactDetail({ onClose }) {
             const adHocKeys = Object.keys(draft.customFields || {}).filter(k => !knownKeys.has(k) && draft.customFields[k]);
             if (fieldDefs.length === 0 && adHocKeys.length === 0) return null;
             return (
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem', marginTop: '0.25rem' }}>
+              <div className="sidebar-section">
                 {fieldDefs.map(def => (
                   <div key={def.key} style={{ marginBottom: '1rem' }}>
-                    <div style={fieldLabel}>{def.label}</div>
+                    <div className="field-label">{def.label}</div>
                     <input value={draft.customFields?.[def.key] || ''} placeholder="—"
-                      style={{ ...inlineInput, ...fieldValue }}
+                      className="inline-input"
                       onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [def.key]: e.target.value } }))}
                       onBlur={e => updateCustomField(def.key, e.target.value)}
-                      onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                     />
                   </div>
                 ))}
                 {adHocKeys.map(key => (
                   <div key={key} style={{ marginBottom: '1rem' }}>
-                    <div style={fieldLabel}>{key.replace(/_/g, ' ')}</div>
+                    <div className="field-label">{key.replace(/_/g, ' ')}</div>
                     <input value={draft.customFields?.[key] || ''} placeholder="—"
-                      style={{ ...inlineInput, ...fieldValue }}
+                      className="inline-input"
                       onChange={e => setDraft(d => ({ ...d, customFields: { ...d.customFields, [key]: e.target.value } }))}
                       onBlur={e => updateCustomField(key, e.target.value)}
-                      onFocus={e => e.target.style.borderBottomColor = 'var(--accent)'}
                     />
                   </div>
                 ))}
@@ -417,7 +359,9 @@ export default function ContactDetail({ onClose }) {
                   if (e.key === 'ArrowLeft')  { e.preventDefault(); setTab(tabs[(idx - 1 + tabs.length) % tabs.length]); }
                 }}
               >
-                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><MessageSquare size={13} /> SMS</span> : <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Mail size={13} /> Email</span>}
+                {t === 'notes' ? 'Notes & Activity'
+                  : t === 'sms'   ? <span className="tab-label"><MessageSquare size={13} /> SMS</span>
+                  :                 <span className="tab-label"><Mail size={13} /> Email</span>}
               </button>
             ))}
           </div>
@@ -434,17 +378,11 @@ export default function ContactDetail({ onClose }) {
 
         {/* ── Offers — equal split right column ── */}
         {cfg.tabs.includes('offers') && (
-          <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.5rem' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              height: '41px', borderBottom: '1px solid var(--border)', marginBottom: '1rem',
-            }}>
-              <span style={{
-                fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)',
-              }}>Offers</span>
+          <div className="offers-column">
+            <div className="offers-column-header">
+              <span className="field-label">Offers</span>
               {(draft.offers || []).length > 0 && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
+                <span className="offers-count">
                   {(draft.offers || []).length} offer{(draft.offers || []).length !== 1 ? 's' : ''}
                 </span>
               )}

@@ -35,13 +35,18 @@ export default function ContactList({ onView, onExport }) {
     currentClientId, currentClient,
     deleteContact, showToast,
     loadContacts, loadMoreContacts,
-    filterSearch, setFilterSearch,
-    filterStatuses, setFilterStatuses,
-    filterCounties, setFilterCounties,
-    filterPhone, setFilterPhone,
-    filterActivity, setFilterActivity,
-    filterEmail, setFilterEmail,
+    filters, setFilters,
   } = useApp();
+
+  const { search: filterSearch, statuses: filterStatuses, counties: filterCounties,
+          phone: filterPhone, activity: filterActivity, email: filterEmail } = filters;
+
+  function setFilterSearch(val)    { setFilters(f => ({ ...f, search: val })); }
+  function setFilterStatuses(val)  { setFilters(f => ({ ...f, statuses: val })); }
+  function setFilterCounties(val)  { setFilters(f => ({ ...f, counties: val })); }
+  function setFilterPhone(val)     { setFilters(f => ({ ...f, phone: val })); }
+  function setFilterActivity(val)  { setFilters(f => ({ ...f, activity: val })); }
+  function setFilterEmail(val)     { setFilters(f => ({ ...f, email: val })); }
 
   const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = useMemo(() => cfg.statuses.map(s => s.value), [cfg]);
@@ -72,8 +77,8 @@ export default function ContactList({ onView, onExport }) {
   // Reload when filters change
   useEffect(() => {
     if (!currentClientId) return;
-    const filters = {
-      statuses: filterStatuses ?? null, // null = all
+    const query = {
+      statuses: filterStatuses ?? null,
       counties: filterCounties?.length ? filterCounties : null,
       phone:    phoneFilter || null,
       email:    emailFilter || null,
@@ -82,12 +87,11 @@ export default function ContactList({ onView, onExport }) {
     };
     clearTimeout(searchTimer.current);
     if (search) {
-      // Debounce search
-      searchTimer.current = setTimeout(() => loadContacts(currentClientId, filters), 300);
+      searchTimer.current = setTimeout(() => loadContacts(currentClientId, query), 300);
     } else {
-      loadContacts(currentClientId, filters);
+      loadContacts(currentClientId, query);
     }
-  }, [currentClientId, filterSearch, filterStatuses, filterCounties, filterPhone, filterEmail, filterActivity, loadContacts]);
+  }, [currentClientId, filters, loadContacts]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -114,12 +118,7 @@ export default function ContactList({ onView, onExport }) {
     search !== '';
 
   function clearAllFilters() {
-    setFilterSearch('');
-    setFilterStatuses(null);
-    setFilterCounties([]);
-    setFilterPhone('');
-    setFilterEmail('');
-    setFilterActivity('');
+    setFilters({ search: '', statuses: null, counties: [], phone: '', activity: '', email: '' });
   }
 
   // Note activity filter is client-side (activityLog JSONB not fetched in list query).
@@ -141,14 +140,6 @@ export default function ContactList({ onView, onExport }) {
   // Get unique counties from loaded contacts for the dropdown
   const counties = [...new Set(contacts.map(c => c.county).filter(Boolean))].sort();
 
-  function setSelectedStatuses(val) {
-    if (typeof val === 'function') setFilterStatuses(prev => [...val(new Set(prev ?? ALL_STATUSES))]);
-    else setFilterStatuses(val === null ? null : [...val]);
-  }
-  function setSelectedCounties(val) {
-    if (typeof val === 'function') setFilterCounties(prev => [...val(new Set(prev ?? []))]);
-    else setFilterCounties([...val]);
-  }
   function toggleStatus(s) {
     const next = new Set(selectedStatuses);
     next.has(s) ? next.delete(s) : next.add(s);

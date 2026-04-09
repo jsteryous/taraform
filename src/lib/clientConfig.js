@@ -5,6 +5,8 @@
 export const LAND_CONFIG = {
   type: 'land',
   terminology: { contact: 'Contact', contacts: 'Contacts' },
+  leadSourceOptions: ['Launch Control', 'Snipe'],
+  contactMethodOptions: ['Launch Control', 'Manual Text', 'Call'],
   statuses: [
     { value: 'New Lead',           color: '#6b7280' },
     { value: 'Contacted',          color: '#3b82f6' },
@@ -28,6 +30,8 @@ export const LAND_CONFIG = {
 export const RESTAURANT_CONFIG = {
   type: 'restaurant',
   terminology: { contact: 'Customer', contacts: 'Customers' },
+  leadSourceOptions: [],
+  contactMethodOptions: [],
   statuses: [
     { value: 'New',      color: '#6b7280' },
     { value: 'Regular',  color: '#3b82f6' },
@@ -48,6 +52,8 @@ export const RESTAURANT_CONFIG = {
 export const GENERIC_CONFIG = {
   type: 'generic',
   terminology: { contact: 'Contact', contacts: 'Contacts' },
+  leadSourceOptions: [],
+  contactMethodOptions: [],
   statuses: [
     { value: 'New Lead',   color: '#6b7280' },
     { value: 'Contacted',  color: '#3b82f6' },
@@ -87,6 +93,8 @@ export function resolveConfig(client) {
     visibleFields: client.config.visibleFields ?? base.visibleFields,
     listColumns: client.config.listColumns || base.listColumns,
     terminology: { ...base.terminology, ...(client.config.terminology || {}) },
+    leadSourceOptions:    client.config.leadSourceOptions    ?? base.leadSourceOptions,
+    contactMethodOptions: client.config.contactMethodOptions ?? base.contactMethodOptions,
   };
 }
 
