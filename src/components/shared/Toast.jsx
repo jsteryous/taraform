@@ -12,7 +12,7 @@ export default function Toast() {
   if (!toast) return null;
   const { msg, variant } = toast;
   return (
-    <div className={`toast toast-${variant}`} style={{
+    <div role="status" aria-live="polite" aria-atomic="true" className={`toast toast-${variant}`} style={{
       position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
       background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)',
       padding: '0.5rem 1.25rem', borderRadius: '20px', fontSize: 'var(--text-sm)',

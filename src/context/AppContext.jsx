@@ -7,7 +7,60 @@ const AppContext = createContext(null);
 const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
 
-const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '' };
+// ── Error classification ──────────────────────────────────────
+function classifyError(e) {
+  if (!navigator.onLine) return 'You appear to be offline.';
+  const status = e?.status ?? e?.code;
+  if (status === 401 || status === 403) return 'Permission denied — check your access.';
+  if (status === 404) return 'Record not found.';
+  if (status >= 500) return 'Server error — try again later.';
+  return 'Something went wrong — try again.';
+}
+
+// ── Query builder (no component state — lives outside the provider) ──
+function buildQuery(clientId, filters = {}) {
+  let q = supabase.from('property_crm_contacts')
+    .select(LIST_FIELDS, { count: 'exact' })
+    .eq('client_id', clientId)
+    .order('updated_at', { ascending: false });
+
+  if (filters.statuses?.length) q = q.in('status', filters.statuses);
+  if (filters.counties?.length) q = q.in('county', filters.counties);
+  if (filters.phone === 'has')     q = q.not('phones', 'eq', '{}');
+  if (filters.phone === 'missing') q = q.or('phones.is.null,phones.eq.{}');
+  if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
+  if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
+
+  if (filters.activity) {
+    const [type, period] = filters.activity.split('_');
+    if (type === 'sms') {
+      if (period === 'never') {
+        q = q.is('last_sms_at', null);
+      } else {
+        const days = parseInt(period, 10);
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        q = q.gte('last_sms_at', cutoff);
+      }
+    }
+  }
+
+  if (filters.search) {
+    // Strip PostgREST filter-syntax characters before interpolating into .or() string.
+    const s = filters.search.toLowerCase().trim().replace(/[(),]/g, '');
+    const words = s.split(/\s+/).filter(Boolean);
+    if (words.length === 1) {
+      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%`);
+    } else {
+      const first = words[0];
+      const last  = words.slice(1).join(' ');
+      q = q.ilike('first_name', `%${first}%`).ilike('last_name', `%${last}%`);
+    }
+  }
+
+  return q;
+}
+
+export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '' };
 
 export function AppProvider({ children }) {
   const [user, setUser]                       = useState(null);
@@ -25,14 +78,16 @@ export function AppProvider({ children }) {
   // Filter state — single object so it survives contact navigation without prop drilling
   const [filters, setFilters] = useState(EMPTY_FILTERS);
 
-  // Refs so callbacks don't need state in their dep arrays
+  // loadingRef: synchronous guard for loadMoreContacts (state updates are async,
+  // so a ref is the only reliable way to prevent concurrent fetches).
   const loadingRef  = useRef(false);
   const contactsRef = useRef([]);
 
-  function setLoading(val) {
+  // Stable setter — both callbacks depend on it with [] dep arrays.
+  const setLoading = useCallback((val) => {
     loadingRef.current = val;
     setLoadingContacts(val);
-  }
+  }, []);
 
   const _setContacts = useCallback((updater) => {
     setContacts(prev => {
@@ -62,62 +117,6 @@ export function AppProvider({ children }) {
     if (name === 'light') document.body.classList.add('theme-light');
   }, []);
 
-  // ── Build a Supabase query from filter state ──────────────
-  function buildQuery(clientId, filters = {}) {
-    let q = supabase.from('property_crm_contacts')
-      .select(LIST_FIELDS, { count: 'exact' })
-      .eq('client_id', clientId)
-      .order('updated_at', { ascending: false });
-
-    // Status filter
-    if (filters.statuses?.length) {
-      q = q.in('status', filters.statuses);
-    }
-    // County filter
-    if (filters.counties?.length) {
-      q = q.in('county', filters.counties);
-    }
-    // Phone filter
-    if (filters.phone === 'has')     q = q.not('phones', 'eq', '{}');
-    if (filters.phone === 'missing') q = q.or('phones.is.null,phones.eq.{}');
-    // Email filter
-    if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
-    if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
-    // Activity filter — SMS handled server-side via last_sms_at
-    if (filters.activity) {
-      const [type, period] = filters.activity.split('_');
-      if (type === 'sms') {
-        if (period === 'never') {
-          q = q.is('last_sms_at', null);
-        } else {
-          const days = parseInt(period, 10);
-          const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-          q = q.gte('last_sms_at', cutoff);
-        }
-      }
-    }
-
-    // Search (name, phone, county, tax map id)
-    if (filters.search) {
-      // Strip PostgREST filter-syntax characters before interpolating into .or() string.
-      // Commas split conditions; parens delimit nested groups — both would corrupt the query.
-      const s = filters.search.toLowerCase().trim().replace(/[(),]/g, '');
-      const words = s.split(/\s+/).filter(Boolean);
-
-      if (words.length === 1) {
-        // Single word — match first name, last name, county, tax map id, or phone
-        q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%`);
-      } else {
-        // Multiple words (e.g. "jennifer cumm") — first word matches first name, rest match last name
-        const first = words[0];
-        const last  = words.slice(1).join(' ');
-        q = q.ilike('first_name', `%${first}%`).ilike('last_name', `%${last}%`);
-      }
-    }
-
-    return q;
-  }
-
   // ── Load first page with filters ──────────────────────────
   const loadContacts = useCallback(async (clientId, filters = {}) => {
     if (!clientId) return;
@@ -129,12 +128,12 @@ export function AppProvider({ children }) {
       _setContacts((data || []).map(mapDbContact));
       setTotalCount(count || 0);
     } catch (e) {
-      console.error('loadContacts error:', e.message);
-      showToast('Failed to load contacts — check your connection', 'error');
+      console.error('loadContacts error:', e);
+      showToast(classifyError(e), 'error');
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line
+  }, [setLoading, _setContacts, showToast]);
 
   // ── Load next page (append) ───────────────────────────────
   const loadMoreContacts = useCallback(async (clientId, filters = {}) => {
@@ -147,12 +146,12 @@ export function AppProvider({ children }) {
       if (error) throw error;
       _setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
     } catch (e) {
-      console.error('loadMoreContacts error:', e.message);
-      showToast('Failed to load more contacts', 'error');
+      console.error('loadMoreContacts error:', e);
+      showToast(classifyError(e), 'error');
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line
+  }, [setLoading, _setContacts, showToast]);
 
   // ── Load full contact (with JSONB) for detail view ────────
   const loadFullContact = useCallback(async (contactId) => {
@@ -160,7 +159,7 @@ export function AppProvider({ children }) {
       .from('property_crm_contacts').select('*').eq('id', contactId).maybeSingle();
     if (error || !data) {
       console.error('loadFullContact contact error:', error);
-      showToast('Failed to load contact', 'error');
+      showToast(classifyError(error), 'error');
       return null;
     }
     const full = mapDbContact(data);
@@ -176,7 +175,7 @@ export function AppProvider({ children }) {
     _setContacts(prev => prev.map(c => c.id === full.id ? full : c));
     setCurrentContact(prev => prev?.id === full.id ? full : prev);
     return full;
-  }, []); // eslint-disable-line
+  }, [_setContacts, showToast]);
 
   const saveContact = useCallback(async (contact) => {
     if (!user || !currentClientId) return;
@@ -198,7 +197,7 @@ export function AppProvider({ children }) {
     _setContacts(prev => prev.filter(c => c.id !== id));
     setTotalCount(prev => prev - 1);
     setCurrentContact(prev => prev?.id === id ? null : prev);
-  }, []); // removed currentContact dep — uses functional setState
+  }, [_setContacts]);
 
   const contextValue = useMemo(() => ({
     user, setUser,

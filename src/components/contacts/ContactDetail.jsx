@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
@@ -23,8 +24,6 @@ export default function ContactDetail({ onClose }) {
   const STATUSES = cfg.statuses.map(s => s.value);
   const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
   const [draft, setDraft] = useState(null);
-  const [saveStatus, setSaveStatus] = useState(''); // '' | 'saving' | 'saved'
-  const saveTimer = useRef(null);
   const [confirmDelete, ConfirmUI] = useConfirm();
 
   const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
@@ -34,67 +33,10 @@ export default function ContactDetail({ onClose }) {
     if (currentContact) setDraft({ ...currentContact });
   }, [currentContact?.id, currentContact?.offers]);
 
+  const { saveStatus, update, updateMultiple, updateCustomField } =
+    useDraftSave(draft, setDraft, setCurrentContact, saveContact, showToast);
+
   if (!currentContact || !draft) return null;
-
-  function markSaved() {
-    clearTimeout(saveTimer.current);
-    setSaveStatus('saved');
-    saveTimer.current = setTimeout(() => setSaveStatus(''), 1800);
-  }
-
-  async function update(field, value) {
-    const prev = draft;
-    const updated = { ...draft, [field]: value, updatedAt: new Date().toISOString() };
-    setDraft(updated);
-    setCurrentContact(updated);
-    clearTimeout(saveTimer.current);
-    setSaveStatus('saving');
-    try {
-      await saveContact(updated);
-      markSaved();
-    } catch {
-      showToast('Save failed — try again', 'error');
-      setSaveStatus('');
-      setDraft(prev);
-      setCurrentContact(prev);
-    }
-  }
-
-  async function updateMultiple(fields) {
-    const prev = draft;
-    const updated = { ...draft, ...fields, updatedAt: new Date().toISOString() };
-    setDraft(updated);
-    setCurrentContact(updated);
-    clearTimeout(saveTimer.current);
-    setSaveStatus('saving');
-    try {
-      await saveContact(updated);
-      markSaved();
-    } catch {
-      showToast('Save failed — try again', 'error');
-      setSaveStatus('');
-      setDraft(prev);
-      setCurrentContact(prev);
-    }
-  }
-
-  async function updateCustomField(key, value) {
-    const prev = draft;
-    const updated = { ...draft, customFields: { ...draft.customFields, [key]: value }, updatedAt: new Date().toISOString() };
-    setDraft(updated);
-    setCurrentContact(updated);
-    clearTimeout(saveTimer.current);
-    setSaveStatus('saving');
-    try {
-      await saveContact(updated);
-      markSaved();
-    } catch {
-      showToast('Save failed — try again', 'error');
-      setSaveStatus('');
-      setDraft(prev);
-      setCurrentContact(prev);
-    }
-  }
 
   async function handleDelete() {
     if (!await confirmDelete('Delete this contact? This cannot be undone.')) return;

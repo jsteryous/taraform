@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, EMPTY_FILTERS } from '../../context/AppContext';
 import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
@@ -41,12 +41,12 @@ export default function ContactList({ onView, onExport }) {
   const { search: filterSearch, statuses: filterStatuses, counties: filterCounties,
           phone: filterPhone, activity: filterActivity, email: filterEmail } = filters;
 
-  function setFilterSearch(val)    { setFilters(f => ({ ...f, search: val })); }
-  function setFilterStatuses(val)  { setFilters(f => ({ ...f, statuses: val })); }
-  function setFilterCounties(val)  { setFilters(f => ({ ...f, counties: val })); }
-  function setFilterPhone(val)     { setFilters(f => ({ ...f, phone: val })); }
-  function setFilterActivity(val)  { setFilters(f => ({ ...f, activity: val })); }
-  function setFilterEmail(val)     { setFilters(f => ({ ...f, email: val })); }
+  const setFilterSearch    = useCallback((val) => setFilters(f => ({ ...f, search: val })),   [setFilters]);
+  const setFilterStatuses  = useCallback((val) => setFilters(f => ({ ...f, statuses: val })), [setFilters]);
+  const setFilterCounties  = useCallback((val) => setFilters(f => ({ ...f, counties: val })), [setFilters]);
+  const setFilterPhone     = useCallback((val) => setFilters(f => ({ ...f, phone: val })),    [setFilters]);
+  const setFilterActivity  = useCallback((val) => setFilters(f => ({ ...f, activity: val })), [setFilters]);
+  const setFilterEmail     = useCallback((val) => setFilters(f => ({ ...f, email: val })),    [setFilters]);
 
   const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = useMemo(() => cfg.statuses.map(s => s.value), [cfg]);
@@ -118,7 +118,7 @@ export default function ContactList({ onView, onExport }) {
     search !== '';
 
   function clearAllFilters() {
-    setFilters({ search: '', statuses: null, counties: [], phone: '', activity: '', email: '' });
+    setFilters(EMPTY_FILTERS);
   }
 
   // Note activity filter is client-side (activityLog JSONB not fetched in list query).
@@ -137,8 +137,10 @@ export default function ContactList({ onView, onExport }) {
     });
   }, [contacts, activityFilter]);
 
-  // Get unique counties from loaded contacts for the dropdown
-  const counties = [...new Set(contacts.map(c => c.county).filter(Boolean))].sort();
+  const counties = useMemo(
+    () => [...new Set(contacts.map(c => c.county).filter(Boolean))].sort(),
+    [contacts]
+  );
 
   function toggleStatus(s) {
     const next = new Set(selectedStatuses);
