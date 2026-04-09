@@ -122,6 +122,24 @@ function collectFiles(dir) {
   return files;
 }
 
+// ─── Raw font-size check: flag any font-size using a bare rem value ───────────
+// Allowed one-offs (decorative sizes outside the token scale)
+const ALLOWED_RAW_FONTSIZES = new Set(['1.125rem', '1.375rem', '1.75rem', '2.5rem']);
+
+function checkRawFontSizes(css) {
+  const violations = [];
+  const re = /font-size\s*:\s*([\d.]+rem)/g;
+  let m;
+  while ((m = re.exec(css)) !== null) {
+    if (!ALLOWED_RAW_FONTSIZES.has(m[1])) {
+      // Find approximate line number
+      const line = css.slice(0, m.index).split('\n').length;
+      violations.push({ value: m[1], line });
+    }
+  }
+  return violations;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const css     = readFileSync(CSS_FILE, 'utf-8');
 const defined = extractCssClasses(css);
@@ -143,8 +161,18 @@ const dead = [...defined]
   .filter(cls => !usedSet.has(cls) && !isDynamic(cls) && !APPLIED_TO_BODY.has(cls))
   .sort();
 
+const rawFontSizeViolations = checkRawFontSizes(css);
+
 // ─── Output ───────────────────────────────────────────────────────────────────
 let exitCode = 0;
+
+if (rawFontSizeViolations.length > 0) {
+  exitCode = 1;
+  console.log(`\n❌  ${rawFontSizeViolations.length} raw rem font-size(s) in CSS — use a --text-* token instead:\n`);
+  for (const { value, line } of rawFontSizeViolations) {
+    console.log(`  ${value}  (line ${line})`);
+  }
+}
 
 if (missing.length > 0) {
   exitCode = 1;
