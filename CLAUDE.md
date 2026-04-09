@@ -15,7 +15,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 - **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
 - **Config:** All client-specific UI (statuses, colors, tabs, visible fields, `leadSourceOptions`, `contactMethodOptions`) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode these values.
-- **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur`. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
+- **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur` — all three come from `useDraftSave` (`hooks/useDraftSave.js`), which owns the optimistic-save/revert pattern. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
 - **CSS/JSX sync:** Run `npm run check-css` after adding or renaming a `className`. Flags missing classes and raw rem font-sizes (both exit 1). Dead CSS is informational only.
 
 ## Gotchas
@@ -24,7 +24,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **Filter state** is a single `filters` object in AppContext (`{ search, statuses, counties, phone, activity, email }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all.
 
-**`saveContact` is async and throws.** Always `await` it. Follow the optimistic update pattern in ContactDetail (`update`/`updateMultiple`/`updateCustomField`): apply locally, revert + `showToast` on catch.
+**`saveContact` is async and throws.** Always `await` it. The optimistic-save pattern (apply locally → revert + `showToast` on catch) lives in `useDraftSave` — use that hook rather than reimplementing it.
 
 **`showToast(msg, variant?)`** — second arg is `'success' | 'error' | 'warning'` (default: neutral, no icon). Pass the right variant on catch/success so the toast renders a colored border and icon.
 
@@ -42,7 +42,7 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **CSV import:** `parseCSVRaw` (utils.js) returns indexed rows for ImportModal's column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan. Bulk inserts chunked at 500 rows.
 
-**AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs and functional setState. All have empty `[]` dep arrays with eslint-disable — intentional, don't "fix" it.
+**AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs and functional setState. `loadMoreContacts` uses `loadingRef` as a synchronous guard (state updates are async — a ref is the only reliable way to prevent concurrent fetches).
 
 **`setContacts` from context is ref-syncing.** The context exposes `_setContacts` as `setContacts` — always use it instead of a local `useState` setter so `contactsRef.current` stays in sync with `loadMoreContacts`.
 
