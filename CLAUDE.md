@@ -10,13 +10,13 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 ## UI patterns
 
-- **Font sizes:** Use CSS tokens (`--text-xs` → `--text-xl` defined in `:root`) — never arbitrary `rem` values.
+- **Font sizes:** Use CSS tokens (`--text-2xs` → `--text-xl` defined in `:root`) — never arbitrary `rem` values. `check-css` enforces this.
 - **Icons:** Use Lucide React — never emoji icons.
 - **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
 - **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
 - **Config:** All client-specific UI (statuses, colors, tabs, visible fields) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode status names or colors.
 - **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur`. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
-- **CSS/JSX sync:** After adding or renaming a `className`, run `npm run check-css`. Exit 1 means a class is referenced in JSX but not defined in `index.css` — that's a bug. The script also lists CSS classes with no JSX reference (dead CSS, informational).
+- **CSS/JSX sync:** Run `npm run check-css` after adding or renaming a `className`. Flags missing classes and raw rem font-sizes (both exit 1). Dead CSS is informational only.
 
 ## Gotchas
 
