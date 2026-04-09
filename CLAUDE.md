@@ -42,9 +42,9 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 **CSV import:** `parseCSVRaw` (utils.js) returns indexed rows for ImportModal's column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan. Bulk inserts chunked at 500 rows.
 
-**AppContext callbacks** (`loadContacts`, `loadMoreContacts`, `loadFullContact`, `saveContact`, `deleteContact`) use refs and functional setState. `loadMoreContacts` uses `loadingRef` as a synchronous guard (state updates are async — a ref is the only reliable way to prevent concurrent fetches).
+**AppContext is split into two contexts.** `useAppData()` — contacts, clients, filters, actions. `useAppUI()` — toast/showToast, theme/setTheme. `useApp()` combines both and is safe everywhere. Use the narrower hooks when a component only needs one side (e.g. `ContactCard` uses `useAppData()` so toast changes don't re-render the list). `loadMoreContacts` uses `loadingRef` as a synchronous concurrent-fetch guard — don't remove it.
 
-**`setContacts` from context is ref-syncing.** The context exposes `_setContacts` as `setContacts` — always use it instead of a local `useState` setter so `contactsRef.current` stays in sync with `loadMoreContacts`.
+**`setContacts` from context is ref-syncing.** Always use it instead of a local `useState` setter so `contactsRef.current` stays in sync with `loadMoreContacts`.
 
 ## Multi-tenancy
 
