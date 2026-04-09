@@ -5,6 +5,7 @@ import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
 import SendEmailModal from '../modals/SendEmailModal';
+import { useConfirm } from '../shared/ConfirmDialog';
 
 const ACTIVITY_OPTIONS = [
   { value: '',           label: 'Any Activity' },
@@ -51,6 +52,7 @@ export default function ContactList({ onView, onExport }) {
   const [countyOpen,    setCountyOpen]    = useState(false);
   const [moreOpen,      setMoreOpen]      = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
+  const [confirmBulkDelete, ConfirmUI]    = useConfirm();
 
   const statusRef = useRef(null);
   const countyRef = useRef(null);
@@ -165,7 +167,7 @@ export default function ContactList({ onView, onExport }) {
   }
   async function deleteSelected() {
     const count = selected.size;
-    if (!count || !confirm(`Delete ${count} contacts?`)) return;
+    if (!count || !await confirmBulkDelete(`Delete ${count} contact${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
     await Promise.all([...selected].map(id => deleteContact(id)));
     setSelected(new Set());
     showToast(`${count} contacts deleted`);
@@ -218,6 +220,7 @@ export default function ContactList({ onView, onExport }) {
 
   return (
     <>
+      {ConfirmUI}
       <StatsBar onFilterStatus={handleStatPillFilter} />
 
       {/* Filter bar */}

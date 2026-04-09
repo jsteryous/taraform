@@ -6,6 +6,9 @@ import NotesTab from './NotesTab';
 import SmsTab from './SmsTab';
 import OffersTab from './OffersTab';
 import EmailTab from './EmailTab';
+import Select from '../shared/Select';
+import { useConfirm } from '../shared/ConfirmDialog';
+import { ArrowLeft, Copy, Check, MessageSquare, Mail, Trash2 } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -31,6 +34,7 @@ export default function ContactDetail({ onClose }) {
   const [draft, setDraft] = useState(null);
   const [saveStatus, setSaveStatus] = useState(''); // '' | 'saving' | 'saved'
   const saveTimer = useRef(null);
+  const [confirmDelete, ConfirmUI] = useConfirm();
 
   const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
   const visibleFields = cfg.visibleFields;
@@ -97,7 +101,7 @@ export default function ContactDetail({ onClose }) {
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this contact?')) return;
+    if (!await confirmDelete('Delete this contact? This cannot be undone.')) return;
     await deleteContact(currentContact.id);
     onClose();
   }
@@ -140,17 +144,18 @@ export default function ContactDetail({ onClose }) {
 
   return (
     <div id="contactDetailPage" className="active">
+      {ConfirmUI}
       {/* Header */}
       <div className="detail-page-header">
-        <button className="back-button" onClick={onClose}>← Back</button>
+        <button className="back-button" onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ArrowLeft size={15} /> Back</button>
         <span className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</span>
         {saveStatus === 'saving' && (
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>Saving…</span>
         )}
         {saveStatus === 'saved' && (
-          <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontFamily: 'var(--mono)' }}>✓ Saved</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: 'var(--success)', fontFamily: 'var(--mono)' }}><Check size={12} /> Saved</span>
         )}
-        <button onClick={handleDelete} style={{ marginLeft: 'auto', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.4rem 0.875rem', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+        <button onClick={handleDelete} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.4rem 0.875rem', cursor: 'pointer', fontSize: '0.8rem' }}><Trash2 size={13} /> Delete</button>
       </div>
 
       <div className="detail-page-content">
@@ -190,33 +195,32 @@ export default function ContactDetail({ onClose }) {
           {/* Status */}
           <div style={{ marginBottom: '1rem' }}>
             <div style={fieldLabel}>Status</div>
-            <select value={draft.status || 'New Lead'} onChange={e => update('status', e.target.value)}
-              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.875rem' }}>
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <Select
+              value={draft.status || 'New Lead'}
+              onChange={v => update('status', v)}
+              options={STATUSES}
+              emptyLabel={null}
+            />
           </div>
 
           {/* Lead Source */}
           <div style={{ marginBottom: '1rem' }}>
             <div style={fieldLabel}>Lead Source</div>
-            <select value={draft.leadSource || ''} onChange={e => update('leadSource', e.target.value)}
-              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.875rem' }}>
-              <option value="">—</option>
-              <option>Launch Control</option>
-              <option>Snipe</option>
-            </select>
+            <Select
+              value={draft.leadSource || ''}
+              onChange={v => update('leadSource', v)}
+              options={['Launch Control', 'Snipe']}
+            />
           </div>
 
           {/* Contact Method */}
           <div style={{ marginBottom: '1rem' }}>
             <div style={fieldLabel}>Contact Method</div>
-            <select value={draft.contactMethod || ''} onChange={e => update('contactMethod', e.target.value)}
-              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.875rem' }}>
-              <option value="">—</option>
-              <option>Launch Control</option>
-              <option>Manual Text</option>
-              <option>Call</option>
-            </select>
+            <Select
+              value={draft.contactMethod || ''}
+              onChange={v => update('contactMethod', v)}
+              options={['Launch Control', 'Manual Text', 'Call']}
+            />
           </div>
 
           {/* Phones */}
@@ -236,7 +240,7 @@ export default function ContactDetail({ onClose }) {
                     updatePhone(i, formatPhone(e.target.value));
                   }}
                 />
-                {p && <button onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem' }}>📋</button>}
+                {p && <button onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }} title="Copy"><Copy size={13} /></button>}
                 <button onClick={() => removePhone(i)} style={removeBtn}>×</button>
               </div>
             ))}
@@ -255,7 +259,7 @@ export default function ContactDetail({ onClose }) {
               />
               {draft.email && (
                 <button onClick={() => { navigator.clipboard.writeText(draft.email); showToast('Copied!'); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem' }}>📋</button>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }} title="Copy"><Copy size={13} /></button>
               )}
             </div>
           </div>
@@ -408,7 +412,7 @@ export default function ContactDetail({ onClose }) {
                   if (e.key === 'ArrowLeft')  { e.preventDefault(); setTab(tabs[(idx - 1 + tabs.length) % tabs.length]); }
                 }}
               >
-                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? '💬 SMS' : '✉ Email'}
+                {t === 'notes' ? 'Notes & Activity' : t === 'sms' ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><MessageSquare size={13} /> SMS</span> : <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Mail size={13} /> Email</span>}
               </button>
             ))}
           </div>

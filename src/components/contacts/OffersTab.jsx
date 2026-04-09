@@ -2,12 +2,14 @@ import { useState } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
+import { useConfirm } from '../shared/ConfirmDialog';
 
 export default function OffersTab({ contact, onChange, onChangeMultiple, onOffersChange }) {
   const { loadFullContact, showToast } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
   const [form, setForm]           = useState({ amount: '', status: 'Pending', notes: '' });
+  const [confirmRemove, ConfirmUI] = useConfirm();
 
   const offers = Array.isArray(contact.offers) ? contact.offers : [];
 
@@ -51,7 +53,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
   }
 
   async function remove(id) {
-    if (!confirm('Remove this offer?')) return;
+    if (!await confirmRemove('Remove this offer?')) return;
     try {
       await deleteOffer(contact.id, id, contact.clientId);
       // Update immediately
@@ -70,6 +72,7 @@ export default function OffersTab({ contact, onChange, onChangeMultiple, onOffer
 
   return (
     <div id="detailTabOffers">
+      {ConfirmUI}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         <button className="btn-small btn-primary" onClick={openAdd}>+ Add Offer</button>
       </div>

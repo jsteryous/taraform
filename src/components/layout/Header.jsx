@@ -7,6 +7,10 @@ import TemplatesModal from '../modals/TemplatesModal';
 import SmsSettingsModal from '../modals/SmsSettingsModal';
 import EmailSettingsModal from '../modals/EmailSettingsModal';
 import EmailVerificationImportModal from '../modals/EmailVerificationImportModal';
+import {
+  Settings, LayoutDashboard, FileText, Clock, Mail, ShieldCheck,
+  Play, Pause, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut,
+} from 'lucide-react';
 
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
   const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast } = useApp();
@@ -66,7 +70,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
     window.location.reload();
   }
 
-  const themeIcons = { dark: '🌑', dim: '🌗', light: '☀️' };
+  const ThemeIcon = { dark: Moon, dim: SunMoon, light: Sun }[theme] || Moon;
 
   return (
     <>
@@ -101,7 +105,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                   style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', color: 'var(--text)', fontSize: '0.875rem', fontWeight: 500, fontFamily: 'var(--sans)', minWidth: '160px', justifyContent: 'space-between' }}
                 >
                   <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
-                  <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>▾</span>
+                  <ChevronDown size={12} style={{ opacity: 0.5, flexShrink: 0 }} />
                 </button>
                 {clientDropOpen && (
                   <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: '200px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 600, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
@@ -119,14 +123,14 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                   </div>
                 )}
               </div>
-              <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Manage clients">⚙</button>
+              <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Manage clients"><Settings size={14} /></button>
             </div>
           </div>
           <div className="user-info">
             <span>{user?.email}</span>
             <div ref={themeRef} style={{ position: 'relative' }}>
               <button className="theme-toggle-btn" onClick={() => setThemeOpen(o => !o)}>
-                <span>{themeIcons[theme]}</span>
+                <ThemeIcon size={14} />
                 <span style={{ textTransform: 'capitalize' }}>{theme}</span>
               </button>
               {themeOpen && (
@@ -139,27 +143,27 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                 </div>
               )}
             </div>
-            <button className="logout-btn" onClick={handleLogout}>Sign Out</button>
+            <button className="logout-btn" onClick={handleLogout} title="Sign out"><LogOut size={14} /></button>
           </div>
         </div>
 
         <div className="header-bottom">
           <div className="header-actions">
-            <button className="btn-primary" onClick={onAddContact}>+ Add Contact</button>
+            <button className="btn-primary" onClick={onAddContact} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Plus size={14} /> Add Contact</button>
             <button onClick={onImport}>Import CSV</button>
             <button onClick={onExport}>Export All</button>
             <button onClick={onDashboard}
-              style={dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}}>
-              📊 Dashboard
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', ...(dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}) }}>
+              <LayoutDashboard size={14} /> Dashboard
             </button>
             <div ref={dropRef} className="settings-dropdown-wrap">
-              <button onClick={() => setDropOpen(o => !o)}>⚙ Settings ▾</button>
+              <button onClick={() => setDropOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Settings size={14} /> Settings <ChevronDown size={12} style={{ opacity: 0.6 }} /></button>
               {dropOpen && (
                 <div className="settings-dropdown-menu open">
-                  <button onClick={() => { setShowTemplates(true); setDropOpen(false); }}>✉ &nbsp;SMS Templates</button>
-                  <button onClick={() => { setShowSchedule(true); setDropOpen(false); }}>⏱ &nbsp;SMS Schedule</button>
-                  <button onClick={() => { setShowEmail(true); setDropOpen(false); }}>📧 &nbsp;Email Settings</button>
-                  <button onClick={() => { setShowEmailVerify(true); setDropOpen(false); }}>✅ &nbsp;Import Email Verification</button>
+                  <button onClick={() => { setShowTemplates(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FileText size={14} /> SMS Templates</button>
+                  <button onClick={() => { setShowSchedule(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Clock size={14} /> SMS Schedule</button>
+                  <button onClick={() => { setShowEmail(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Mail size={14} /> Email Settings</button>
+                  <button onClick={() => { setShowEmailVerify(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ShieldCheck size={14} /> Import Email Verification</button>
                   <hr className="menu-divider" />
                   <button onClick={async () => {
                     const next = !paused;
@@ -171,7 +175,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                       showToast('Failed to update SMS automation');
                     }
                   }}>
-                    {paused ? '▶  Resume SMS' : '⏸  Pause SMS'}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{paused ? <Play size={14} /> : <Pause size={14} />} {paused ? 'Resume SMS' : 'Pause SMS'}</span>
                   </button>
                   <button onClick={async () => {
                     const next = !emailAuto;
@@ -183,7 +187,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                       showToast('Failed to update email automation');
                     }
                   }}>
-                    {emailAuto ? '⏸  Pause Email' : '▶  Resume Email'}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{emailAuto ? <Pause size={14} /> : <Play size={14} />} {emailAuto ? 'Pause Email' : 'Resume Email'}</span>
                   </button>
                 </div>
               )}
