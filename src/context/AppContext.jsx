@@ -104,7 +104,9 @@ export function AppProvider({ children }) {
 
     // Search (name, phone, county, tax map id)
     if (filters.search) {
-      const s = filters.search.toLowerCase().trim();
+      // Strip PostgREST filter-syntax characters before interpolating into .or() string.
+      // Commas split conditions; parens delimit nested groups — both would corrupt the query.
+      const s = filters.search.toLowerCase().trim().replace(/[(),]/g, '');
       const words = s.split(/\s+/).filter(Boolean);
 
       if (words.length === 1) {
@@ -210,7 +212,7 @@ export function AppProvider({ children }) {
       clientsList, setClientsList,
       currentClientId, setCurrentClientId,
       currentClient,
-      contacts, setContacts,
+      contacts, setContacts: _setContacts,
       totalCount, setTotalCount,
       loadingContacts,
       currentContact, setCurrentContact,

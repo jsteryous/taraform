@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  const lines = text.replace(/\r/g, '').trim().split('\n');
   const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
   const rows = lines.slice(1).map(line => {
     const vals = [];
@@ -37,13 +37,6 @@ export default function EmailVerificationImportModal({ open, onClose }) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      // Fetch fresh contacts from DB (avoids stale React state)
-      const { data: dbContacts } = await supabase
-        .from('property_crm_contacts')
-        .select('id, email, first_name, last_name')
-        .eq('client_id', currentClientId)
-        .not('email', 'is', null)
-        .neq('email', '');
       const { headers, rows } = parseCSV(ev.target.result);
       const h = headers.map(x => x.toLowerCase().trim());
 
@@ -73,6 +66,17 @@ export default function EmailVerificationImportModal({ open, onClose }) {
         return;
       }
 
+      // Collect all emails from the CSV first, then fetch only those contacts
+      const csvEmails = [...new Set(
+        rows.map(r => r[emailIdx]?.trim().toLowerCase()).filter(Boolean)
+      )];
+      const { data: dbContacts } = await supabase
+        .from('property_crm_contacts')
+        .select('id, email, first_name, last_name')
+        .eq('client_id', currentClientId)
+        .in('email', csvEmails);
+      const emailToContact = new Map((dbContacts || []).map(c => [c.email?.toLowerCase(), c]));
+
       const verified = [], invalid = [], skipped = [];
 
       for (const row of rows) {
@@ -86,7 +90,7 @@ export default function EmailVerificationImportModal({ open, onClose }) {
         }
 
         // Match to existing contact by email (case-insensitive)
-        const match = (dbContacts || []).find(c => c.email?.toLowerCase() === email);
+        const match = emailToContact.get(email);
         if (!match) { skipped.push({ email, reason: 'not found in Taraform' }); continue; }
 
         // safe / inbox_full = verified; invalid = blocked; unknown/empty = skip
@@ -108,21 +112,37 @@ export default function EmailVerificationImportModal({ open, onClose }) {
   async function handleImport() {
     if (!preview) return;
     setImporting(true);
+    const now = new Date().toISOString();
     try {
-      // Mark verified contacts
-      for (const { contact } of preview.verified) {
-        await supabase.from('property_crm_contacts')
-          .update({ email_status: 'verified', updated_at: new Date().toISOString() })
-          .eq('id', contact.id);
-        setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, emailStatus: 'verified' } : c));
+      const verifiedIds   = preview.verified.map(({ contact }) => contact.id);
+      const invalidIds    = preview.invalid.map(({ contact }) => contact.id);
+      const updates = [];
+      if (verifiedIds.length) {
+        updates.push(
+          supabase.from('property_crm_contacts')
+            .update({ email_status: 'verified', updated_at: now })
+            .in('id', verifiedIds)
+        );
       }
-      // Mark invalid contacts
-      for (const { contact } of preview.invalid) {
-        await supabase.from('property_crm_contacts')
-          .update({ email_status: 'do_not_email', updated_at: new Date().toISOString() })
-          .eq('id', contact.id);
-        setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, emailStatus: 'do_not_email' } : c));
+      if (invalidIds.length) {
+        updates.push(
+          supabase.from('property_crm_contacts')
+            .update({ email_status: 'do_not_email', updated_at: now })
+            .in('id', invalidIds)
+        );
       }
+      const results = await Promise.all(updates);
+      const failed = results.filter(r => r.error);
+      if (failed.length) throw failed[0].error;
+
+      // Update local state in one pass
+      const verifiedSet = new Set(verifiedIds);
+      const invalidSet  = new Set(invalidIds);
+      setContacts(prev => prev.map(c => {
+        if (verifiedSet.has(c.id))  return { ...c, emailStatus: 'verified' };
+        if (invalidSet.has(c.id))   return { ...c, emailStatus: 'do_not_email' };
+        return c;
+      }));
       setStep('done');
     } finally {
       setImporting(false);
