@@ -76,6 +76,7 @@ export default function EmailSettingsModal({ open, onClose }) {
     }
     const popup = window.open(url, 'ms_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
+      if (e.origin !== 'https://taraform-server-production.up.railway.app') return;
       if (e.data?.type === 'MS_AUTH_SUCCESS') {
         cleanup();
         popup?.close();
@@ -105,6 +106,7 @@ export default function EmailSettingsModal({ open, onClose }) {
     }
     const popup = window.open(url, 'google_auth', 'width=600,height=700,scrollbars=yes');
     const handler = async (e) => {
+      if (e.origin !== 'https://taraform-server-production.up.railway.app') return;
       if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
         cleanup();
         popup?.close();

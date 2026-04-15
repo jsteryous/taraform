@@ -43,10 +43,10 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
     if (!currentClientId) return;
     getSetting('automation_paused', currentClientId)
       .then(d => setPaused(d.value === 'true'))
-      .catch(() => {});
+      .catch(e => { if (e.status !== 404) showToast('Failed to load SMS automation status', 'error'); });
     getSetting('email_automation_enabled', currentClientId)
       .then(d => setEmailAuto(d.value === 'true'))
-      .catch(() => {});
+      .catch(e => { if (e.status !== 404) showToast('Failed to load email automation status', 'error'); });
   }, [currentClientId]);
 
   useEffect(() => {

@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 const BASE = 'https://taraform-server-production.up.railway.app';
 
-async function req(path, options = {}) {
+async function req(path, options = {}, _retry = true) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
@@ -22,6 +22,18 @@ async function req(path, options = {}) {
 
   const text = await res.text();
   if (!res.ok) {
+    // On 401, refresh the session once and retry. If the refresh also fails,
+    // the token is unrecoverable — sign out so the user can re-authenticate.
+    if (res.status === 401 && _retry) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (!refreshErr && refreshed.session) {
+        return req(path, options, false);
+      }
+      await supabase.auth.signOut();
+      window.location.reload();
+      return;
+    }
+
     console.error(`[api] ${method} ${path} → ${res.status}`, text);
     let errMsg;
     try {
@@ -30,7 +42,9 @@ async function req(path, options = {}) {
     } catch {
       errMsg = `${res.status} ${res.statusText}`;
     }
-    throw new Error(errMsg);
+    const err = new Error(errMsg);
+    err.status = res.status;
+    throw err;
   }
 
   try {
