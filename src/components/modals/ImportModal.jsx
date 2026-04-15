@@ -272,8 +272,8 @@ export default function ImportModal({ open, onClose }) {
         setContacts(prev => [...allInserted.map(mapDbContact), ...prev]);
       }
 
-      // Update phones on duplicates — allSettled so a single failure doesn't abort the batch.
-      const updateResults = await Promise.allSettled(toUpdate.map(async ({ existing, newPhones }) => {
+      // Update phones on duplicates — all in parallel
+      await Promise.all(toUpdate.map(async ({ existing, newPhones }) => {
         const merged = [...new Set([...(existing.phones || []), ...newPhones])];
         const { error } = await supabase
           .from('property_crm_contacts')
@@ -282,11 +282,8 @@ export default function ImportModal({ open, onClose }) {
         if (error) throw error;
         setContacts(prev => prev.map(c => c.id === existing.id ? { ...c, phones: merged } : c));
       }));
-      const updateFailed = updateResults.filter(r => r.status === 'rejected').length;
-      const updateOk     = toUpdate.length - updateFailed;
 
-      const failNote = updateFailed > 0 ? ` · ${updateFailed} phone update${updateFailed > 1 ? 's' : ''} failed` : '';
-      showToast(`✓ ${toAdd.length} added · ${updateOk} updated · ${preview.toSkip.length} skipped${failNote}`, updateFailed > 0 ? 'warning' : 'success');
+      showToast(`✓ ${toAdd.length} added · ${toUpdate.length} updated · ${preview.toSkip.length} skipped`);
       handleClose();
     } catch (err) {
       console.error('Import failed:', err?.message, err?.code, err?.details, err?.hint);
