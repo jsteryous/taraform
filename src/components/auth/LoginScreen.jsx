@@ -1,9 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+
+// Pull OAuth errors out of either the query string or the hash. Google + Supabase
+// can use either depending on the flow (PKCE → query, implicit → hash).
+function readOAuthError() {
+  const sources = [window.location.search, window.location.hash.replace(/^#\/?/, '?')];
+  for (const src of sources) {
+    if (!src || (!src.includes('error') && !src.includes('error_description'))) continue;
+    const params = new URLSearchParams(src.startsWith('?') ? src.slice(1) : src);
+    const code = params.get('error') || params.get('error_code');
+    const desc = params.get('error_description');
+    if (code || desc) return { code, desc: desc ? decodeURIComponent(desc.replace(/\+/g, ' ')) : '' };
+  }
+  return null;
+}
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const oauthErr = readOAuthError();
+    if (oauthErr) {
+      setError(oauthErr.desc || oauthErr.code || 'Sign-in failed');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+    const stashed = sessionStorage.getItem('taraform_auth_error');
+    if (stashed) {
+      setError(stashed);
+      sessionStorage.removeItem('taraform_auth_error');
+    }
+  }, []);
 
   async function handleGoogle() {
     setLoading(true); setError('');

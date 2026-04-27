@@ -61,12 +61,17 @@ function CRM() {
     if (saved === 'dim') document.body.classList.add('theme-dim');
     if (saved === 'light') document.body.classList.add('theme-light');
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error('[auth] getSession error:', error);
+        sessionStorage.setItem('taraform_auth_error', error.message || String(error));
+      }
       setUser(data.session?.user || null);
       setAuthReady(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[auth] state change:', event, session ? 'session present' : 'no session');
       setUser(session?.user || null);
     });
     return () => subscription.unsubscribe();
