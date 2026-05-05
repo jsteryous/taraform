@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Modal from '../shared/Modal';
 import Select from '../shared/Select';
 import { useApp } from '../../context/AppContext';
 import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
@@ -23,74 +22,60 @@ const OFFER_TO_CONTACT_STATUS = {
   Accepted:  'UC',
 };
 
-function syncContactStatus(offers, onChangeMultiple) {
-  if (!offers.length || !onChangeMultiple) return;
-  const latest = offers[offers.length - 1];
-  const next = OFFER_TO_CONTACT_STATUS[latest.status];
-  if (next) onChangeMultiple({ status: next });
-}
-
 export default function OffersTab({ contact, onChangeMultiple, onOffersChange }) {
   const { loadFullContact, showToast } = useApp();
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing]     = useState(null);
-  const [form, setForm]           = useState({ amount: '', notes: '' });
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmount] = useState('');
   const [confirmRemove, ConfirmUI] = useConfirm();
 
   const offers = Array.isArray(contact.offers) ? contact.offers : [];
 
-  function openAdd() {
-    setEditing(null);
-    setForm({ amount: '', notes: '' });
-    setShowModal(true);
+  // Batched local update: when the latest-offer status maps to a new contact
+  // status, we MUST send both fields in a single useDraftSave call. Two
+  // sequential setDraft calls race because useDraftSave reads draftRef.current
+  // synchronously, so the second setDraft would clobber the first.
+  function applyOffers(nextOffers) {
+    const prevLatest = offers[offers.length - 1]?.status;
+    const nextLatest = nextOffers[nextOffers.length - 1]?.status;
+    const prevMapped = prevLatest ? OFFER_TO_CONTACT_STATUS[prevLatest] : null;
+    const nextMapped = nextLatest ? OFFER_TO_CONTACT_STATUS[nextLatest] : null;
+
+    if (nextMapped && nextMapped !== prevMapped && onChangeMultiple) {
+      onChangeMultiple({ offers: nextOffers, status: nextMapped });
+    } else if (onOffersChange) {
+      onOffersChange(nextOffers);
+    }
   }
 
-  function openEdit(offer) {
-    setEditing(offer.id);
-    setForm({ amount: offer.amount, notes: offer.notes || '' });
-    setShowModal(true);
-  }
-
-  async function save() {
-    if (!form.amount) return;
+  async function add() {
+    if (!amount) return;
     try {
-      if (editing) {
-        const existing = offers.find(o => o.id === editing);
-        const next = { amount: form.amount, notes: form.notes, status: existing?.status || 'Pending' };
-        await updateOffer(contact.id, editing, { ...next, clientId: contact.clientId });
-        const nextOffers = offers.map(o => o.id === editing ? { ...o, ...next } : o);
-        if (onOffersChange) onOffersChange(nextOffers);
-        syncContactStatus(nextOffers, onChangeMultiple);
-      } else {
-        const next = { amount: form.amount, notes: form.notes, status: 'Pending' };
-        await addOffer(contact.id, { ...next, clientId: contact.clientId });
-        const tempOffer = { id: `_tmp_${crypto.randomUUID()}`, ...next, createdAt: new Date().toISOString() };
-        const nextOffers = [...offers, tempOffer];
-        if (onOffersChange) onOffersChange(nextOffers);
-        syncContactStatus(nextOffers, onChangeMultiple);
-        // Background sync to replace temp id with real DB row
-        loadFullContact(contact.id).then(updated => {
-          if (updated?.offers?.length) onOffersChange(updated.offers);
-        });
-      }
-      setShowModal(false);
+      const next = { amount, status: 'Pending', notes: '' };
+      await addOffer(contact.id, { ...next, clientId: contact.clientId });
+      const tempOffer = { id: `_tmp_${crypto.randomUUID()}`, ...next, createdAt: new Date().toISOString() };
+      applyOffers([...offers, tempOffer]);
+      // Background sync to replace temp id with real DB row
+      loadFullContact(contact.id).then(updated => {
+        if (updated?.offers?.length) onOffersChange(updated.offers);
+      });
+      setAdding(false);
+      setAmount('');
     } catch (e) {
-      showToast('Failed to save offer: ' + e.message, 'error');
+      showToast('Failed to add offer: ' + e.message, 'error');
     }
   }
 
   async function changeStatus(offer, status) {
     if (status === offer.status) return;
-    const prev = offers;
-    const nextOffers = offers.map(o => o.id === offer.id ? { ...o, status } : o);
-    if (onOffersChange) onOffersChange(nextOffers);
-    syncContactStatus(nextOffers, onChangeMultiple);
+    const prevOffers = offers;
+    const nextOffers = prevOffers.map(o => o.id === offer.id ? { ...o, status } : o);
+    applyOffers(nextOffers);
     try {
       await updateOffer(contact.id, offer.id, {
         amount: offer.amount, notes: offer.notes || '', status, clientId: contact.clientId,
       });
     } catch (e) {
-      if (onOffersChange) onOffersChange(prev);
+      if (onOffersChange) onOffersChange(prevOffers);
       showToast('Failed to update status: ' + e.message, 'error');
     }
   }
@@ -99,23 +84,47 @@ export default function OffersTab({ contact, onChangeMultiple, onOffersChange })
     if (!await confirmRemove('Remove this offer?')) return;
     try {
       await deleteOffer(contact.id, id, contact.clientId);
-      const nextOffers = offers.filter(o => o.id !== id);
-      if (onOffersChange) onOffersChange(nextOffers);
-      syncContactStatus(nextOffers, onChangeMultiple);
+      applyOffers(offers.filter(o => o.id !== id));
     } catch (e) {
       showToast('Failed to remove offer: ' + e.message, 'error');
     }
+  }
+
+  function cancelAdd() {
+    setAdding(false);
+    setAmount('');
   }
 
   return (
     <div id="detailTabOffers">
       {ConfirmUI}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <button className="btn-small btn-primary" onClick={openAdd}>+ Add Offer</button>
+        {adding ? (
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)' }}>$</span>
+            <input
+              type="number"
+              autoFocus
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter')  add();
+                if (e.key === 'Escape') cancelAdd();
+              }}
+              placeholder="150000"
+              className="inline-input"
+              style={{ width: '130px' }}
+            />
+            <button className="btn-small btn-primary" onClick={add} disabled={!amount}>Save</button>
+            <button className="btn-small" onClick={cancelAdd}>Cancel</button>
+          </div>
+        ) : (
+          <button className="btn-small btn-primary" onClick={() => setAdding(true)}>+ Add Offer</button>
+        )}
       </div>
 
       {offers.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No offers yet.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No offers yet.</div>
       ) : offers.map(offer => {
         const color = STATUS_COLORS[offer.status] || 'var(--text-muted)';
         return (
@@ -134,33 +143,12 @@ export default function OffersTab({ contact, onChangeMultiple, onOffersChange })
                 {offer.createdAt ? new Date(offer.createdAt).toLocaleDateString() : ''}
               </span>
             </div>
-            {offer.notes && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{offer.notes}</div>}
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
-              <button className="btn-small" onClick={() => openEdit(offer)}>Edit</button>
               <button className="btn-small btn-danger" onClick={() => remove(offer.id)}>Remove</button>
             </div>
           </div>
         );
       })}
-
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Offer' : 'Add Offer'}
-        footer={<><button onClick={() => setShowModal(false)}>Cancel</button><button className="btn-primary" onClick={save}>Save</button></>}>
-        <div className="form-grid">
-          <div className="form-group full-width">
-            <label>Amount ($)</label>
-            <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="150000" />
-          </div>
-          <div className="form-group full-width">
-            <label>Notes</label>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
-          </div>
-          {!editing && (
-            <div className="form-group full-width" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-              Status starts as <strong>Pending</strong> — change it inline on the offer row after saving.
-            </div>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }
