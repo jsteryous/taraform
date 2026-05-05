@@ -329,7 +329,7 @@ export default function ContactDetail({ onClose }) {
                 </span>
               )}
             </div>
-            <OffersTab contact={draft} onChange={update} onChangeMultiple={updateMultiple}
+            <OffersTab contact={draft} onChangeMultiple={updateMultiple}
               onOffersChange={offers => setDraft(prev => ({ ...prev, offers }))} />
           </div>
         )}
