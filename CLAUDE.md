@@ -8,49 +8,14 @@ Railway server: `https://taraform-server-production.up.railway.app` (repo: jster
 
 `HashRouter` (GitHub Pages). Contact detail is a full-screen overlay synced to `/#/contact/:id`; back button closes it via the URL sync effect in App.jsx.
 
-## UI patterns
-
-- **Font sizes:** Use CSS tokens (`--text-2xs` → `--text-xl` defined in `:root`) — never arbitrary `rem` values. `check-css` enforces this.
-- **Icons:** Use Lucide React — never emoji icons.
-- **Selects:** Use `<Select>` from `shared/Select.jsx` — never native `<select>`.
-- **Confirms:** Use `useConfirm()` from `shared/ConfirmDialog.jsx` — never `confirm()`.
-- **Config:** All client-specific UI (statuses, colors, tabs, visible fields, `leadSourceOptions`, `contactMethodOptions`) comes from `resolveConfig(currentClient)` in `clientConfig.js`. Never hardcode these values.
-- **Blur-to-save:** All fields in ContactDetail save on blur, not on change. Draft state updates on `onChange`; `update()` / `updateMultiple()` / `updateCustomField()` fire on `onBlur` — all three come from `useDraftSave` (`hooks/useDraftSave.js`), which owns the optimistic-save/revert pattern. (`updateMultiField` is a helper that wraps `update` for array-typed fields.)
-- **CSS/JSX sync:** Run `npm run check-css` after adding or renaming a `className`. Flags missing classes and raw rem font-sizes (both exit 1). Dead CSS is informational only.
-
-## Gotchas
-
-**Contacts are paginated 50/page.** `loadContacts(clientId, filters)` loads page 1; `loadMoreContacts` appends. All filters go as Supabase query params — never filter in JS. SMS activity filters (`sms_7/30/never`) are server-side via `last_sms_at`. Note filters (`note_7/30/never`) are client-side only — `activityLog` isn't in `LIST_FIELDS`.
-
-**Filter state** is a single `filters` object in AppContext (`{ search, statuses, counties, phone, activity, email }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all.
-
-**`saveContact` is async and throws.** Always `await` it. The optimistic-save pattern (apply locally → revert + `showToast` on catch) lives in `useDraftSave` — use that hook rather than reimplementing it.
-
-**`showToast(msg, variant?)`** — second arg is `'success' | 'error' | 'warning'` (default: neutral, no icon). Pass the right variant on catch/success so the toast renders a colored border and icon.
-
-**`custom_field_definitions` is a TEXT column** (not JSONB). Always parse with `parseCustomFieldDefs(raw)` from utils.js — never bare `JSON.parse`.
-
-**`getSetting` may return 404** for unseeded keys — use `Promise.allSettled` when loading multiple settings in parallel.
-
-**`sms_settings` has no uniqueness constraint** on `(key, client_id)` — never `.upsert()` without `onConflict`. Use PUT /api/settings/:key on the server. Use `.maybeSingle()` on direct reads, never `.single()`.
-
-**`contact_offers.client_id` is unreliable** (null on older rows). Always join through `property_crm_contacts` when filtering by client.
-
-**`property_crm_contacts.id` is bigint.** New contacts use `Date.now()` as a client-generated numeric ID. Never pass a string (e.g. UUID) — bigint column will reject it.
-
-**No recursive `setSending` pattern.** If a send function owns a `setSending(true/false)` try/finally, inline any second API call — don't call the function recursively.
-
-**CSV import:** `parseCSVRaw` (utils.js) returns indexed rows for ImportModal's column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan. Bulk inserts chunked at 500 rows.
-
-**AppContext is split into two contexts.** `useAppData()` — contacts, clients, filters, actions. `useAppUI()` — toast/showToast, theme/setTheme. `useApp()` combines both and is safe everywhere. Use the narrower hooks when a component only needs one side (e.g. `ContactCard` uses `useAppData()` so toast changes don't re-render the list). `loadMoreContacts` uses `loadingRef` as a synchronous concurrent-fetch guard — don't remove it.
-
-**`setContacts` from context is ref-syncing.** Always use it instead of a local `useState` setter so `contactsRef.current` stays in sync with `loadMoreContacts`.
-
 ## Multi-tenancy
 
 > ⚠️ `getClients` on the Railway server may return all clients regardless of membership — RLS is the real enforcement layer. Verify server-side gating before adding new users.
 
-## Key DB notes
+## Subdirectory docs
 
-- `sms_settings` known keys: `automation_paused`, `email_automation_enabled`, `email_daily_limit`, `send_start_hour`, `send_end_hour`, `daily_limit`
-- `email_tokens`: OAuth per client, provider `gmail` | `outlook`. Popup flow posts `GOOGLE_AUTH_SUCCESS/ERROR` or `MS_AUTH_SUCCESS/ERROR`.
+Scoped guidance lives next to the code:
+
+- `src/components/CLAUDE.md` — UI patterns (font tokens, Select, useConfirm, blur-to-save, check-css, CSV import)
+- `src/context/CLAUDE.md` — AppContext split, pagination, filter state, focus-refresh, saveContact, showToast
+- `src/lib/CLAUDE.md` — DB conventions (bigint id, sms_settings, contact_offers, custom fields, OAuth tokens)
