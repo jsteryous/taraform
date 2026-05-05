@@ -15,3 +15,5 @@
 **`saveContact` is async and throws.** Always `await` it. The optimistic-save pattern (apply locally → revert + `showToast` on catch) lives in `useDraftSave` — use that hook rather than reimplementing.
 
 **`showToast(msg, variant?)`** — second arg is `'success' | 'error' | 'warning'` (default: neutral, no icon). Pass the right variant on catch/success so the toast renders a colored border and icon.
+
+**`useEffect` ordering (TDZ):** Any effect in `AppProvider` whose deps reference `loadContacts` / `loadMoreContacts` / `loadFullContact` / `saveContact` / `deleteContact` must be placed *after* its `useCallback` declaration. Deps arrays evaluate at render time, so an earlier-placed effect throws TDZ — minified to `Cannot access 'le' before initialization`. Bitten twice (`ef658d3`, `1df32f7`).

@@ -12,3 +12,9 @@
 ## CSV import (ImportModal)
 
 `parseCSVRaw` (`utils.js`) returns indexed rows for the column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan. Bulk inserts chunked at 500 rows.
+
+## Offers ↔ contact status (OffersTab)
+
+Contact status is auto-derived from the latest offer (by `createdAt`): `Pending`/`Countered` → "Offer Made", `Rejected` → "Offer Rejected/NFS", `Accepted` → "UC". Pre-offer (`New Lead`, `Contacted`) and terminal (`Closed`, `Dead/Pass`) states stay manual via the header dropdown.
+
+When mutating offers, batch any contact-status change with the offers update into a single `onChangeMultiple({ offers, status })` call. Sequential `onOffersChange` + `onChangeMultiple` calls race through `useDraftSave`'s `draftRef.current` and the second clobbers the first — caused a stale-render bug where the inline status dropdown didn't reflect the new value until re-mount.
