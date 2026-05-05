@@ -107,6 +107,27 @@ export function AppProvider({ children }) {
     setFilters(EMPTY_FILTERS);
   }, [currentClientId]);
 
+  // Refresh page 1 when the tab regains focus — picks up contacts added externally
+  // (LandID extension, CSV imports in another tab, etc.) without a manual reload.
+  useEffect(() => {
+    if (!currentClientId) return;
+    let lastRefresh = Date.now();
+    function refresh() {
+      if (document.visibilityState !== 'visible') return;
+      if (loadingRef.current) return;
+      const now = Date.now();
+      if (now - lastRefresh < 2000) return;
+      lastRefresh = now;
+      loadContacts(currentClientId, filters);
+    }
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [currentClientId, filters, loadContacts]);
+
   const showToast = useCallback((msg, variant = 'default') => {
     setToast({ msg, variant });
     setTimeout(() => setToast(null), 2500);
