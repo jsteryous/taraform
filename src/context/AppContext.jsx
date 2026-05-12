@@ -49,14 +49,17 @@ function buildQuery(clientId, filters = {}) {
 
   if (filters.search) {
     // Strip PostgREST filter-syntax characters before interpolating into .or() string.
-    const s = filters.search.toLowerCase().trim().replace(/[(),]/g, '');
+    // raw preserves case for tax_map_ids match (cs is case-sensitive, exact-element);
+    // s is lowercased for ilike on names/county.
+    const raw = filters.search.trim().replace(/[(),{}"]/g, '');
+    const s   = raw.toLowerCase();
     const words = s.split(/\s+/).filter(Boolean);
     if (words.length === 1) {
-      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%`);
-    } else {
+      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,tax_map_ids.cs.{"${raw}"}`);
+    } else if (words.length > 1) {
       const first = words[0];
       const last  = words.slice(1).join(' ');
-      q = q.ilike('first_name', `%${first}%`).ilike('last_name', `%${last}%`);
+      q = q.or(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%),tax_map_ids.cs.{"${raw}"}`);
     }
   }
 
