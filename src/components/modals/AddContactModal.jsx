@@ -14,7 +14,10 @@ function findDuplicates(contact, existing) {
       c.lastName?.toLowerCase() === contact.lastName.toLowerCase();
     const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
       contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
+    // Tax map IDs are only unique within a county — same parcel ID in different counties is fine.
     const taxMatch = contact.taxMapIds?.length && c.taxMapIds?.length &&
+      contact.county && c.county &&
+      contact.county.toLowerCase() === c.county.toLowerCase() &&
       contact.taxMapIds.some(t1 => c.taxMapIds.some(t2 => t1.toLowerCase() === t2.toLowerCase()));
     return nameMatch || addressMatch || taxMatch;
   });

@@ -10,6 +10,8 @@
 
 **`contact_offers.client_id` is unreliable** (null on older rows). Always join through `property_crm_contacts` when filtering by client.
 
+**Tax map IDs are unique within a county, not globally.** Same parcel ID can exist in different counties — duplicate detection (`AddContactModal.findDuplicates`, `ImportModal.findDuplicate`/`buildLookupMaps`) must key by `county|taxMapId`, not `taxMapId` alone.
+
 **`email_tokens`:** OAuth per client, provider `gmail` | `outlook`. Popup flow posts `GOOGLE_AUTH_SUCCESS/ERROR` or `MS_AUTH_SUCCESS/ERROR`.
 
 **Supabase auth token storage:** `localStorage['sb-ykuenmwfxecmmqichwit-auth-token']`. The LandID Chrome extension reads this to share auth — coordinate before changing storage strategy (storageKey, custom storage, cookie-based) or bumping supabase-js across token-format changes.

@@ -57,7 +57,10 @@ function buildLookupMaps(contacts) {
       byName.set(`${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}`, c);
     }
     for (const a of c.propertyAddresses || []) byAddress.set(a.toLowerCase(), c);
-    for (const t of c.taxMapIds || []) byTaxId.set(t.toLowerCase(), c);
+    // Tax map IDs are only unique within a county — key by county|id so same parcel ID
+    // in a different county isn't flagged as a duplicate.
+    const cKey = (c.county || '').toLowerCase();
+    for (const t of c.taxMapIds || []) byTaxId.set(`${cKey}|${t.toLowerCase()}`, c);
   }
   return { byName, byAddress, byTaxId };
 }
@@ -71,8 +74,9 @@ function findDuplicate(contact, { byName, byAddress, byTaxId }) {
     const match = byAddress.get(a.toLowerCase());
     if (match) return match;
   }
+  const cKey = (contact.county || '').toLowerCase();
   for (const t of contact.taxMapIds || []) {
-    const match = byTaxId.get(t.toLowerCase());
+    const match = byTaxId.get(`${cKey}|${t.toLowerCase()}`);
     if (match) return match;
   }
   return null;

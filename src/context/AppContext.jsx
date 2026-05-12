@@ -49,17 +49,20 @@ function buildQuery(clientId, filters = {}) {
 
   if (filters.search) {
     // Strip PostgREST filter-syntax characters before interpolating into .or() string.
-    // raw preserves case for tax_map_ids match (cs is case-sensitive, exact-element);
-    // s is lowercased for ilike on names/county.
+    // raw preserves case for array cs (contains) match — case-sensitive, exact-element;
+    // s is lowercased for ilike on text columns.
+    // Array columns (tax_map_ids, property_addresses, phones) only support exact-element
+    // match in PostgREST — partial/case-insensitive across array elements would need an RPC.
     const raw = filters.search.trim().replace(/[(),{}"]/g, '');
     const s   = raw.toLowerCase();
     const words = s.split(/\s+/).filter(Boolean);
+    const arrayMatch = `tax_map_ids.cs.{"${raw}"},property_addresses.cs.{"${raw}"},phones.cs.{"${raw}"}`;
     if (words.length === 1) {
-      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,tax_map_ids.cs.{"${raw}"}`);
+      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}`);
     } else if (words.length > 1) {
       const first = words[0];
       const last  = words.slice(1).join(' ');
-      q = q.or(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%),tax_map_ids.cs.{"${raw}"}`);
+      q = q.or(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%),owner_address.ilike.%${s}%,${arrayMatch}`);
     }
   }
 
