@@ -32,8 +32,9 @@ function buildQuery(clientId, filters = {}) {
 
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
   if (filters.counties?.length) q = q.in('county', filters.counties);
-  if (filters.phone === 'has')     q = q.not('phones', 'eq', '{}');
-  if (filters.phone === 'missing') q = q.or('phones.is.null,phones.eq.{}');
+  // phones is jsonb — empty value is [] (JSON array), not {} (object).
+  if (filters.phone === 'has')     q = q.not('phones', 'eq', '[]');
+  if (filters.phone === 'missing') q = q.or('phones.is.null,phones.eq.[]');
   if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
   if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
 
