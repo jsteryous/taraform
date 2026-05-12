@@ -17,6 +17,9 @@ function classifyError(e) {
   if (status === 401 || status === 403) return 'Permission denied — check your access.';
   if (status === 404) return 'Record not found.';
   if (status >= 500) return 'Server error — try again later.';
+  // PostgREST returns the offending detail in e.message / e.details — surface it so
+  // 400s are debuggable from the toast instead of needing the Network panel.
+  if (e?.message) return e.message;
   return 'Something went wrong — try again.';
 }
 
@@ -48,17 +51,14 @@ function buildQuery(clientId, filters = {}) {
   }
 
   if (filters.search) {
-    // Strip PostgREST filter-syntax characters before interpolating into .or() string.
-    // raw preserves case for array cs (contains) match — case-sensitive, exact-element;
-    // s is lowercased for ilike on text columns.
-    // Array columns (tax_map_ids, property_addresses, phones) only support exact-element
-    // match in PostgREST — partial/case-insensitive across array elements would need an RPC.
-    const raw = filters.search.trim().replace(/[(),{}"]/g, '');
+    // tax_map_ids, property_addresses, phones are jsonb (not text[]) — cs uses JSON array
+    // syntax `cs.["value"]`, not Postgres array literal `cs.{value}`. Exact-element match,
+    // case-sensitive. Partial/case-insensitive would need an RPC.
+    // Strip PostgREST filter-syntax + JSON control chars before interpolation.
+    const raw = filters.search.trim().replace(/[(),{}\[\]"\\]/g, '');
     const s   = raw.toLowerCase();
     const words = s.split(/\s+/).filter(Boolean);
-    // Array cs needs the element unquoted inside or() — double-quoting trips PostgREST's
-    // or-parser. Safe because we've stripped {,},(,),",,, from raw.
-    const arrayMatch = `tax_map_ids.cs.{${raw}},property_addresses.cs.{${raw}},phones.cs.{${raw}}`;
+    const arrayMatch = `tax_map_ids.cs.["${raw}"],property_addresses.cs.["${raw}"],phones.cs.["${raw}"]`;
     if (words.length === 1) {
       q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}`);
     } else if (words.length > 1) {
