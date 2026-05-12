@@ -56,7 +56,9 @@ function buildQuery(clientId, filters = {}) {
     const raw = filters.search.trim().replace(/[(),{}"]/g, '');
     const s   = raw.toLowerCase();
     const words = s.split(/\s+/).filter(Boolean);
-    const arrayMatch = `tax_map_ids.cs.{"${raw}"},property_addresses.cs.{"${raw}"},phones.cs.{"${raw}"}`;
+    // Array cs needs the element unquoted inside or() — double-quoting trips PostgREST's
+    // or-parser. Safe because we've stripped {,},(,),",,, from raw.
+    const arrayMatch = `tax_map_ids.cs.{${raw}},property_addresses.cs.{${raw}},phones.cs.{${raw}}`;
     if (words.length === 1) {
       q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}`);
     } else if (words.length > 1) {
