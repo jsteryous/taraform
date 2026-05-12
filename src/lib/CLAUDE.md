@@ -2,6 +2,8 @@
 
 **`property_crm_contacts.id` is bigint.** New contacts use `Date.now()` as a client-generated numeric ID. Never pass a string (e.g. UUID) — bigint column will reject it.
 
+**Array-ish columns on `property_crm_contacts` are `jsonb`, not `text[]`.** `phones`, `tax_map_ids`, `property_addresses`, `activity_log`, `custom_fields` — all jsonb. PostgREST containment uses JSON array syntax `cs.["value"]`; the text-array form `cs.{value}` returns `22P02 invalid input syntax for type json`. Likely backed by GIN indexes for fast containment lookups.
+
 **`custom_field_definitions` is a TEXT column** (not JSONB). Always parse with `parseCustomFieldDefs(raw)` from `utils.js` — never bare `JSON.parse`.
 
 **`getSetting` may return 404** for unseeded keys — use `Promise.allSettled` when loading multiple settings in parallel.

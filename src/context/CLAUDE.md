@@ -4,7 +4,7 @@
 
 **Contacts paginate 50/page.** `loadContacts(clientId, filters)` loads page 1; `loadMoreContacts` appends. All filters go as Supabase query params — never filter in JS. SMS activity filters (`sms_7/30/never`) are server-side via `last_sms_at`. Note filters (`note_7/30/never`) are client-side only — `activityLog` isn't in `LIST_FIELDS`.
 
-**Search across array columns is exact-element only.** `tax_map_ids`, `property_addresses`, `phones` are **jsonb** (not `text[]`) — `cs` uses JSON array syntax `cs.["value"]`, never Postgres array literal `cs.{value}` (the latter 400s with `invalid input syntax for type json`). Exact-element, case-sensitive. No partial/case-insensitive across array elements without a Postgres RPC. Text columns (`first_name`, `last_name`, `county`, `owner_address`, `email`) use `ilike` for partial match.
+**Search filter** ORs name/county/owner_address/email (`ilike`, partial) with `tax_map_ids`/`property_addresses`/`phones` (`cs.["value"]`, exact-element). The array columns are jsonb — see `src/lib/CLAUDE.md` for the syntax rule. No partial/case-insensitive across array elements without a Postgres RPC.
 
 **Filter state** is a single `filters` object (`{ search, statuses, counties, phone, activity, email }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all.
 
