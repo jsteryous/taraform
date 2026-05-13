@@ -24,12 +24,7 @@ function classifyError(e) {
 }
 
 // ── Query builder (no component state — lives outside the provider) ──
-function buildQuery(clientId, filters = {}) {
-  let q = supabase.from('property_crm_contacts')
-    .select(LIST_FIELDS, { count: 'exact' })
-    .eq('client_id', clientId)
-    .order('updated_at', { ascending: false });
-
+function applyContactFilters(q, filters = {}) {
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
   if (filters.counties?.length) q = q.in('county', filters.counties);
   // phones is jsonb — empty value is [] (JSON array), not {} (object).
@@ -70,6 +65,39 @@ function buildQuery(clientId, filters = {}) {
   }
 
   return q;
+}
+
+function buildQuery(clientId, filters = {}) {
+  let q = supabase.from('property_crm_contacts')
+    .select(LIST_FIELDS, { count: 'exact' })
+    .eq('client_id', clientId)
+    .order('updated_at', { ascending: false });
+  return applyContactFilters(q, filters);
+}
+
+// Pages through every row matching the current filters (past Supabase's 1000-row default).
+// Used by Export — selects `*` because CSV needs fields outside LIST_FIELDS (owner_address,
+// property_addresses, and activity_log for client-side note filtering).
+export async function fetchAllFilteredContacts(clientId, filters = {}) {
+  if (!clientId) return [];
+  const CHUNK = 1000;
+  const all = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let q = supabase.from('property_crm_contacts')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('updated_at', { ascending: false });
+    q = applyContactFilters(q, filters);
+    const { data, error } = await q.range(from, from + CHUNK - 1);
+    if (error) throw error;
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < CHUNK) break;
+    from += CHUNK;
+  }
+  return all;
 }
 
 export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '' };

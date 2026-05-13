@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { AppProvider, useApp } from './context/AppContext';
+import { AppProvider, useApp, fetchAllFilteredContacts } from './context/AppContext';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
@@ -11,45 +11,75 @@ import ImportModal from './components/modals/ImportModal';
 import Dashboard from './components/Dashboard';
 import Toast from './components/shared/Toast';
 import ErrorBoundary from './components/shared/ErrorBoundary';
-import { mapDbContact } from './lib/utils';
+
+function hasActiveFilters(f) {
+  if (!f) return false;
+  return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity);
+}
 
 function CRM() {
-  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact, showToast } = useApp();
+  const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact, showToast, filters } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const showDashboard = location.pathname === '/dashboard';
 
   async function handleExport(selectedContacts) {
-    let source = selectedContacts?.length ? selectedContacts : null;
-    if (!source) {
-      // Fetch all contacts for export
-      const { data } = await supabase
-        .from('property_crm_contacts')
-        .select('*')
-        .eq('client_id', currentClientId)
-        .order('updated_at', { ascending: false });
-      source = (data || []).map(d => ({
-        firstName: d.first_name, lastName: d.last_name,
-        phones: d.phones || [], email: d.email || '',
-        county: d.county, ownerAddress: d.owner_address,
-        propertyAddresses: d.property_addresses || [],
-        taxMapIds: d.tax_map_ids || [], status: d.status, smsStatus: d.sms_status,
-      }));
+    try {
+      let source;
+      let filteredAll = false;
+      if (selectedContacts?.length) {
+        source = selectedContacts;
+      } else {
+        if (!currentClientId) { showToast('Select a client first.', 'warning'); return; }
+        const rows = await fetchAllFilteredContacts(currentClientId, filters);
+        let mapped = rows.map(d => ({
+          firstName: d.first_name, lastName: d.last_name,
+          phones: d.phones || [], email: d.email || '',
+          county: d.county, ownerAddress: d.owner_address,
+          propertyAddresses: d.property_addresses || [],
+          taxMapIds: d.tax_map_ids || [], status: d.status, smsStatus: d.sms_status,
+          activityLog: d.activity_log || [],
+        }));
+        // Note activity filter is client-side (activity_log jsonb isn't server-filterable
+        // without an RPC). Mirror ContactList's filtered useMemo so export matches view.
+        if (filters?.activity?.startsWith('note_')) {
+          const period = filters.activity.split('_')[1];
+          const cutoff = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+          mapped = mapped.filter(c => {
+            const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
+            const lastNote = notes.map(e => new Date(e.timestamp || e.createdAt)).filter(d => !isNaN(d)).sort((a,b) => b-a)[0];
+            if (period === 'never') return !lastNote;
+            if (!lastNote) return false;
+            if (period === '7')  return lastNote >= cutoff(7);
+            if (period === '30') return lastNote >= cutoff(30);
+            return true;
+          });
+        }
+        source = mapped;
+        filteredAll = true;
+      }
+      if (!source.length) { showToast('No contacts to export', 'warning'); return; }
+      const rows = source.map(c => [
+        c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
+        c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
+        (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
+      ]);
+      const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
+      const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : `taraform-contacts-${source.length}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(`Exported ${source.length} contact${source.length !== 1 ? 's' : ''}${filteredAll && hasActiveFilters(filters) ? ' (filtered)' : ''}`, 'success');
+    } catch (e) {
+      console.error('Export error:', e);
+      showToast('Export failed: ' + (e.message || 'unknown error'), 'error');
     }
-    const rows = source.map(c => [
-      c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
-      c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
-      (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
-    ]);
-    const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
-    const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = selectedContacts?.length ? `taraform-selected-${selectedContacts.length}.csv` : 'taraform-contacts.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }  const [authReady, setAuthReady] = useState(false);
+  }
+
+  const [authReady, setAuthReady] = useState(false);
   const [showAdd, setShowAdd]     = useState(false);
   const [showImport, setShowImport] = useState(false);
 

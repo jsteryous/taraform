@@ -12,8 +12,14 @@ import {
   Play, Pause, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut,
 } from 'lucide-react';
 
+function hasActiveFilters(f) {
+  if (!f) return false;
+  return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity);
+}
+
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
-  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast } = useApp();
+  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount } = useApp();
+  const filtered = hasActiveFilters(filters);
   const [dropOpen, setDropOpen]           = useState(false);
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
@@ -141,7 +147,11 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           <div className="header-actions">
             <button className="btn-primary" onClick={onAddContact} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Plus size={14} /> Add Contact</button>
             <button onClick={onImport}>Import CSV</button>
-            <button onClick={onExport}>Export All</button>
+            <button onClick={onExport} title={filtered ? 'Exports all contacts matching your current filters' : 'Exports all contacts for this client'}>
+              {currentClientId && totalCount > 0
+                ? (filtered ? `Export Filtered (${totalCount})` : `Export All (${totalCount})`)
+                : 'Export All'}
+            </button>
             <button onClick={onDashboard}
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', ...(dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}) }}>
               <LayoutDashboard size={14} /> Dashboard
