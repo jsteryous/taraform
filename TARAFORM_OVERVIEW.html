@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taraform — How it works & what makes it different</title>
+<style>
+  :root {
+    /* ── DARK THEME (default) ── */
+    --bg: #0b0d13;
+    --bg-2: #0f1219;
+    --surface: #161922;
+    --surface-2: #1d2230;
+    --surface-3: #242a3c;
+    --border: #2a3142;
+    --border-soft: #1e2330;
+    --text: #e8ecf3;
+    --muted: #8a92a6;
+    --muted-2: #5e6678;
+
+    /* Brand / section accents */
+    --accent: #6aa9ff;
+    --accent-2: #b18bff;
+    --accent-3: #5eead4;
+    --warn: #f5b14a;
+    --good: #4ade80;
+    --bad: #f87171;
+    --pink: #ff8fb7;
+
+    /* Status colors (from src/lib/clientConfig.js, LAND_CONFIG) */
+    --s-new: #6b7280;
+    --s-contacted: #3b82f6;
+    --s-offer: #f59e0b;
+    --s-rejected: #a855f7;
+    --s-uc: #10b981;
+    --s-closed: #059669;
+    --s-dead: #ef4444;
+
+    /* SVG-specific (so diagrams retheme correctly) */
+    --svg-card: #161922;
+    --svg-card-2: #1d2230;
+    --svg-border: #2a3142;
+    --svg-text: #e8ecf3;
+    --svg-text-2: #cfd6e6;
+    --svg-text-muted: #8a92a6;
+    --svg-bad-bg: #2a1a1a;
+    --svg-bad-border: #3a2222;
+    --svg-bad-row-end: #161922;
+    --svg-good-bg-start: rgba(94,234,212,0.18);
+    --svg-good-bg-end: rgba(94,234,212,0.04);
+
+    /* Hero gradient */
+    --hero-grad-start: #ffffff;
+    --hero-grad-end: #b3bbcb;
+
+    /* Background page radials */
+    --radial-1: rgba(106,169,255,0.10);
+    --radial-2: rgba(177,139,255,0.06);
+
+    /* Code text */
+    --code-text: #d6dcec;
+    --pre-text: #cfd6e6;
+    --pre-comment: #8a92a6;
+    --pre-key: #ff8fb7;
+    --pre-str: #b9e08c;
+
+    --mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+
+    color-scheme: dark;
+  }
+
+  /* ── LIGHT THEME ── */
+  [data-theme="light"] {
+    --bg: #f5f7fb;
+    --bg-2: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f0f3f9;
+    --surface-3: #e5eaf3;
+    --border: #d6dce8;
+    --border-soft: #e5eaf3;
+    --text: #1a1f2c;
+    --muted: #5e6678;
+    --muted-2: #8a92a6;
+
+    /* Slightly deeper accents for light-mode contrast */
+    --accent: #2563eb;
+    --accent-2: #7c3aed;
+    --accent-3: #0d9488;
+    --warn: #d97706;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --pink: #db2777;
+
+    /* SVG retheme */
+    --svg-card: #ffffff;
+    --svg-card-2: #f0f3f9;
+    --svg-border: #d6dce8;
+    --svg-text: #1a1f2c;
+    --svg-text-2: #2a3142;
+    --svg-text-muted: #5e6678;
+    --svg-bad-bg: #fef2f2;
+    --svg-bad-border: #fecaca;
+    --svg-bad-row-end: #ffffff;
+    --svg-good-bg-start: rgba(13,148,136,0.14);
+    --svg-good-bg-end: rgba(13,148,136,0.02);
+
+    --hero-grad-start: #0f172a;
+    --hero-grad-end: #475569;
+
+    --radial-1: rgba(37,99,235,0.10);
+    --radial-2: rgba(124,58,237,0.07);
+
+    --code-text: #1e293b;
+    --pre-text: #1e293b;
+    --pre-comment: #64748b;
+    --pre-key: #be185d;
+    --pre-str: #15803d;
+
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    padding: 0 0 96px;
+    background:
+      radial-gradient(ellipse 1200px 600px at 50% -200px, var(--radial-1), transparent 60%),
+      radial-gradient(ellipse 800px 500px at 90% 200px, var(--radial-2), transparent 70%),
+      var(--bg);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── THEME TOGGLE ── */
+  .theme-toggle {
+    position: fixed; top: 18px; right: 18px; z-index: 100;
+    width: 40px; height: 40px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  }
+  .theme-toggle:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .theme-toggle svg { width: 18px; height: 18px; display: block; }
+  .theme-toggle .sun { display: none; }
+  .theme-toggle .moon { display: block; }
+  [data-theme="light"] .theme-toggle .sun { display: block; }
+  [data-theme="light"] .theme-toggle .moon { display: none; }
+
+  /* ── HERO ── */
+  .hero { padding: 72px 24px 24px; text-align: center; }
+  .hero .eyebrow {
+    display: inline-block;
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    padding: 6px 12px; border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .hero h1 {
+    font-size: 44px; font-weight: 800; letter-spacing: -0.025em;
+    margin: 0 0 14px; line-height: 1.05;
+    background: linear-gradient(180deg, var(--hero-grad-start) 0%, var(--hero-grad-end) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .hero .lede {
+    font-size: 17px; color: var(--muted);
+    max-width: 640px; margin: 0 auto 28px; line-height: 1.55;
+  }
+  .hero .lede strong { color: var(--text); }
+
+  /* ── STAT CARDS ── */
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin: 32px 0 8px;
+  }
+  .stat {
+    background: linear-gradient(180deg, var(--surface), var(--bg-2));
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 14px;
+    position: relative; overflow: hidden;
+  }
+  .stat::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+    background: var(--bar, var(--accent));
+  }
+  .stat .n {
+    font-family: var(--mono); font-size: 24px; font-weight: 700;
+    color: var(--text); line-height: 1; letter-spacing: -0.02em;
+  }
+  .stat .l {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-top: 8px;
+  }
+
+  /* ── SECTIONS ── */
+  section { padding: 56px 0 8px; }
+  .section-head {
+    display: flex; align-items: center; gap: 14px;
+    margin: 0 0 18px;
+  }
+  .section-head .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    background: var(--accent-bg, color-mix(in srgb, var(--accent) 12%, transparent));
+    color: var(--accent-fg, var(--accent));
+    border: 1px solid var(--accent-border, color-mix(in srgb, var(--accent) 30%, transparent));
+  }
+  .section-head h2 {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.015em;
+    margin: 0; color: var(--text);
+  }
+  .section-head .sub {
+    color: var(--muted); font-size: 13px;
+    margin-left: auto; font-family: var(--mono);
+  }
+  /* Per-section color themes */
+  section.theme-blue   { --accent-bg: color-mix(in srgb, var(--accent)   12%, transparent); --accent-fg: var(--accent);   --accent-border: color-mix(in srgb, var(--accent)   30%, transparent); }
+  section.theme-purple { --accent-bg: color-mix(in srgb, var(--accent-2) 12%, transparent); --accent-fg: var(--accent-2); --accent-border: color-mix(in srgb, var(--accent-2) 30%, transparent); }
+  section.theme-teal   { --accent-bg: color-mix(in srgb, var(--accent-3) 10%, transparent); --accent-fg: var(--accent-3); --accent-border: color-mix(in srgb, var(--accent-3) 28%, transparent); }
+  section.theme-amber  { --accent-bg: color-mix(in srgb, var(--warn)     10%, transparent); --accent-fg: var(--warn);     --accent-border: color-mix(in srgb, var(--warn)     28%, transparent); }
+  section.theme-pink   { --accent-bg: color-mix(in srgb, var(--pink)     10%, transparent); --accent-fg: var(--pink);     --accent-border: color-mix(in srgb, var(--pink)     28%, transparent); }
+
+  p { margin: 0 0 14px; color: var(--text); }
+  .muted { color: var(--muted); }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; color: var(--accent-fg, var(--text)); }
+
+  code, kbd {
+    font-family: var(--mono); font-size: 0.88em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px;
+    color: var(--code-text);
+  }
+  pre {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    overflow-x: auto; font-family: var(--mono); font-size: 13px;
+    line-height: 1.55; color: var(--pre-text);
+  }
+  pre .c { color: var(--pre-comment); }
+  pre .k { color: var(--pre-key); }
+  pre .s { color: var(--pre-str); }
+
+  ul { padding-left: 22px; margin: 0 0 14px; }
+  li { margin: 5px 0; }
+
+  /* ── KEY FACT BANNER ── */
+  .keyfact {
+    position: relative;
+    background:
+      linear-gradient(135deg,
+        color-mix(in srgb, var(--accent)   10%, transparent),
+        color-mix(in srgb, var(--accent-2) 8%,  transparent));
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin: 18px 0 28px;
+    font-size: 16px; line-height: 1.6;
+  }
+  .keyfact .badge {
+    display: inline-block;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .keyfact strong { color: var(--text); }
+  .keyfact code {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    border-color: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--text);
+  }
+
+  .callout {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 8%, transparent), color-mix(in srgb, var(--warn) 2%, transparent));
+    border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+    border-left: 3px solid var(--warn);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 16px 0 18px;
+    font-size: 14px;
+  }
+  .callout.info {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), color-mix(in srgb, var(--accent) 1%, transparent));
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+    border-left-color: var(--accent);
+  }
+  .callout strong { color: var(--text); }
+
+  /* ── PILLS / BADGES ── */
+  .pillrow { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 8px; justify-content: center; }
+  .pill {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px;
+    color: var(--muted); font-family: var(--mono);
+  }
+  .pill.b { color: var(--accent);   border-color: color-mix(in srgb, var(--accent)   30%, transparent); background: color-mix(in srgb, var(--accent)   7%, transparent); }
+  .pill.p { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 30%, transparent); background: color-mix(in srgb, var(--accent-2) 7%, transparent); }
+  .pill.t { color: var(--accent-3); border-color: color-mix(in srgb, var(--accent-3) 28%, transparent); background: color-mix(in srgb, var(--accent-3) 7%, transparent); }
+
+  /* ── STATUS BADGES (real colors from clientConfig.js) ── */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--c-bg); color: var(--c-fg);
+    border: 1px solid var(--c-bd);
+  }
+  .status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-fg); }
+  .s-new       { --c-bg: color-mix(in srgb, #6b7280 12%, transparent); --c-fg: #6b7280; --c-bd: color-mix(in srgb, #6b7280 35%, transparent); }
+  .s-contacted { --c-bg: color-mix(in srgb, #3b82f6 12%, transparent); --c-fg: #3b82f6; --c-bd: color-mix(in srgb, #3b82f6 35%, transparent); }
+  .s-offer     { --c-bg: color-mix(in srgb, #f59e0b 12%, transparent); --c-fg: #d97706; --c-bd: color-mix(in srgb, #f59e0b 35%, transparent); }
+  .s-rejected  { --c-bg: color-mix(in srgb, #a855f7 12%, transparent); --c-fg: #a855f7; --c-bd: color-mix(in srgb, #a855f7 35%, transparent); }
+  .s-uc        { --c-bg: color-mix(in srgb, #10b981 12%, transparent); --c-fg: #059669; --c-bd: color-mix(in srgb, #10b981 35%, transparent); }
+  .s-closed    { --c-bg: color-mix(in srgb, #059669 12%, transparent); --c-fg: #059669; --c-bd: color-mix(in srgb, #059669 35%, transparent); }
+  .s-dead      { --c-bg: color-mix(in srgb, #ef4444 12%, transparent); --c-fg: #dc2626; --c-bd: color-mix(in srgb, #ef4444 35%, transparent); }
+  /* Dark mode brightens fg for readability */
+  :root .s-new       { --c-fg: #9ca3af; }
+  :root .s-contacted { --c-fg: #60a5fa; }
+  :root .s-offer     { --c-fg: #fbbf24; }
+  :root .s-rejected  { --c-fg: #c084fc; }
+  :root .s-uc        { --c-fg: #34d399; }
+  :root .s-closed    { --c-fg: #10b981; }
+  :root .s-dead      { --c-fg: #f87171; }
+  [data-theme="light"] .s-new       { --c-fg: #4b5563; }
+  [data-theme="light"] .s-contacted { --c-fg: #1d4ed8; }
+  [data-theme="light"] .s-offer     { --c-fg: #b45309; }
+  [data-theme="light"] .s-rejected  { --c-fg: #7e22ce; }
+  [data-theme="light"] .s-uc        { --c-fg: #047857; }
+  [data-theme="light"] .s-closed    { --c-fg: #065f46; }
+  [data-theme="light"] .s-dead      { --c-fg: #b91c1c; }
+
+  /* ── PIPELINE ── */
+  .pipeline {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 0; margin: 20px 0 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 14px; overflow: hidden;
+  }
+  .pipeline .step {
+    text-align: center; position: relative;
+    padding: 0 4px;
+  }
+  .pipeline .bar {
+    height: 4px; border-radius: 2px;
+    margin-bottom: 12px;
+    background: var(--c, var(--muted-2));
+    box-shadow: 0 0 12px var(--c, transparent);
+  }
+  .pipeline .name {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text); font-weight: 600; letter-spacing: -0.01em;
+  }
+  .pipeline .meta {
+    font-size: 10px; color: var(--muted); margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .pipeline .step.auto::after {
+    content: "AUTO"; position: absolute; top: -6px; right: 4px;
+    font-family: var(--mono); font-size: 8px; color: var(--accent-3);
+    background: color-mix(in srgb, var(--accent-3) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-3) 30%, transparent);
+    padding: 1px 4px; border-radius: 4px; letter-spacing: 0.08em;
+  }
+
+  /* ── TABLES ── */
+  table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; margin: 12px 0 18px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left; padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-2); font-weight: 600;
+    color: var(--muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: color-mix(in srgb, var(--text) 2%, transparent); }
+  td.tag code {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+    color: var(--accent);
+  }
+
+  /* ── CARDS GRID ── */
+  .cards {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 14px; margin: 12px 0 8px;
+  }
+  .card {
+    background: linear-gradient(180deg, var(--surface), var(--bg-2));
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; position: relative;
+  }
+  .card .ico {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; font-weight: 700;
+    background: var(--ico-bg, color-mix(in srgb, var(--accent) 12%, transparent));
+    color: var(--ico-fg, var(--accent));
+    border: 1px solid var(--ico-bd, color-mix(in srgb, var(--accent) 30%, transparent));
+    margin-bottom: 10px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--text); }
+  .card p { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.55; }
+  .card.t-blue   { --ico-bg: color-mix(in srgb, var(--accent)   12%, transparent); --ico-fg: var(--accent);   --ico-bd: color-mix(in srgb, var(--accent)   30%, transparent); }
+  .card.t-purple { --ico-bg: color-mix(in srgb, var(--accent-2) 12%, transparent); --ico-fg: var(--accent-2); --ico-bd: color-mix(in srgb, var(--accent-2) 30%, transparent); }
+  .card.t-teal   { --ico-bg: color-mix(in srgb, var(--accent-3) 10%, transparent); --ico-fg: var(--accent-3); --ico-bd: color-mix(in srgb, var(--accent-3) 28%, transparent); }
+  .card.t-amber  { --ico-bg: color-mix(in srgb, var(--warn)     10%, transparent); --ico-fg: var(--warn);     --ico-bd: color-mix(in srgb, var(--warn)     28%, transparent); }
+
+  /* ── SVG WRAPPER + theme-aware classes ── */
+  .svgbox {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+    margin: 12px 0 22px;
+  }
+  .svgbox svg { display: block; width: 100%; height: auto; }
+  .svgbox .caption {
+    font-size: 12px; color: var(--muted); margin-top: 10px;
+    text-align: center; font-family: var(--mono);
+  }
+  /* SVG element classes — fill/stroke via CSS so themes flip cleanly */
+  .svg-card        { fill: var(--svg-card);        stroke: var(--svg-border); }
+  .svg-card-2      { fill: var(--svg-card-2);      stroke: var(--svg-border); }
+  .svg-bad         { fill: var(--svg-bad-bg);      stroke: var(--svg-bad-border); }
+  .svg-good        { fill: url(#goodRow);          stroke: color-mix(in srgb, var(--accent-3) 40%, transparent); }
+  .svg-text        { fill: var(--svg-text); }
+  .svg-text-2      { fill: var(--svg-text-2); }
+  .svg-text-muted  { fill: var(--svg-text-muted); }
+  .svg-accent      { fill: var(--accent); }
+  .svg-accent-fill { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .svg-teal        { fill: var(--accent-3); }
+  .svg-teal-fill   { fill: color-mix(in srgb, var(--accent-3) 8%, transparent); stroke: color-mix(in srgb, var(--accent-3) 35%, transparent); }
+  .svg-purple-fill { fill: url(#dbGrad);            stroke: color-mix(in srgb, var(--accent-2) 50%, transparent); }
+  .svg-amber-fill  { fill: color-mix(in srgb, var(--warn) 8%, transparent); stroke: color-mix(in srgb, var(--warn) 35%, transparent); }
+  .svg-warn        { fill: var(--warn); }
+  .svg-bad-text    { fill: var(--bad); }
+  .svg-good-text   { fill: var(--accent-3); }
+  .svg-pill-bad    { fill: color-mix(in srgb, var(--bad) 10%, transparent); stroke: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .svg-stroke-muted { stroke: var(--svg-text-muted); fill: none; }
+  .svg-stroke-accent { stroke: var(--accent); fill: none; }
+  .svg-stroke-teal   { stroke: var(--accent-3); fill: none; }
+  .svg-stroke-warn   { stroke: var(--warn); fill: none; }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 22px;
+    margin: 32px 0 0;
+  }
+  .toc strong { color: var(--accent); font-family: var(--mono);
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .toc ol { padding-left: 22px; margin: 8px 0 0; }
+  .toc a { color: var(--text); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+  .toc li { margin: 6px 0; }
+  .toc li .tag { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 8px; }
+
+  /* ── FOOTER ── */
+  .footer-note {
+    margin-top: 64px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .cards { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(4, 1fr); row-gap: 16px; }
+    .hero h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────────────  THEME TOGGLE  ───────────────────────────── -->
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle light / dark theme" title="Toggle theme">
+  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <line x1="12" y1="2"  x2="12" y2="5"/>
+    <line x1="12" y1="19" x2="12" y2="22"/>
+    <line x1="2"  y1="12" x2="5"  y2="12"/>
+    <line x1="19" y1="12" x2="22" y2="12"/>
+    <line x1="4.93" y1="4.93"   x2="7.05"  y2="7.05"/>
+    <line x1="16.95" y1="16.95" x2="19.07" y2="19.07"/>
+    <line x1="4.93" y1="19.07"  x2="7.05"  y2="16.95"/>
+    <line x1="16.95" y1="7.05"  x2="19.07" y2="4.93"/>
+  </svg>
+</button>
+
+<!-- ─────────────────────────────  HERO  ───────────────────────────── -->
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Internal docs · Taraform CRM</span>
+    <h1>The CRM that doesn't<br>key on people.</h1>
+    <p class="lede">
+      Taraform is a multi-tenant SMS / email outreach CRM for <strong>land acquisition</strong>.
+      Its design choice that matters: identity lives on the <strong>parcel</strong>
+      (county + APN), not on the contact name.
+    </p>
+
+    <div class="pillrow">
+      <span class="pill b">React + Vite</span>
+      <span class="pill p">Supabase</span>
+      <span class="pill t">Backend server</span>
+      <span class="pill">HashRouter</span>
+      <span class="pill">GitHub Pages → taraform.org</span>
+    </div>
+
+    <div class="wrap" style="padding: 0;">
+      <div class="stats">
+        <div class="stat" style="--bar: var(--accent);">
+          <div class="n">county + APN</div>
+          <div class="l">Source of truth</div>
+        </div>
+        <div class="stat" style="--bar: var(--accent-2);">
+          <div class="n">2</div>
+          <div class="l">React contexts (data / UI)</div>
+        </div>
+        <div class="stat" style="--bar: var(--accent-3);">
+          <div class="n">50&nbsp;<span style="color:var(--muted); font-size: 14px;">/ page</span></div>
+          <div class="l">Server-paged contacts</div>
+        </div>
+        <div class="stat" style="--bar: var(--warn);">
+          <div class="n">7</div>
+          <div class="l">Status stages, partly auto</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding: 0;">
+      <div class="toc">
+        <strong>On this page</strong>
+        <ol>
+          <li><a href="#what">What Taraform is</a><span class="tag">overview</span></li>
+          <li><a href="#unique">Property identity, not contact identity</a><span class="tag">core idea</span></li>
+          <li><a href="#dedupe">How property-keyed dedupe works</a><span class="tag">code</span></li>
+          <li><a href="#stack">Stack &amp; architecture</a><span class="tag">diagram</span></li>
+          <li><a href="#data">Data model highlights</a><span class="tag">db</span></li>
+          <li><a href="#workflow">How a deal flows through it</a><span class="tag">pipeline</span></li>
+          <li><a href="#patterns">Patterns worth knowing</a><span class="tag">conventions</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- ─────────────────────────────  1. WHAT  ───────────────────────────── -->
+<section id="what" class="theme-blue">
+  <div class="section-head">
+    <span class="num">01</span>
+    <h2>What Taraform is</h2>
+    <span class="sub">overview</span>
+  </div>
+
+  <p>
+    Taraform is a CRM built specifically for <em>land acquisition</em> — the business of buying rural / vacant parcels
+    from their owners. It's multi-tenant out of the box, with presets for
+    <code>land</code>, <code>restaurant</code>, and <code>generic</code> marketing, so the same engine can run a
+    land-flipping pipeline and a restaurant CRM side-by-side.
+  </p>
+
+  <p>
+    The front end talks straight to Supabase for reads / writes; a thin backend server wraps the operations
+    that need secrets — SMS sending, OAuth callbacks for Gmail / Outlook, settings PUTs. Postgres row-level
+    security enforces tenant isolation at the database layer.
+  </p>
+</section>
+
+<!-- ─────────────────────────────  2. UNIQUE  ───────────────────────────── -->
+<section id="unique" class="theme-purple">
+  <div class="section-head">
+    <span class="num">02</span>
+    <h2>Property identity, not contact identity</h2>
+    <span class="sub">core idea</span>
+  </div>
+
+  <div class="keyfact">
+    <div class="badge">★ The thesis</div>
+    Almost every CRM keys on the <em>person</em>. Taraform refuses to. The stable identity of a record is the
+    <strong>property</strong> — its <strong>APN (Tax Map ID)</strong> within a given <strong>county</strong>.
+    People change. Owners die, sell, divorce, move, refuse to pick up, hand the parcel to an LLC. The parcel doesn't.
+    <strong><code>county + tax_map_id</code></strong> uniquely identifies a piece of dirt forever, and Taraform treats
+    that pair as the source of truth for "have we already talked to this thing?"
+  </div>
+
+  <h3>The problem this solves, visualized</h3>
+
+  <div class="svgbox">
+    <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three duplicate person-keyed records collapsing into one parcel-keyed record">
+      <defs>
+        <linearGradient id="goodRow" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stop-color="var(--svg-good-bg-start)"/>
+          <stop offset="100%" stop-color="var(--svg-good-bg-end)"/>
+        </linearGradient>
+        <marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="svg-teal"/>
+        </marker>
+      </defs>
+
+      <!-- Left: WITHOUT property keying -->
+      <text x="20" y="22" class="svg-bad-text" font-family="ui-monospace,monospace" font-size="11" font-weight="700" letter-spacing="2">✗ NAME-KEYED CRM</text>
+      <text x="20" y="40" class="svg-text-muted" font-size="12">Same parcel imported 3 times. 3 fragmented records.</text>
+
+      <!-- 3 fragmented rows -->
+      <g transform="translate(20, 60)">
+        <rect width="340" height="56" rx="8" class="svg-bad"/>
+        <text x="14" y="22" class="svg-text" font-size="13" font-weight="600">Bob Smith</text>
+        <text x="14" y="42" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">(864) 555-0101 · status: New Lead</text>
+        <rect x="246" y="20" width="80" height="18" rx="9" class="svg-pill-bad"/>
+        <text x="286" y="33" class="svg-bad-text" font-family="ui-monospace,monospace" font-size="10" text-anchor="middle">parcel 1</text>
+      </g>
+      <g transform="translate(20, 126)">
+        <rect width="340" height="56" rx="8" class="svg-bad"/>
+        <text x="14" y="22" class="svg-text" font-size="13" font-weight="600">Robert J. Smith</text>
+        <text x="14" y="42" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">(864) 555-0102 · status: Contacted</text>
+        <rect x="246" y="20" width="80" height="18" rx="9" class="svg-pill-bad"/>
+        <text x="286" y="33" class="svg-bad-text" font-family="ui-monospace,monospace" font-size="10" text-anchor="middle">parcel 1</text>
+      </g>
+      <g transform="translate(20, 192)">
+        <rect width="340" height="56" rx="8" class="svg-bad"/>
+        <text x="14" y="22" class="svg-text" font-size="13" font-weight="600">Smith Family Trust</text>
+        <text x="14" y="42" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">(864) 555-0103 · status: New Lead</text>
+        <rect x="246" y="20" width="80" height="18" rx="9" class="svg-pill-bad"/>
+        <text x="286" y="33" class="svg-bad-text" font-family="ui-monospace,monospace" font-size="10" text-anchor="middle">parcel 1</text>
+      </g>
+      <text x="20" y="275" class="svg-bad-text" font-size="12">⚠ You'll cold-call the same dirt 3 times.</text>
+      <text x="20" y="293" class="svg-bad-text" font-size="12">⚠ Outreach history scattered across rows.</text>
+
+      <!-- Arrow -->
+      <g transform="translate(395, 140)">
+        <line x1="0" y1="20" x2="80" y2="20" class="svg-stroke-teal" stroke-width="2" marker-end="url(#arrowHead)"/>
+        <text x="40" y="10" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11" text-anchor="middle" letter-spacing="1">DEDUPE BY</text>
+        <text x="40" y="42" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11" text-anchor="middle" letter-spacing="1">county|APN</text>
+      </g>
+
+      <!-- Right: WITH property keying -->
+      <text x="500" y="22" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11" font-weight="700" letter-spacing="2">✓ PARCEL-KEYED CRM</text>
+      <text x="500" y="40" class="svg-text-muted" font-size="12">One parcel = one record. Phones merge in.</text>
+
+      <g transform="translate(500, 100)">
+        <rect width="360" height="140" rx="10" class="svg-good" stroke-width="1.5"/>
+        <text x="14" y="24" class="svg-text" font-size="13" font-weight="700">Greenville · APN 0123-45-6789</text>
+        <text x="14" y="44" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">aliases: Bob Smith · Robert J. Smith · Trust</text>
+        <line x1="14" y1="54" x2="346" y2="54" class="svg-stroke-teal" style="opacity: 0.3"/>
+        <text x="14" y="74" class="svg-text-2" font-family="ui-monospace,monospace" font-size="11">phones:</text>
+        <text x="80" y="74" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11">(864) 555-0101</text>
+        <text x="80" y="90" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11">(864) 555-0102</text>
+        <text x="80" y="106" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11">(864) 555-0103</text>
+        <text x="14" y="128" class="svg-text-2" font-family="ui-monospace,monospace" font-size="11">status: <tspan class="svg-warn">Offer Made</tspan> · notes preserved</text>
+      </g>
+      <text x="500" y="275" class="svg-good-text" font-size="12">✓ One outreach thread per parcel.</text>
+      <text x="500" y="293" class="svg-good-text" font-size="12">✓ Re-imports enrich, never fragment.</text>
+    </svg>
+    <div class="caption">Skip-trace returns 3 names for one parcel — Taraform collapses them by county + APN.</div>
+  </div>
+
+  <h3>Why this matters specifically in land</h3>
+
+  <div class="cards">
+    <div class="card t-purple">
+      <div class="ico">↻</div>
+      <h4>Lists get bought and re-bought</h4>
+      <p>The same parcel will appear under a trust, then a person, then an LLC. Name-keyed dedupe would create three rows for one parcel.</p>
+    </div>
+    <div class="card t-amber">
+      <div class="ico">☎</div>
+      <h4>Phone numbers are noisy</h4>
+      <p>Skip-trace returns ~5 phone candidates per row. Keying on phone would either drop leads or merge unrelated households.</p>
+    </div>
+    <div class="card t-blue">
+      <div class="ico">⌖</div>
+      <h4>APNs are scoped by county</h4>
+      <p>Different counties reuse the same numbering schemes. The real key isn't <code>tax_map_id</code> — it's <code>county|tax_map_id</code>.</p>
+    </div>
+    <div class="card t-teal">
+      <div class="ico">⤓</div>
+      <h4>Re-imports enrich, not fragment</h4>
+      <p>Next month's list merges new phones onto the existing parcel record — history, notes, offers, status all stay attached.</p>
+    </div>
+  </div>
+
+  <pre><span class="c">// src/lib/CLAUDE.md — explicit rule in the codebase</span>
+Tax map IDs are unique within a county, not globally.
+Same parcel ID can exist in different counties — duplicate
+detection must key by <span class="s">`county|taxMapId`</span>, not <span class="s">`taxMapId`</span> alone.</pre>
+</section>
+
+<!-- ─────────────────────────────  3. DEDUPE  ───────────────────────────── -->
+<section id="dedupe" class="theme-teal">
+  <div class="section-head">
+    <span class="num">03</span>
+    <h2>How property-keyed dedupe works</h2>
+    <span class="sub">code</span>
+  </div>
+
+  <p>
+    Two entry points apply the same rule: the single-contact <strong>Add</strong> form, and bulk
+    <strong>CSV Import</strong>.
+  </p>
+
+  <h3>The import pipeline</h3>
+
+  <div class="svgbox">
+    <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CSV import dedupe pipeline">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="svg-accent"/>
+        </marker>
+      </defs>
+
+      <!-- Step 1: CSV -->
+      <g transform="translate(10, 60)">
+        <rect width="140" height="80" rx="10" class="svg-card"/>
+        <text x="70" y="32" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">CSV upload</text>
+        <text x="70" y="52" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">parseCSVRaw()</text>
+        <text x="70" y="68" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">+ autoMap headers</text>
+      </g>
+      <line x1="155" y1="100" x2="180" y2="100" class="svg-stroke-accent" marker-end="url(#arr2)"/>
+
+      <!-- Step 2: Build lookup maps -->
+      <g transform="translate(180, 60)">
+        <rect width="180" height="80" rx="10" class="svg-accent-fill"/>
+        <text x="90" y="28" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">buildLookupMaps()</text>
+        <text x="90" y="48" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="10">byName · byAddress</text>
+        <text x="90" y="62" text-anchor="middle" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11" font-weight="700">byTaxId: county|APN</text>
+        <text x="90" y="75" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="10">O(n+m) lookup</text>
+      </g>
+      <line x1="365" y1="100" x2="390" y2="100" class="svg-stroke-accent" marker-end="url(#arr2)"/>
+
+      <!-- Step 3: For each row -->
+      <g transform="translate(390, 60)">
+        <rect width="160" height="80" rx="10" class="svg-card"/>
+        <text x="80" y="32" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">findDuplicate()</text>
+        <text x="80" y="52" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">per incoming row</text>
+        <text x="80" y="68" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">match? yes / no</text>
+      </g>
+
+      <!-- Branches -->
+      <line x1="555" y1="80"  x2="590" y2="50"  class="svg-stroke-teal" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <line x1="555" y1="120" x2="590" y2="120" class="svg-stroke-warn" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <line x1="555" y1="120" x2="590" y2="170" class="svg-stroke-muted" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+      <!-- Outcomes -->
+      <g transform="translate(595, 22)">
+        <rect width="270" height="46" rx="8" class="svg-teal-fill"/>
+        <text x="14" y="22" class="svg-good-text" font-family="ui-monospace,monospace" font-size="11" font-weight="700">toAdd</text>
+        <text x="14" y="38" class="svg-text-2" font-size="12">No match → insert new parcel row</text>
+      </g>
+      <g transform="translate(595, 95)">
+        <rect width="270" height="46" rx="8" class="svg-amber-fill"/>
+        <text x="14" y="22" class="svg-warn" font-family="ui-monospace,monospace" font-size="11" font-weight="700">toUpdate</text>
+        <text x="14" y="38" class="svg-text-2" font-size="12">Match + new phones → merge phones</text>
+      </g>
+      <g transform="translate(595, 165)">
+        <rect width="270" height="32" rx="8" class="svg-card-2"/>
+        <text x="14" y="20" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11" font-weight="700">toSkip <tspan class="svg-text-2" font-weight="400">— match, no new data</tspan></text>
+      </g>
+    </svg>
+    <div class="caption">ImportModal.jsx — three-way bucketing before any insert.</div>
+  </div>
+
+  <h3>The actual code</h3>
+
+<pre><span class="k">function</span> buildLookupMaps(contacts) {
+  <span class="k">const</span> byName    = <span class="k">new</span> Map();
+  <span class="k">const</span> byAddress = <span class="k">new</span> Map();
+  <span class="k">const</span> byTaxId   = <span class="k">new</span> Map();
+  <span class="k">for</span> (<span class="k">const</span> c <span class="k">of</span> contacts) {
+    <span class="k">if</span> (c.firstName && c.lastName)
+      byName.set(<span class="s">`${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}`</span>, c);
+    <span class="k">for</span> (<span class="k">const</span> a <span class="k">of</span> c.propertyAddresses || [])
+      byAddress.set(a.toLowerCase(), c);
+    <span class="c">// Tax map IDs are only unique within a county — key by county|id so same</span>
+    <span class="c">// parcel ID in a different county isn't flagged as a duplicate.</span>
+    <span class="k">const</span> cKey = (c.county || <span class="s">''</span>).toLowerCase();
+    <span class="k">for</span> (<span class="k">const</span> t <span class="k">of</span> c.taxMapIds || [])
+      byTaxId.set(<span class="s">`${cKey}|${t.toLowerCase()}`</span>, c);
+  }
+  <span class="k">return</span> { byName, byAddress, byTaxId };
+}</pre>
+
+  <p>
+    When a parcel matches, the import doesn't skip outright — it computes the <em>new</em> phones and bulk-updates
+    the existing record:
+  </p>
+
+<pre><span class="k">const</span> newPhones = c.phones.filter(p =&gt; !(existing.phones || []).includes(p));
+<span class="k">if</span> (newPhones.length &gt; 0) toUpdate.push({ existing, newPhones });
+<span class="k">else</span>                      toSkip.push({ incoming: c, existing });</pre>
+
+  <h3>Search uses the same identity</h3>
+
+  <p>
+    The list search bar ORs partial matches across name / county / owner_address / email with <em>exact</em> matches
+    against jsonb arrays <code>tax_map_ids</code>, <code>property_addresses</code>, and <code>phones</code> — via
+    PostgREST's JSON containment syntax <code>cs.["value"]</code>, backed by GIN indexes. Paste an APN into the search
+    box → snap straight to the parcel.
+  </p>
+
+  <div class="callout">
+    <strong>Subtle correctness rule:</strong> Empty jsonb arrays are <code>[]</code>, not <code>{}</code>.
+    The phone "missing" filter compares to <code>[]</code>; getting that wrong silently returns the wrong contacts
+    (commit <code>3dd4f8d</code>).
+  </div>
+</section>
+
+<!-- ─────────────────────────────  4. STACK  ───────────────────────────── -->
+<section id="stack" class="theme-pink">
+  <div class="section-head">
+    <span class="num">04</span>
+    <h2>Stack &amp; architecture</h2>
+    <span class="sub">diagram</span>
+  </div>
+
+  <div class="svgbox">
+    <svg viewBox="0 0 880 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Taraform architecture">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="svg-text-muted"/>
+        </marker>
+        <linearGradient id="dbGrad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stop-color="color-mix(in srgb, var(--accent-2) 18%, transparent)"/>
+          <stop offset="100%" stop-color="color-mix(in srgb, var(--accent-2)  3%, transparent)"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Top row: clients -->
+      <g transform="translate(40, 20)">
+        <rect width="340" height="80" rx="12" class="svg-card" style="stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 1.5"/>
+        <text x="170" y="28" text-anchor="middle" class="svg-accent" font-size="14" font-weight="700">React SPA (Vite)</text>
+        <text x="170" y="48" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">taraform.org · HashRouter</text>
+        <text x="170" y="64" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">2 contexts: AppData + AppUI</text>
+      </g>
+      <g transform="translate(500, 20)">
+        <rect width="340" height="80" rx="12" class="svg-card" style="stroke: color-mix(in srgb, var(--accent-3) 40%, transparent); stroke-width: 1.5"/>
+        <text x="170" y="28" text-anchor="middle" class="svg-teal" font-size="14" font-weight="700">LandID Chrome Extension</text>
+        <text x="170" y="48" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">shares the user's CRM session</text>
+        <text x="170" y="64" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">for parcel-lookup tools</text>
+      </g>
+
+      <!-- Arrows down to DB -->
+      <line x1="210" y1="100" x2="280" y2="160" class="svg-stroke-muted" stroke-width="1" marker-end="url(#arr3)" stroke-dasharray="4 3"/>
+      <text x="220" y="138" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">direct DB</text>
+      <line x1="670" y1="100" x2="600" y2="160" class="svg-stroke-muted" stroke-width="1" marker-end="url(#arr3)" stroke-dasharray="4 3"/>
+      <text x="640" y="138" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">same auth</text>
+
+      <!-- DB -->
+      <g transform="translate(60, 160)">
+        <rect width="760" height="100" rx="12" class="svg-purple-fill" stroke-width="1.5"/>
+        <text x="380" y="30" text-anchor="middle" style="fill: var(--accent-2)" font-size="15" font-weight="700">Supabase · Postgres + Auth + RLS</text>
+        <text x="380" y="56" text-anchor="middle" class="svg-text-2" font-family="ui-monospace,monospace" font-size="12">property_crm_contacts (bigint id, jsonb arrays, GIN indexes)</text>
+        <text x="380" y="76" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">contact_offers · sms_settings · email_tokens · clients</text>
+      </g>
+
+      <!-- Arrow to server -->
+      <line x1="440" y1="260" x2="440" y2="290" class="svg-stroke-muted" stroke-width="1" marker-end="url(#arr3)" stroke-dasharray="4 3"/>
+      <text x="455" y="280" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">secrets-bearing ops</text>
+
+      <!-- Server -->
+      <g transform="translate(120, 290)">
+        <rect width="640" height="60" rx="12" class="svg-card" style="stroke: color-mix(in srgb, var(--warn) 45%, transparent); stroke-width: 1.5"/>
+        <text x="320" y="26" text-anchor="middle" class="svg-warn" font-size="14" font-weight="700">Backend server</text>
+        <text x="320" y="46" text-anchor="middle" class="svg-text-muted" font-family="ui-monospace,monospace" font-size="11">SMS send · OAuth (Gmail / Outlook) · admin endpoints</text>
+      </g>
+    </svg>
+    <div class="caption">SPA writes to Supabase directly; the backend server handles anything that needs a secret.</div>
+  </div>
+
+  <ul>
+    <li><strong>Deploy.</strong> CI on push to <code>main</code> → GitHub Pages. No local <code>gh-pages</code> step.</li>
+    <li><strong>Routing.</strong> HashRouter (GitHub Pages limit). Contact detail is a full-screen overlay synced to
+        <code>/#/contact/:id</code> so the back button closes it.</li>
+    <li><strong>Split context.</strong> <code>useAppData()</code> for contacts/clients/filters; <code>useAppUI()</code>
+        for toast/theme. A toast pop doesn't re-render the contact list.</li>
+    <li><strong>Pagination.</strong> 50/page server-paged; <code>loadMoreContacts</code> appends. All filters go to
+        Supabase as query params, never filtered in JS.</li>
+    <li><strong>Cross-tab freshness.</strong> Tab focus auto-refreshes page 1 (throttled 2s) — writes from the LandID
+        extension or another tab show up without a manual reload.</li>
+  </ul>
+</section>
+
+<!-- ─────────────────────────────  5. DATA  ───────────────────────────── -->
+<section id="data" class="theme-amber">
+  <div class="section-head">
+    <span class="num">05</span>
+    <h2>Data model highlights</h2>
+    <span class="sub">db</span>
+  </div>
+
+  <table>
+    <tr><th style="width: 38%;">Field / Column</th><th>Why it's interesting</th></tr>
+    <tr>
+      <td class="tag"><code>property_crm_contacts.id</code> <span class="muted">bigint</span></td>
+      <td>New contacts use <code>Date.now()</code> as a client-generated numeric ID. Never pass a UUID string — the column will reject it.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>phones</code>, <code>tax_map_ids</code>, <code>property_addresses</code>, <code>activity_log</code>, <code>custom_fields</code></td>
+      <td>All <strong>jsonb</strong>, not text[]. Containment uses <code>cs.["value"]</code>; the text-array form <code>cs.{value}</code> errors out. Backed by GIN indexes.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>(county, tax_map_id)</code></td>
+      <td><strong>The real identity of a parcel.</strong> Not a DB unique constraint — enforced in import + add logic.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>contact_offers.client_id</code></td>
+      <td>Unreliable (null on older rows). Always join through <code>property_crm_contacts</code> when filtering by client.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>custom_field_definitions</code></td>
+      <td>A <strong>TEXT</strong> column holding stringified JSON — parse via <code>parseCustomFieldDefs</code>, not bare <code>JSON.parse</code>.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>sms_settings</code></td>
+      <td>No uniqueness on <code>(key, client_id)</code>. Never <code>upsert</code> without <code>onConflict</code>; use the server's <code>PUT /api/settings/:key</code>.</td>
+    </tr>
+    <tr>
+      <td class="tag"><code>email_tokens</code></td>
+      <td>OAuth per client, provider <code>gmail</code> | <code>outlook</code>. Popup flow posts auth-success / auth-error messages back to the SPA.</td>
+    </tr>
+    <tr>
+      <td class="tag">LandID Chrome extension</td>
+      <td>A companion extension shares the same Supabase session, so a user signed into the CRM is already authenticated for parcel-lookup tools.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ─────────────────────────────  6. WORKFLOW  ───────────────────────────── -->
+<section id="workflow" class="theme-blue">
+  <div class="section-head">
+    <span class="num">06</span>
+    <h2>How a deal flows through it</h2>
+    <span class="sub">pipeline</span>
+  </div>
+
+  <p>The seven canonical statuses, in flow order. The middle three derive automatically from offer state; the rest are manual.</p>
+
+  <div class="pipeline">
+    <div class="step">
+      <div class="bar" style="--c: var(--s-new);"></div>
+      <div class="name">New Lead</div>
+      <div class="meta">manual</div>
+    </div>
+    <div class="step">
+      <div class="bar" style="--c: var(--s-contacted);"></div>
+      <div class="name">Contacted</div>
+      <div class="meta">manual</div>
+    </div>
+    <div class="step auto">
+      <div class="bar" style="--c: var(--s-offer);"></div>
+      <div class="name">Offer Made</div>
+      <div class="meta">pending / countered</div>
+    </div>
+    <div class="step auto">
+      <div class="bar" style="--c: var(--s-rejected);"></div>
+      <div class="name">Rejected / NFS</div>
+      <div class="meta">rejected offer</div>
+    </div>
+    <div class="step auto">
+      <div class="bar" style="--c: var(--s-uc);"></div>
+      <div class="name">UC</div>
+      <div class="meta">offer accepted</div>
+    </div>
+    <div class="step">
+      <div class="bar" style="--c: var(--s-closed);"></div>
+      <div class="name">Closed</div>
+      <div class="meta">manual</div>
+    </div>
+    <div class="step">
+      <div class="bar" style="--c: var(--s-dead);"></div>
+      <div class="name">Dead / Pass</div>
+      <div class="meta">manual</div>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin: 4px 0 22px;">
+    <span class="status s-new"><span class="dot"></span> New Lead</span>
+    <span class="status s-contacted"><span class="dot"></span> Contacted</span>
+    <span class="status s-offer"><span class="dot"></span> Offer Made</span>
+    <span class="status s-rejected"><span class="dot"></span> Rejected/NFS</span>
+    <span class="status s-uc"><span class="dot"></span> UC</span>
+    <span class="status s-closed"><span class="dot"></span> Closed</span>
+    <span class="status s-dead"><span class="dot"></span> Dead/Pass</span>
+  </p>
+
+  <h3>Stage by stage</h3>
+
+  <div class="cards">
+    <div class="card t-blue">
+      <div class="ico">1</div>
+      <h4>Source the list</h4>
+      <p>CSV import auto-maps columns. <code>county|tax_map_id</code> check buckets each row into <em>add</em>, <em>merge phones</em>, or <em>skip</em>. Bulk insert in chunks of 500.</p>
+    </div>
+    <div class="card t-blue">
+      <div class="ico">2</div>
+      <h4>Outreach</h4>
+      <p>SMS / Email tab on the contact. <code>last_sms_at</code> drives the server-side activity filters (<code>sms_7</code>, <code>sms_30</code>, <code>sms_never</code>).</p>
+    </div>
+    <div class="card t-amber">
+      <div class="ico">3</div>
+      <h4>Offer cycle</h4>
+      <p>OffersTab: Pending → Countered → Accepted / Rejected. Contact status auto-derives from the latest offer — <strong>batch the offers + status into one <code>onChangeMultiple()</code></strong> or the second write clobbers the first.</p>
+    </div>
+    <div class="card t-teal">
+      <div class="ico">4</div>
+      <h4>Close</h4>
+      <p>Status manually flips to <span class="status s-closed"><span class="dot"></span> Closed</span> or <span class="status s-dead"><span class="dot"></span> Dead/Pass</span>. Notes &amp; offers stay attached to the parcel record forever.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────  7. PATTERNS  ───────────────────────────── -->
+<section id="patterns" class="theme-purple">
+  <div class="section-head">
+    <span class="num">07</span>
+    <h2>Patterns worth knowing</h2>
+    <span class="sub">conventions</span>
+  </div>
+
+  <div class="cards">
+    <div class="card t-purple">
+      <div class="ico">✎</div>
+      <h4>Blur-to-save with optimistic revert</h4>
+      <p>Fields update a draft on <code>onChange</code> and persist on <code>onBlur</code> via <code>useDraftSave</code>. On save failure the local state reverts and a toast fires — no Save button, no phantom edits on 4xx.</p>
+    </div>
+    <div class="card t-blue">
+      <div class="ico">⚙</div>
+      <h4>Client config drives the UI</h4>
+      <p><code>resolveConfig(currentClient)</code> returns statuses, colors, tabs, visible fields, stats pills, terminology. Never hardcode — presets exist for <code>land</code>, <code>restaurant</code>, <code>generic</code>.</p>
+    </div>
+    <div class="card t-teal">
+      <div class="ico">✓</div>
+      <h4>CSS / JSX sync gate</h4>
+      <p><code>npm run check-css</code> flags missing CSS classes and raw <code>rem</code> font sizes (use the <code>--text-xs</code> … <code>--text-xl</code> tokens). Both exit 1 — CI catches them.</p>
+    </div>
+    <div class="card t-amber">
+      <div class="ico">!</div>
+      <h4>useEffect TDZ landmine</h4>
+      <p>Effects in <code>AppProvider</code> referencing <code>loadContacts</code> / <code>saveContact</code> / etc must be placed <em>after</em> their <code>useCallback</code>. Dep arrays evaluate at render time → otherwise minifies to <code>Cannot access 'le' before initialization</code>.</p>
+    </div>
+  </div>
+
+</section>
+
+<!-- ─────────────────────────────  TL;DR  ───────────────────────────── -->
+<section class="theme-blue">
+  <div class="section-head">
+    <span class="num">★</span>
+    <h2>TL;DR</h2>
+    <span class="sub">one paragraph</span>
+  </div>
+
+  <div class="keyfact">
+    <div class="badge">★ THE WHOLE THING</div>
+    Taraform is a React + Supabase SMS/email CRM for land acquisition. The thing that separates it from a generic CRM
+    is that <strong>it identifies records by parcel — <code>county + Tax Map ID</code> — not by contact name</strong>.
+    That single decision is what lets the same parcel survive owner changes, re-imports, and skip-trace noise without
+    fragmenting into duplicate records, and it's enforced at every entry point: manual add, bulk CSV import, and search.
+    Everything else (jsonb arrays with GIN containment, blur-to-save with optimistic revert, split data/UI contexts,
+    server-paged filtering, client-driven config) is plumbing in service of that identity choice.
+  </div>
+
+  <div class="footer-note">
+    Generated from <code>CLAUDE.md</code> files &amp; source · <code>TARAFORM_OVERVIEW.html</code> in the repo root
+  </div>
+</section>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = 'taraform_overview_theme';
+    var btn = document.getElementById('themeToggle');
+    var root = document.documentElement;
+
+    function apply(theme) {
+      if (theme === 'light') root.setAttribute('data-theme', 'light');
+      else                   root.removeAttribute('data-theme');
+    }
+
+    // Initial: saved → system pref → dark
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    if (saved === 'light' || saved === 'dark') {
+      apply(saved);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      apply('light');
+    } else {
+      apply('dark');
+    }
+
+    btn.addEventListener('click', function () {
+      var isLight = root.getAttribute('data-theme') === 'light';
+      var next = isLight ? 'dark' : 'light';
+      apply(next);
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>
