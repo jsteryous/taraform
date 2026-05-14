@@ -4,6 +4,8 @@
 
 **Contacts paginate 50/page.** `loadContacts(clientId, filters)` loads page 1; `loadMoreContacts` appends. All filters go as Supabase query params — never filter in JS. SMS activity filters (`sms_7/30/never`) are server-side via `last_sms_at`. Note filters (`note_7/30/never`) are client-side only — `activityLog` isn't in `LIST_FIELDS`.
 
+**Bulk fetches (export, etc.):** use `fetchAllFilteredContacts(clientId, filters)` — pages past Supabase's 1000-row cap with `select('*')`, shares filter logic with `loadContacts` via `applyContactFilters`. Re-apply the note activity filter client-side after the fetch (same as `ContactList`'s `filtered` memo). Don't reach for raw supabase queries here; they skip the filter pipeline (this is exactly how Export All was broken).
+
 **Search filter** ORs name/county/owner_address/email (`ilike`, partial) with `tax_map_ids`/`property_addresses`/`phones` (`cs.["value"]`, exact-element). The array columns are jsonb — see `src/lib/CLAUDE.md` for the syntax rule. No partial/case-insensitive across array elements without a Postgres RPC.
 
 **Filter state** is a single `filters` object (`{ search, statuses, counties, phone, activity, email }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all.
