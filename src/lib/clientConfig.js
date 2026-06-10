@@ -22,7 +22,7 @@ export const LAND_CONFIG = {
     { label: 'under contract', status: 'UC',         color: '#34d399' },
     { label: 'closed',         status: 'Closed',     color: '#10b981' },
   ],
-  tabs: ['notes', 'sms', 'email', 'offers'],
+  tabs: ['notes', 'offers'],
   visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],
 };
@@ -44,7 +44,7 @@ export const RESTAURANT_CONFIG = {
     { label: 'vip',      status: 'VIP',     color: '#fbbf24' },
     { label: 'inactive', status: 'Inactive',color: '#f87171' },
   ],
-  tabs: ['notes', 'sms', 'email'],
+  tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
 };
@@ -66,7 +66,7 @@ export const GENERIC_CONFIG = {
     { label: 'interested',status: 'Interested', color: '#fbbf24' },
     { label: 'converted', status: 'Converted',  color: '#34d399' },
   ],
-  tabs: ['notes', 'sms', 'email'],
+  tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
 };

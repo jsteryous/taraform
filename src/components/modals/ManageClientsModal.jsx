@@ -5,8 +5,8 @@ import { createClient, updateClient, deleteClient, getClients, getClientUsers, a
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
 import { parseCustomFieldDefs } from '../../lib/utils';
 
-const ALL_TABS      = ['notes', 'sms', 'email', 'offers'];
-const TAB_LABELS    = { notes: 'Notes & Activity', sms: 'SMS', email: 'Email', offers: 'Offers' };
+const ALL_TABS      = ['notes', 'offers'];
+const TAB_LABELS    = { notes: 'Notes & Activity', offers: 'Offers' };
 const ALL_FIELDS    = ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'];
 const FIELD_LABELS  = { county: 'County', taxMapIds: 'Tax Map IDs', acreage: 'Acreage', ownerAddress: 'Owner Address', propertyAddresses: 'Property Addresses' };
 const ALL_COLUMNS   = ['name', 'phone', 'county', 'status'];
@@ -16,7 +16,6 @@ const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generi
 export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   const { clientsList, setClientsList, showToast } = useApp();
   const [newName, setNewName]     = useState('');
-  const [newTwilio, setNewTwilio] = useState('');
   const [activeEditor, setActiveEditor] = useState(null);
   const [editorTab, setEditorTab] = useState('settings');
 
@@ -29,8 +28,8 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
 
   async function handleCreate() {
     if (!newName.trim()) return;
-    await createClient({ name: newName.trim(), twilio_number: newTwilio.trim() || null });
-    setNewName(''); setNewTwilio('');
+    await createClient({ name: newName.trim() });
+    setNewName('');
     await refresh();
     showToast('Client created');
   }
@@ -81,7 +80,7 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.name}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                  {c.twilio_number || 'No Twilio number'} · {resolveConfig(c).terminology.contacts}
+                  {resolveConfig(c).terminology.contacts}
                 </div>
               </div>
               <button className="btn-small"
@@ -105,10 +104,6 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
           <div className="form-group" style={{ margin: 0 }}>
             <label>Business Name *</label>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Rosso Restaurant" />
-          </div>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label>Twilio Number</label>
-            <input value={newTwilio} onChange={e => setNewTwilio(e.target.value)} placeholder="+18645551234" />
           </div>
         </div>
         <button className="btn-primary" onClick={handleCreate}>+ Add Client</button>
@@ -146,7 +141,6 @@ function ViewConfig({ client, onSave }) {
   const saved = client.config || {};
   const [type,     setType]     = useState(saved.type || 'land');
   const [name,     setName]     = useState(client.name || '');
-  const [twilio,   setTwilio]   = useState(client.twilio_number || '');
   const [term,     setTerm]     = useState(cfg.terminology?.contact || 'Contact');
   const [statuses, setStatuses] = useState(cfg.statuses);
   const [pills,    setPills]    = useState(cfg.statsPills);
@@ -185,7 +179,6 @@ function ViewConfig({ client, onSave }) {
   function handleSave() {
     onSave({
       name: name.trim(),
-      twilio_number: twilio.trim() || null,
       config: { type, terminology: { contact: term, contacts: term + 's' }, statuses, statsPills: pills, tabs, visibleFields: fields, listColumns: columns },
     });
   }
@@ -215,10 +208,6 @@ function ViewConfig({ client, onSave }) {
           <div className="form-group" style={{ margin: 0 }}>
             <label style={{ fontSize: '0.75rem' }}>Client Name</label>
             <input value={name} onChange={e => setName(e.target.value)} style={{ fontSize: '0.8rem' }} />
-          </div>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label style={{ fontSize: '0.75rem' }}>Twilio Number</label>
-            <input value={twilio} onChange={e => setTwilio(e.target.value)} style={{ fontSize: '0.8rem', fontFamily: 'var(--mono)' }} />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label style={{ fontSize: '0.75rem' }}>Contact Term</label>

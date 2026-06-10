@@ -4,12 +4,10 @@ import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
-import SmsTab from './SmsTab';
 import OffersTab from './OffersTab';
-import EmailTab from './EmailTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { ArrowLeft, Copy, Check, MessageSquare, Mail, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2 } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -22,7 +20,7 @@ export default function ContactDetail({ onClose }) {
   const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const STATUSES = cfg.statuses.map(s => s.value);
-  const [tab, setTab] = useState(cfg.tabs.find(t => t !== 'offers') || 'notes');
+  const [tab, setTab] = useState('notes');
   const [draft, setDraft] = useState(null);
   const [confirmDelete, ConfirmUI] = useConfirm();
 
@@ -285,36 +283,20 @@ export default function ContactDetail({ onClose }) {
         {/* ── Main area ── */}
         <div className="notes-main-area">
           <div className="detail-tabs" role="tablist" aria-label="Contact sections">
-            {cfg.tabs.filter(t => t !== 'offers').map(t => (
-              <button key={t}
-                role="tab"
-                id={`tab-${t}`}
-                aria-selected={tab === t}
-                aria-controls={`tabpanel-${t}`}
-                tabIndex={tab === t ? 0 : -1}
-                className={`detail-tab${tab === t ? ' active' : ''}`}
-                onClick={() => setTab(t)}
-                onKeyDown={e => {
-                  const tabs = cfg.tabs.filter(x => x !== 'offers');
-                  const idx = tabs.indexOf(t);
-                  if (e.key === 'ArrowRight') { e.preventDefault(); setTab(tabs[(idx + 1) % tabs.length]); }
-                  if (e.key === 'ArrowLeft')  { e.preventDefault(); setTab(tabs[(idx - 1 + tabs.length) % tabs.length]); }
-                }}
-              >
-                {t === 'notes' ? 'Notes & Activity'
-                  : t === 'sms'   ? <span className="tab-label"><MessageSquare size={13} /> SMS</span>
-                  :                 <span className="tab-label"><Mail size={13} /> Email</span>}
-              </button>
-            ))}
+            <button
+              role="tab"
+              id="tab-notes"
+              aria-selected={tab === 'notes'}
+              aria-controls="tabpanel-notes"
+              tabIndex={0}
+              className={`detail-tab${tab === 'notes' ? ' active' : ''}`}
+              onClick={() => setTab('notes')}
+            >
+              Notes &amp; Activity
+            </button>
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
             {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
-          </div>
-          <div role="tabpanel" id="tabpanel-sms" aria-labelledby="tab-sms" hidden={tab !== 'sms'}>
-            {tab === 'sms' && <SmsTab contact={draft} />}
-          </div>
-          <div role="tabpanel" id="tabpanel-email" aria-labelledby="tab-email" hidden={tab !== 'email'}>
-            {tab === 'email' && <EmailTab contact={draft} />}
           </div>
         </div>
 

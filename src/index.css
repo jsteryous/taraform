@@ -648,61 +648,6 @@ label {
     background: var(--surface-hover);
 }
 
-/* ── SMS thread ── */
-.sms-thread { display:flex; flex-direction:column; gap:0.625rem; margin-bottom:1rem; }
-.sms-bubble { max-width:75%; padding:0.625rem 0.875rem; border-radius:12px; font-size:var(--text-base); line-height:1.5; }
-.sms-bubble.outbound { align-self:flex-end; background:var(--accent); color:white; border-bottom-right-radius:3px; }
-.sms-bubble.inbound  { align-self:flex-start; background:var(--surface); border:1px solid var(--border); color:var(--text); border-bottom-left-radius:3px; }
-.sms-meta { font-size:var(--text-xs); color:var(--text-muted); margin-top:0.2rem; font-family:var(--mono); }
-.sms-meta.outbound { text-align:right; }
-.sms-intent { font-size:var(--text-2xs); padding:0.1rem 0.35rem; border-radius:3px; background:rgba(16,185,129,0.15); color:#34d399; font-family:var(--mono); margin-left:0.4rem; }
-.sms-send-bar { display:flex; gap:0.5rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border); }
-.sms-send-bar textarea { flex:1; min-height:60px; resize:none; }
-.sms-opt-out-warning { background:rgba(239,68,68,0.1); border:1px solid var(--danger); color:var(--danger); padding:0.75rem 1rem; border-radius:6px; font-size:var(--text-base); margin-top:1rem; }
-
-/* ── Template variable buttons ── */
-.tpl-var-btn {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--accent);
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    font-size: var(--text-sm);
-    font-family: var(--mono);
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.tpl-var-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
-.tpl-var-custom { border-style: dashed; color: var(--text-muted); }
-.tpl-var-custom:hover { border-style: solid; }
-
-/* ── Template card ── */
-.tpl-touch-section { margin-bottom: 2rem; }
-.tpl-touch-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-}
-.tpl-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.875rem 1rem;
-    margin-bottom: 0.5rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.75rem;
-    align-items: start;
-}
-.tpl-card.tpl-active { border-color: var(--accent); }
-.tpl-card-body { font-size: var(--text-base); color: var(--text-muted); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.tpl-card-name { font-size: var(--text-sm); font-family: var(--mono); color: var(--text-muted); margin-bottom: 0.3rem; }
-.tpl-active-tag { font-size: var(--text-2xs); font-family: var(--mono); background: rgba(59,130,246,0.15); color: var(--accent); padding: 0.1rem 0.4rem; border-radius: 3px; margin-left: 0.5rem; text-transform: uppercase; letter-spacing: 0.4px; }
-.tpl-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
-
 input[type="file"] {
     display: none;
 }
@@ -822,16 +767,6 @@ input[type="file"] {
 }
 .client-switcher-gear:hover { opacity: 1; }
 
-/* SMS status dot next to client */
-.sms-status-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-    transition: background 0.2s;
-}
-.sms-status-dot.paused { background: var(--danger); }
-
 .user-info {
     display: flex;
     align-items: center;
@@ -849,46 +784,6 @@ input[type="file"] {
     cursor: pointer;
 }
 .logout-btn:hover { background: var(--surface-hover); }
-
-/* Settings dropdown */
-.settings-dropdown-wrap {
-    position: relative;
-}
-.settings-dropdown-menu {
-    display: none;
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    min-width: 190px;
-    z-index: 500;
-    overflow: hidden;
-}
-.settings-dropdown-menu.open { display: block; animation: dropdownFade 0.15s ease; }
-.settings-dropdown-menu button {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    padding: 0.65rem 1rem;
-    background: none;
-    border: none;
-    border-radius: 0;
-    color: var(--text);
-    font-size: var(--text-base);
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.1s;
-}
-.settings-dropdown-menu button:hover { background: var(--surface-hover); }
-.settings-dropdown-menu .menu-divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 0.25rem 0;
-}
 
 /* ── Client switcher dropdown ── */
 .client-drop-btn {
@@ -943,18 +838,6 @@ input[type="file"] {
     font-weight: 600;
     background: rgba(59, 130, 246, 0.08);
 }
-
-/* ── Email automation dot ── */
-.email-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: all 0.2s;
-}
-.email-status-dot.on  { background: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.25); }
-.email-status-dot.off { background: #6b7280; }
 
 /* ── Filter bar dropdowns ── */
 .filter-btn {
@@ -1228,11 +1111,6 @@ input[type="file"] {
     padding: 0.4rem 0.875rem;
     cursor: pointer;
     font-size: var(--text-sm);
-}
-.tab-label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
 }
 .offers-column {
     border-left: 1px solid var(--border);

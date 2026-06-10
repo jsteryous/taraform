@@ -4,7 +4,6 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
-import SendEmailModal from '../modals/SendEmailModal';
 import { useConfirm } from '../shared/ConfirmDialog';
 
 const ACTIVITY_OPTIONS = [
@@ -56,7 +55,6 @@ export default function ContactList({ onView, onExport }) {
   const [statusOpen,    setStatusOpen]    = useState(false);
   const [countyOpen,    setCountyOpen]    = useState(false);
   const [moreOpen,      setMoreOpen]      = useState(false);
-  const [showSendEmail, setShowSendEmail] = useState(false);
   const [confirmBulkDelete, ConfirmUI]    = useConfirm();
 
   const statusRef    = useRef(null);
@@ -319,13 +317,10 @@ export default function ContactList({ onView, onExport }) {
         <div style={{ padding: '0.5rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.2)' }}>
           <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 500 }}>{selected.size} selected</span>
           <button className="btn-small" onClick={() => { onExport(filtered.filter(c => selected.has(c.id))); }}>Export Selected</button>
-          <button className="btn-small" onClick={() => setShowSendEmail(true)}>✉ Send Emails</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
           <button className="btn-small" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
-
-      <SendEmailModal open={showSendEmail} onClose={() => setShowSendEmail(false)} selectedContacts={filtered.filter(c => selected.has(c.id))} />
 
       {/* Select all */}
       <div style={{ padding: '0.5rem 2rem', borderBottom: '1px solid var(--border)' }}>

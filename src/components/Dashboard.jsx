@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { resolveConfig } from '../lib/clientConfig';
 import { supabase } from '../lib/supabase';
-import { getEmailStats } from '../lib/api';
 
 const PERIODS = [
   { value: 'today',   label: 'Today' },
@@ -46,7 +45,6 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [offerStats, setOfferStats] = useState(null);
   const [offerLoading, setOfferLoading] = useState(true);
   const [offerError, setOfferError] = useState(null);
-  const [emailData, setEmailData]   = useState(null);
 
   const loadOfferStats = useCallback(async (p) => {
     setOfferLoading(true);
@@ -108,17 +106,9 @@ export default function Dashboard({ onClose, onViewContact }) {
     }
   }, [currentClientId]);
 
-  const loadEmailStats = useCallback(async (p) => {
-    if (!currentClientId) return;
-    try {
-      setEmailData(await getEmailStats(currentClientId, p));
-    } catch { /* email stats are optional */ }
-  }, [currentClientId]);
-
   useEffect(() => {
     loadOfferStats(period);
-    loadEmailStats(period);
-  }, [period, loadOfferStats, loadEmailStats]);
+  }, [period, loadOfferStats]);
 
   // ── Styles ────────────────────────────────────────────────────
   const card = {
@@ -250,40 +240,7 @@ export default function Dashboard({ onClose, onViewContact }) {
           )}
         </div>
 
-        {/* ── Email ── */}
-        {emailData && (
-          <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <div style={sectionTitle}>Email — {PERIODS.find(p => p.value === period)?.label}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: emailData.autoEnabled ? '#10b981' : '#6b7280', display: 'inline-block' }} />
-                {emailData.autoEnabled ? 'Automation on' : 'Automation off'}
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <KpiCard label="Sent"       value={emailData.sentThisPeriod}    color="#60a5fa" sub={`${emailData.totalSent} all-time`} style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-              <KpiCard label="Verified"   value={emailData.verifiedCount}     color="#10b981" sub="safe to send"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-              <KpiCard label="Blocked"    value={emailData.blockedCount}      color="#f87171" sub="do not email"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-              <KpiCard label="Unverified" value={emailData.unverifiedCount}   color="#f59e0b" sub="not yet checked" style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-              <KpiCard label="Unknown"    value={emailData.unknownCount || 0} color="#6b7280" sub="unverifiable"    style={{}} bigNum={bigNum} cardLabel={cardLabel} />
-            </div>
-            {emailData.sentThisPeriod === 0 && (
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No emails sent in this period yet.</div>
-            )}
-          </div>
-        )}
-
       </div>
-    </div>
-  );
-}
-
-function KpiCard({ label, value, color, sub, style, bigNum, cardLabel }) {
-  return (
-    <div style={style}>
-      <div style={cardLabel}>{label}</div>
-      <div style={{ ...bigNum, color }}>{value ?? '—'}</div>
-      {sub && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{sub}</div>}
     </div>
   );
 }

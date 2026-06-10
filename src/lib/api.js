@@ -1,97 +1,57 @@
 import { supabase } from './supabase';
 
-const BASE = 'https://taraform-server-production.up.railway.app';
+// Direct Supabase data access (anon key + RLS). Replaced the Railway server
+// (taraform-server) on 2026-06-10. Clients/members are backed by the policies
+// and SECURITY DEFINER RPCs in db/20260610_clients_rls.sql; offers rely on the
+// pre-existing membership policy on contact_offers.
 
-async function req(path, options = {}) {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-
-  const method = options.method || 'GET';
-  const body   = options.body;
-  if (body) {
-    try { console.log(`[api] ${method} ${path}`, JSON.parse(body)); } catch { console.log(`[api] ${method} ${path}`, body); }
-  }
-
-  const res = await fetch(`${BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    console.error(`[api] ${method} ${path} → ${res.status}`, text);
-    let errMsg;
-    try {
-      const json = JSON.parse(text);
-      errMsg = json.error || json.message || `${res.status} ${res.statusText}`;
-    } catch {
-      errMsg = `${res.status} ${res.statusText}`;
-    }
-    throw new Error(errMsg);
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
+function unwrap({ data, error }) {
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-// Clients
-export const getClients      = ()           => req('/api/clients');
-export const createClient    = (body)       => req('/api/clients', { method: 'POST', body: JSON.stringify(body) });
-export const updateClient    = (id, body)   => req(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-export const deleteClient    = (id)         => req(`/api/clients/${id}`, { method: 'DELETE' });
+// Clients — RLS limits rows to clients the caller is a member of
+export const getClients = async () =>
+  unwrap(await supabase.from('clients').select('*').order('name', { ascending: true }));
 
-// Client users (members)
-export const getClientUsers   = (clientId)         => req(`/api/clients/${clientId}/users`);
-export const addClientUser    = (clientId, email)  => req(`/api/clients/${clientId}/users`, { method: 'POST', body: JSON.stringify({ email }) });
-export const removeClientUser = (clientId, userId) => req(`/api/clients/${clientId}/users/${userId}`, { method: 'DELETE' });
+export const createClient = async ({ name, twilio_number }) =>
+  unwrap(await supabase.rpc('create_client', { p_name: name, p_twilio_number: twilio_number || null }));
 
-// Templates
-export const getTemplates    = (clientId)   => req(`/api/templates?client_id=${clientId}`);
-export const createTemplate  = (body)       => req('/api/templates', { method: 'POST', body: JSON.stringify(body) });
-export const updateTemplate  = (id, body)   => req(`/api/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-export const deleteTemplate  = (id)         => req(`/api/templates/${id}`, { method: 'DELETE' });
+export const updateClient = async (id, body) => {
+  const updates = {};
+  for (const key of ['name', 'twilio_number', 'config', 'custom_field_definitions']) {
+    if (body[key] !== undefined) updates[key] = body[key];
+  }
+  return unwrap(await supabase.from('clients').update(updates).eq('id', id).select().single());
+};
 
-// Settings
-export const getSetting      = (key, cid)        => req(`/api/settings/${key}?client_id=${cid}`);
-export const putSetting      = (key, value, cid) => req(`/api/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value, client_id: cid }) });
+export const deleteClient = async (id) =>
+  unwrap(await supabase.from('clients').delete().eq('id', id));
 
-// SMS
-export const getMessages     = (contactId)  => req(`/api/messages/${contactId}`);
-export const sendMessage     = (body)       => req('/api/send', { method: 'POST', body: JSON.stringify(body) });
+// Client users (members) — RPCs enforce membership/owner checks and resolve emails
+export const getClientUsers = async (clientId) =>
+  unwrap(await supabase.rpc('get_client_members', { p_client_id: clientId }));
 
-// Offers
-export const addOffer    = (contactId, body)              => req(`/api/contacts/${contactId}/offers`, { method: 'POST', body: JSON.stringify(body) });
-export const updateOffer = (contactId, offerId, body)     => req(`/api/contacts/${contactId}/offers/${offerId}`, { method: 'PUT', body: JSON.stringify(body) });
-export const deleteOffer = (contactId, offerId, clientId) => req(`/api/contacts/${contactId}/offers/${offerId}?client_id=${clientId}`, { method: 'DELETE' });
+export const addClientUser = async (clientId, email) =>
+  unwrap(await supabase.rpc('add_client_member', { p_client_id: clientId, p_email: email }));
 
-// Email connection
-export const getEmailStatus      = (clientId)       => req(`/api/email/status?client_id=${clientId}`);
-export const getEmailAuthUrl     = (clientId)       => req(`/api/email/auth-url?client_id=${clientId}`);
-export const getGmailAuthUrl     = (clientId)       => req(`/api/email/gmail-auth-url?client_id=${clientId}`);
-export const disconnectEmail     = (clientId)       => req(`/api/email/disconnect?client_id=${clientId}`, { method: 'DELETE' });
+export const removeClientUser = async (clientId, userId) =>
+  unwrap(await supabase.rpc('remove_client_member', { p_client_id: clientId, p_user_id: userId }));
 
-// Email templates
-export const getEmailTemplates   = (clientId)       => req(`/api/email/templates?client_id=${clientId}`);
-export const createEmailTemplate = (body)           => req('/api/email/templates', { method: 'POST', body: JSON.stringify(body) });
-export const updateEmailTemplate = (id, body)       => req(`/api/email/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-export const deleteEmailTemplate = (id)             => req(`/api/email/templates/${id}`, { method: 'DELETE' });
+// Offers — contact_offers.id is bigint with no DB default, hence Date.now()
+export const addOffer = async (contactId, { amount, status, notes, clientId }) =>
+  unwrap(await supabase.from('contact_offers')
+    .insert({ id: Date.now(), contact_id: contactId, client_id: clientId, amount, status, notes })
+    .select().single());
 
-// Email verification
-export const startEmailVerify      = (body)         => req('/api/email/verify-start', { method: 'POST', body: JSON.stringify(body) });
-export const getEmailVerifyStatus  = (clientId)     => req(`/api/email/verify-status?client_id=${clientId}`);
-export const resetEmailVerifyJob   = (clientId)     => req(`/api/email/verify-reset?client_id=${clientId}`, { method: 'DELETE' });
-export const reprocessEmailVerify  = (body)         => req('/api/email/verify-reprocess', { method: 'POST', body: JSON.stringify(body) });
+export const updateOffer = async (contactId, offerId, { amount, status, notes }) =>
+  unwrap(await supabase.from('contact_offers')
+    .update({ amount, status, notes })
+    .eq('id', offerId).eq('contact_id', contactId)
+    .select().single());
 
-// Email stats
-export const getEmailStats         = (clientId, period) => req(`/api/email/stats?client_id=${clientId}&period=${period}`);
-
-// Email sending
-export const getEmailMessages      = (contactId, clientId) => req(`/api/email/messages?contact_id=${contactId}&client_id=${clientId}`);
-export const sendEmailOne          = (body)                => req('/api/email/send-one', { method: 'POST', body: JSON.stringify(body) });
-export const sendEmailBatch        = (body)                => req('/api/email/send-batch', { method: 'POST', body: JSON.stringify(body) });
+export const deleteOffer = async (contactId, offerId) =>
+  unwrap(await supabase.from('contact_offers')
+    .delete()
+    .eq('id', offerId).eq('contact_id', contactId)
+    .select().single());

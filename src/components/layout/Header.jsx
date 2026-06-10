@@ -1,15 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
-import { getClients, putSetting, getSetting } from '../../lib/api';
+import { getClients } from '../../lib/api';
 import ManageClientsModal from '../modals/ManageClientsModal';
-import TemplatesModal from '../modals/TemplatesModal';
-import SmsSettingsModal from '../modals/SmsSettingsModal';
-import EmailSettingsModal from '../modals/EmailSettingsModal';
-import EmailVerificationImportModal from '../modals/EmailVerificationImportModal';
 import {
-  Settings, LayoutDashboard, FileText, Clock, Mail, ShieldCheck,
-  Play, Pause, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut,
+  Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut,
 } from 'lucide-react';
 
 function hasActiveFilters(f) {
@@ -20,17 +15,9 @@ function hasActiveFilters(f) {
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
   const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount } = useApp();
   const filtered = hasActiveFilters(filters);
-  const [dropOpen, setDropOpen]           = useState(false);
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
   const [showClients, setShowClients]     = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showSchedule, setShowSchedule]  = useState(false);
-  const [showEmail, setShowEmail]        = useState(false);
-  const [showEmailVerify, setShowEmailVerify] = useState(false);
-  const [paused, setPaused]              = useState(false);
-  const [emailAuto, setEmailAuto]        = useState(false);
-  const dropRef = useRef(null);
   const themeRef = useRef(null);
   const clientDropRef = useRef(null);
 
@@ -46,18 +33,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   }, []); // eslint-disable-line
 
   useEffect(() => {
-    if (!currentClientId) return;
-    getSetting('automation_paused', currentClientId)
-      .then(d => setPaused(d.value === 'true'))
-      .catch(() => {});
-    getSetting('email_automation_enabled', currentClientId)
-      .then(d => setEmailAuto(d.value === 'true'))
-      .catch(() => {});
-  }, [currentClientId]);
-
-  useEffect(() => {
     function handler(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
       if (themeRef.current && !themeRef.current.contains(e.target)) setThemeOpen(false);
       if (clientDropRef.current && !clientDropRef.current.contains(e.target)) setClientDropOpen(false);
     }
@@ -85,21 +61,6 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           <div className="header-left">
             <h1>Taraform</h1>
             <div className="client-switcher">
-              <div className={`sms-status-dot${paused ? ' paused' : ''}`} title={paused ? 'SMS paused' : 'SMS active'} />
-              <div
-                title={emailAuto ? 'Email automation on' : 'Email automation off'}
-                className={`email-status-dot ${emailAuto ? 'on' : 'off'}`}
-                onClick={async () => {
-                  const next = !emailAuto;
-                  setEmailAuto(next);
-                  try {
-                    await putSetting('email_automation_enabled', next.toString(), currentClientId);
-                  } catch {
-                    setEmailAuto(!next);
-                    showToast('Failed to update email automation', 'error');
-                  }
-                }}
-              />
               <div ref={clientDropRef} style={{ position: 'relative' }}>
                 <button className="client-drop-btn" onClick={() => setClientDropOpen(o => !o)}>
                   <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
@@ -156,42 +117,6 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', ...(dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}) }}>
               <LayoutDashboard size={14} /> Dashboard
             </button>
-            <div ref={dropRef} className="settings-dropdown-wrap">
-              <button onClick={() => setDropOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Settings size={14} /> Settings <ChevronDown size={12} style={{ opacity: 0.6 }} /></button>
-              {dropOpen && (
-                <div className="settings-dropdown-menu open">
-                  <button onClick={() => { setShowTemplates(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FileText size={14} /> SMS Templates</button>
-                  <button onClick={() => { setShowSchedule(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Clock size={14} /> SMS Schedule</button>
-                  <button onClick={() => { setShowEmail(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Mail size={14} /> Email Settings</button>
-                  <button onClick={() => { setShowEmailVerify(true); setDropOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ShieldCheck size={14} /> Import Email Verification</button>
-                  <hr className="menu-divider" />
-                  <button onClick={async () => {
-                    const next = !paused;
-                    setPaused(next); setDropOpen(false);
-                    try {
-                      await putSetting('automation_paused', next.toString(), currentClientId);
-                    } catch {
-                      setPaused(!next);
-                      showToast('Failed to update SMS automation', 'error');
-                    }
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{paused ? <Play size={14} /> : <Pause size={14} />} {paused ? 'Resume SMS' : 'Pause SMS'}</span>
-                  </button>
-                  <button onClick={async () => {
-                    const next = !emailAuto;
-                    setEmailAuto(next); setDropOpen(false);
-                    try {
-                      await putSetting('email_automation_enabled', next.toString(), currentClientId);
-                    } catch {
-                      setEmailAuto(!next);
-                      showToast('Failed to update email automation');
-                    }
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{emailAuto ? <Pause size={14} /> : <Play size={14} />} {emailAuto ? 'Pause Email' : 'Resume Email'}</span>
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
           <div id="statsBar" className="stats-bar" />
         </div>
@@ -208,10 +133,6 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           }
         }}
       />
-      <TemplatesModal open={showTemplates} onClose={() => setShowTemplates(false)} />
-      <SmsSettingsModal open={showSchedule} onClose={() => setShowSchedule(false)} />
-      <EmailSettingsModal open={showEmail} onClose={() => setShowEmail(false)} />
-      <EmailVerificationImportModal open={showEmailVerify} onClose={() => setShowEmailVerify(false)} />
     </>
   );
 }
