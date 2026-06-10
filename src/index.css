@@ -966,7 +966,7 @@ input[type="file"] {
     width: 100%;
     padding: 1.5rem 2rem;
     display: grid;
-    grid-template-columns: 300px 1fr 1fr;
+    grid-template-columns: var(--sidebar-w, 300px) 1fr 1fr;
     gap: 1.5rem;
     box-sizing: border-box;
 }
@@ -1010,6 +1010,29 @@ input[type="file"] {
     margin-top: 0.75rem;
     justify-content: flex-end;
 }
+/* Drag handle on the sidebar's right edge (sits in the grid gap) */
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -14px;
+    width: 12px;
+    cursor: col-resize;
+}
+.sidebar-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background 0.15s;
+}
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle.dragging::after { background: var(--accent); }
+
 @media (max-width: 968px) {
     .detail-page-content {
         grid-template-columns: 1fr;
@@ -1018,6 +1041,7 @@ input[type="file"] {
         position: relative;
         top: 0;
     }
+    .sidebar-resize-handle { display: none; }
 }
 /* ── ContactDetail field & sidebar styles ── */
 .field-label {

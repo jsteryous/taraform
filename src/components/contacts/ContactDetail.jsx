@@ -23,6 +23,35 @@ export default function ContactDetail({ onClose }) {
   const [tab, setTab] = useState('notes');
   const [draft, setDraft] = useState(null);
   const [confirmDelete, ConfirmUI] = useConfirm();
+  const [sidebarW, setSidebarW] = useState(() => {
+    const v = parseInt(localStorage.getItem('taraform_sidebar_w'), 10);
+    return Number.isFinite(v) ? Math.min(560, Math.max(220, v)) : 300;
+  });
+  const [sidebarDragging, setSidebarDragging] = useState(false);
+
+  function startSidebarDrag(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarW;
+    setSidebarDragging(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    let w = startW;
+    function onMove(ev) {
+      w = Math.min(560, Math.max(220, startW + ev.clientX - startX));
+      setSidebarW(w);
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setSidebarDragging(false);
+      localStorage.setItem('taraform_sidebar_w', String(w));
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
 
   const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
   const visibleFields = cfg.visibleFields;
@@ -74,9 +103,14 @@ export default function ContactDetail({ onClose }) {
         <button className="btn-danger-ghost" onClick={handleDelete}><Trash2 size={13} /> Delete</button>
       </div>
 
-      <div className="detail-page-content">
+      <div className="detail-page-content" style={{ '--sidebar-w': `${sidebarW}px` }}>
         {/* ── Sidebar ── */}
         <div className="contact-info-sidebar">
+          <div
+            className={`sidebar-resize-handle${sidebarDragging ? ' dragging' : ''}`}
+            onMouseDown={startSidebarDrag}
+            title="Drag to resize"
+          />
 
           {/* Name */}
           <div style={{ marginBottom: '1rem' }}>

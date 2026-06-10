@@ -26,7 +26,13 @@ export default function NotesTab({ contact, onChange }) {
           id="newNoteText"
           value={newNote}
           onChange={e => setNewNote(e.target.value)}
-          placeholder="Add a note... (e.g., 'Called - no answer' or 'Wants $200K')"
+          onKeyDown={e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              saveNote();
+            }
+          }}
+          placeholder="Add a note... (Ctrl+Enter to save)"
         />
         <div className="note-add-actions">
           <button className="btn-small" onClick={() => setNewNote('')}>Clear</button>
