@@ -963,6 +963,7 @@ input[type="file"] {
     color: var(--text);
 }
 .detail-page-content {
+    position: relative; /* anchors .sidebar-resize-handle */
     width: 100%;
     padding: 1.5rem 2rem;
     display: grid;
@@ -1010,21 +1011,24 @@ input[type="file"] {
     margin-top: 0.75rem;
     justify-content: flex-end;
 }
-/* Drag handle on the sidebar's right edge (sits in the grid gap) */
+/* Drag handle — child of .detail-page-content, floats over the grid gap
+   right of the sidebar (the sidebar itself clips overflow, so the handle
+   cannot live inside it) */
 .sidebar-resize-handle {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    right: -14px;
-    width: 12px;
+    top: 1.5rem;
+    bottom: 1.5rem;
+    left: calc(2rem + var(--sidebar-w, 300px) + 5px);
+    width: 14px;
     cursor: col-resize;
+    z-index: 10;
 }
 .sidebar-resize-handle::after {
     content: '';
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 5px;
+    left: 6px;
     width: 2px;
     border-radius: 1px;
     background: transparent;

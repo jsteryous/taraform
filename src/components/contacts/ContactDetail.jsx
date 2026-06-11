@@ -25,7 +25,7 @@ export default function ContactDetail({ onClose }) {
   const [confirmDelete, ConfirmUI] = useConfirm();
   const [sidebarW, setSidebarW] = useState(() => {
     const v = parseInt(localStorage.getItem('taraform_sidebar_w'), 10);
-    return Number.isFinite(v) ? Math.min(560, Math.max(220, v)) : 300;
+    return Number.isFinite(v) ? Math.min(700, Math.max(220, v)) : 300;
   });
   const [sidebarDragging, setSidebarDragging] = useState(false);
 
@@ -38,7 +38,7 @@ export default function ContactDetail({ onClose }) {
     document.body.style.userSelect = 'none';
     let w = startW;
     function onMove(ev) {
-      w = Math.min(560, Math.max(220, startW + ev.clientX - startX));
+      w = Math.min(700, Math.max(220, startW + ev.clientX - startX));
       setSidebarW(w);
     }
     function onUp() {
@@ -106,11 +106,6 @@ export default function ContactDetail({ onClose }) {
       <div className="detail-page-content" style={{ '--sidebar-w': `${sidebarW}px` }}>
         {/* ── Sidebar ── */}
         <div className="contact-info-sidebar">
-          <div
-            className={`sidebar-resize-handle${sidebarDragging ? ' dragging' : ''}`}
-            onMouseDown={startSidebarDrag}
-            title="Drag to resize"
-          />
 
           {/* Name */}
           <div style={{ marginBottom: '1rem' }}>
@@ -313,6 +308,13 @@ export default function ContactDetail({ onClose }) {
             );
           })()}
         </div>
+
+        {/* Resize handle — absolutely positioned in the grid gap right of the sidebar */}
+        <div
+          className={`sidebar-resize-handle${sidebarDragging ? ' dragging' : ''}`}
+          onMouseDown={startSidebarDrag}
+          title="Drag to resize"
+        />
 
         {/* ── Main area ── */}
         <div className="notes-main-area">
