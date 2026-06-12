@@ -110,7 +110,9 @@ export default function ContactDetail({ onClose }) {
     update('phones', next);
     setEditingPhone(next.length - 1);
   }
-  function removePhone(idx) {
+  async function removePhone(idx) {
+    const val = (draft.phones || [])[idx];
+    if (val && !await confirmDelete(`Remove phone ${val}?`)) return;
     update('phones', (draft.phones || []).filter((_, i) => i !== idx));
     setEditingPhone(null);
   }
@@ -121,7 +123,11 @@ export default function ContactDetail({ onClose }) {
     update(field, arr);
   }
   function addToMultiField(field) { update(field, [...(draft[field] || []), '']); }
-  function removeFromMultiField(field, idx) { update(field, (draft[field] || []).filter((_, i) => i !== idx)); }
+  async function removeFromMultiField(field, idx, label) {
+    const val = (draft[field] || [])[idx];
+    if (val && !await confirmDelete(`Remove ${label} "${val}"?`)) return;
+    update(field, (draft[field] || []).filter((_, i) => i !== idx));
+  }
 
   const smsStatus = draft.smsStatus || 'eligible';
   const smsColor = SMS_STATUS_COLORS[smsStatus] || 'var(--text-muted)';
@@ -275,8 +281,8 @@ export default function ContactDetail({ onClose }) {
                     onBlur={e => updateMultiField('taxMapIds', i, e.target.value)}
                     placeholder="—"
                   />
-                  {t && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(t); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>}
-                  <button className="remove-field-btn" onClick={() => removeFromMultiField('taxMapIds', i)}>×</button>
+                  {t && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(t); showToast('Copied!'); }} title="Copy"><Copy size={14} /></button>}
+                  <button className="remove-field-btn" onClick={() => removeFromMultiField('taxMapIds', i, 'tax map ID')}>×</button>
                 </div>
               ))}
               <button className="add-field-btn" onClick={() => addToMultiField('taxMapIds')}>+ Add Tax ID</button>
@@ -324,7 +330,7 @@ export default function ContactDetail({ onClose }) {
                         onBlur={e => updateMultiField('propertyAddresses', i, e.target.value)}
                         placeholder="—"
                       />
-                      <button className="remove-field-btn" onClick={() => removeFromMultiField('propertyAddresses', i)}>×</button>
+                      <button className="remove-field-btn" onClick={() => removeFromMultiField('propertyAddresses', i, 'property address')}>×</button>
                     </div>
                   ))}
                   <button className="add-field-btn" onClick={() => addToMultiField('propertyAddresses')}>+ Add Property</button>

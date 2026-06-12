@@ -1111,10 +1111,12 @@ input[type="file"] {
     align-items: center;
     flex-shrink: 0;
     text-decoration: none; /* also used as <a> for tel:/sms: links */
-    padding: 0;
+    padding: 0.25rem;
+    border-radius: 4px;
 }
 .copy-btn:hover {
     color: var(--text);
+    background: var(--surface-hover);
 }
 /* Clickable phone number (tel: link) in the contact sidebar */
 .phone-link {
