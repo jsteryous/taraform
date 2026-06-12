@@ -270,7 +270,9 @@ export default function ContactDetail({ onClose }) {
           {visibleFields.includes('taxMapIds') && (
             <div style={{ marginBottom: '1rem' }}>
               <div className="field-label">Tax Map IDs</div>
-              {(draft.taxMapIds || []).filter(Boolean).map((t, i) => (
+              {/* No filter(Boolean) here: the row "Add Tax ID" appends is empty,
+                  and filtering would both hide it and shift row indices */}
+              {(draft.taxMapIds || []).map((t, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                   <input value={t} className="inline-input" style={{ flex: 1 }}
                     onChange={e => {
@@ -319,7 +321,7 @@ export default function ContactDetail({ onClose }) {
               {visibleFields.includes('propertyAddresses') && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div className="field-label">Property Addresses</div>
-                  {(draft.propertyAddresses || []).filter(Boolean).map((a, i) => (
+                  {(draft.propertyAddresses || []).map((a, i) => (
                     <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <input value={a} className="inline-input" style={{ flex: 1 }}
                         onChange={e => {

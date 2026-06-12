@@ -39,7 +39,7 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
       />
 
       <div className="contact-name">{contact.firstName} {contact.lastName}</div>
-      <div className="contact-phones">{contact.phones?.[0] || '—'}</div>
+      <div className="contact-phones">{contact.phones?.[0] ? <span className="phone-chip">{contact.phones[0]}</span> : '—'}</div>
       {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', gridColumn: showCounty ? 'auto' : 'span 1' }}>

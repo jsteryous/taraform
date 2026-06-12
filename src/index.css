@@ -385,6 +385,17 @@ textarea {
     font-family: var(--mono);
 }
 
+/* Blue chip around the phone number in list rows — matches the app's
+   accent/search blue so phones scan easily */
+.phone-chip {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 5px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .contact-county {
     font-size: var(--text-base);
     color: var(--text-muted);
