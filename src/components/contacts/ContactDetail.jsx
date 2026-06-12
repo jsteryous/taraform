@@ -7,7 +7,7 @@ import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare, Pencil } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -22,6 +22,7 @@ export default function ContactDetail({ onClose }) {
   const STATUSES = cfg.statuses.map(s => s.value);
   const [tab, setTab] = useState('notes');
   const [draft, setDraft] = useState(null);
+  const [editingPhone, setEditingPhone] = useState(null); // index of phone row in edit mode
   const [confirmDelete, ConfirmUI] = useConfirm();
   const [sidebarW, setSidebarW] = useState(() => {
     const v = parseInt(localStorage.getItem('taraform_sidebar_w'), 10);
@@ -58,6 +59,7 @@ export default function ContactDetail({ onClose }) {
 
   useEffect(() => {
     if (currentContact) setDraft({ ...currentContact });
+    setEditingPhone(null);
   }, [currentContact?.id, currentContact?.offers]);
 
   const { saveStatus, update, updateMultiple, updateCustomField } =
@@ -91,8 +93,15 @@ export default function ContactDetail({ onClose }) {
     phones[idx] = val;
     update('phones', phones);
   }
-  function addPhone() { update('phones', [...(draft.phones || []), '']); }
-  function removePhone(idx) { update('phones', (draft.phones || []).filter((_, i) => i !== idx)); }
+  function addPhone() {
+    const next = [...(draft.phones || []), ''];
+    update('phones', next);
+    setEditingPhone(next.length - 1);
+  }
+  function removePhone(idx) {
+    update('phones', (draft.phones || []).filter((_, i) => i !== idx));
+    setEditingPhone(null);
+  }
 
   function updateMultiField(field, idx, val) {
     const arr = [...(draft[field] || [])];
@@ -177,19 +186,32 @@ export default function ContactDetail({ onClose }) {
             <div className="field-label">Phones</div>
             {(draft.phones?.length ? draft.phones : ['']).map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <input type="tel" value={p} placeholder="(864) 555-1234"
-                  className="inline-input" style={{ flex: 1 }}
-                  onChange={e => {
-                    const phones = [...(draft.phones || [])];
-                    phones[i] = e.target.value;
-                    setDraft(d => ({ ...d, phones }));
-                  }}
-                  onBlur={e => updatePhone(i, formatPhone(e.target.value))}
-                />
-                {p && <a className="copy-btn" href={`tel:+1${normalizePhone(p)}`} title="Call"><Phone size={13} /></a>}
-                {p && <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>}
-                {p && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>}
-                <button className="remove-field-btn" onClick={() => removePhone(i)}>×</button>
+                {(editingPhone === i || !p) ? (
+                  <>
+                    <input type="tel" value={p} placeholder="(864) 555-1234"
+                      autoFocus={editingPhone === i}
+                      className="inline-input" style={{ flex: 1 }}
+                      onChange={e => {
+                        const phones = [...(draft.phones || [])];
+                        phones[i] = e.target.value;
+                        setDraft(d => ({ ...d, phones }));
+                      }}
+                      onBlur={e => { updatePhone(i, formatPhone(e.target.value)); setEditingPhone(null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                    />
+                    {/* preventDefault keeps the input focused so blur-save doesn't race the remove click */}
+                    <button className="remove-field-btn" onMouseDown={e => e.preventDefault()} onClick={() => removePhone(i)}>×</button>
+                  </>
+                ) : (
+                  <>
+                    <a className="phone-link" href={`tel:+1${normalizePhone(p)}`} title="Call">
+                      <Phone size={13} /> {p}
+                    </a>
+                    <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>
+                    <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>
+                    <button className="copy-btn" onClick={() => setEditingPhone(i)} title="Edit"><Pencil size={13} /></button>
+                  </>
+                )}
               </div>
             ))}
             <button className="add-field-btn" onClick={addPhone}>+ Add Phone</button>
