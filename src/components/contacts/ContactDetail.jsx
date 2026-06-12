@@ -200,8 +200,9 @@ export default function ContactDetail({ onClose }) {
             </div>
           )}
 
-          {/* Phones */}
-          <div style={{ marginBottom: '1rem' }}>
+          {/* Phones — blue panel so it's findable at a glance when keying
+              in numbers from another screen (e.g. Forewarn) */}
+          <div className="phone-section">
             <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               Phones
               <button className="copy-btn" onClick={() => setShowCallHelp(true)} title="Set up click-to-call"><HelpCircle size={12} /></button>

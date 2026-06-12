@@ -1129,6 +1129,18 @@ input[type="file"] {
     color: var(--text);
     background: var(--surface-hover);
 }
+/* Phones panel in the contact sidebar — same blue family as the search
+   bar so the section is findable at a glance */
+.phone-section {
+    background: var(--search-bg);
+    border: 1px solid var(--search-border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+}
+.phone-section .field-label {
+    color: var(--accent);
+}
 /* Clickable phone number (tel: link) in the contact sidebar */
 .phone-link {
     flex: 1;
