@@ -37,8 +37,15 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
       if (themeRef.current && !themeRef.current.contains(e.target)) setThemeOpen(false);
       if (clientDropRef.current && !clientDropRef.current.contains(e.target)) setClientDropOpen(false);
     }
+    function onKey(e) {
+      if (e.key === 'Escape') { setThemeOpen(false); setClientDropOpen(false); }
+    }
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   async function handleClientSwitch(id) {
@@ -114,7 +121,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                 : 'Export All'}
             </button>
             <button onClick={onDashboard}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', ...(dashboardActive ? { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' } : {}) }}>
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', ...(dashboardActive ? { background: 'color-mix(in srgb, var(--accent) 15%, transparent)', borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', color: 'var(--accent)' } : {}) }}>
               <LayoutDashboard size={14} /> Dashboard
             </button>
           </div>

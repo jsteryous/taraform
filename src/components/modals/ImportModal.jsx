@@ -3,6 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact, formatPhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
+import { FileText } from 'lucide-react';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
@@ -314,7 +315,7 @@ export default function ImportModal({ open, onClose }) {
       {/* Step 1: Upload */}
       {step === 'upload' && (
         <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
+          <div style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}><FileText size={48} strokeWidth={1.5} /></div>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
             Upload a CSV file. Column headers will be auto-detected where possible.
           </p>

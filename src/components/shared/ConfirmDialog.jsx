@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export function useConfirm() {
   const [state, setState] = useState(null); // { message, resolve, danger }
@@ -11,6 +11,16 @@ export function useConfirm() {
     state?.resolve(result);
     setState(null);
   }
+
+  // Esc cancels the dialog
+  useEffect(() => {
+    if (!state) return;
+    function onKey(e) {
+      if (e.key === 'Escape') handleChoice(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [state]); // eslint-disable-line
 
   const dialog = state ? (
     <div className="confirm-overlay" onClick={() => handleChoice(false)}>

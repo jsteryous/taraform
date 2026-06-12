@@ -5,6 +5,7 @@ import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
 import { useConfirm } from '../shared/ConfirmDialog';
+import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
 const ACTIVITY_OPTIONS = [
   { value: '',           label: 'Any Activity' },
@@ -122,8 +123,15 @@ export default function ContactList({ onView, onExport }) {
       if (countyRef.current && !countyRef.current.contains(e.target)) setCountyOpen(false);
       if (moreRef.current   && !moreRef.current.contains(e.target))   setMoreOpen(false);
     }
+    function onKey(e) {
+      if (e.key === 'Escape') { setStatusOpen(false); setCountyOpen(false); setMoreOpen(false); }
+    }
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   function handleStatPillFilter(status) {
@@ -198,7 +206,7 @@ export default function ContactList({ onView, onExport }) {
   if (!currentClientId) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">🏢</div>
+        <div className="empty-icon"><Building2 size={40} /></div>
         <p>Select a client above to get started</p>
       </div>
     );
@@ -214,20 +222,20 @@ export default function ContactList({ onView, onExport }) {
 
         {/* Search */}
         <div style={{ flex: 1, minWidth: '220px', position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <span style={{ position: 'absolute', left: '0.875rem', color: 'rgba(99,160,255,0.6)', fontSize: '1rem', pointerEvents: 'none', zIndex: 1 }}>⌕</span>
+          <Search size={14} style={{ position: 'absolute', left: '0.875rem', color: 'rgba(99,160,255,0.6)', pointerEvents: 'none', zIndex: 1 }} />
           <input type="text" className="search"
             placeholder="Search by name, phone, address, tax map ID…"
             value={search} onChange={e => setFilterSearch(e.target.value)}
             style={{ width: '100%', paddingLeft: '2.25rem', paddingRight: search ? '2rem' : '1rem' }}
           />
-          {search && <button onClick={() => setFilterSearch('')} style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none', color: 'rgba(99,160,255,0.7)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: 0, zIndex: 1 }}>×</button>}
+          {search && <button onClick={() => setFilterSearch('')} style={{ position: 'absolute', right: '0.75rem', background: 'none', border: 'none', color: 'rgba(99,160,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, zIndex: 1 }}><X size={14} /></button>}
         </div>
 
         {/* Status */}
         <div ref={statusRef} style={{ position: 'relative' }}>
           <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" className={filterBtnClass(selectedStatuses.size < ALL_STATUSES.length)}>
             <span>{statusLabel}</span>
-            <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
+            <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
           </button>
           {statusOpen && (
             <div className="filter-dropdown">
@@ -250,7 +258,7 @@ export default function ContactList({ onView, onExport }) {
           <div ref={countyRef} style={{ position: 'relative' }}>
             <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" className={filterBtnClass(selectedCounties.size > 0)}>
               <span>{countyLabel}</span>
-              <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
+              <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
             </button>
             {countyOpen && (
               <div className="filter-dropdown">
@@ -272,7 +280,7 @@ export default function ContactList({ onView, onExport }) {
         <div ref={moreRef} style={{ position: 'relative' }}>
           <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" className={filterBtnClass(moreActiveCount > 0)} style={{ minWidth: 'auto', gap: '0.4rem' }}>
             <span>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
-            <span style={{ fontSize: 'var(--text-xs)', opacity: 0.6 }}>▾</span>
+            <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
           </button>
           {moreOpen && (
             <div className="filter-dropdown" style={{ minWidth: '240px' }}>
@@ -302,8 +310,8 @@ export default function ContactList({ onView, onExport }) {
         </div>
 
         {hasActiveFilters && (
-          <button onClick={clearAllFilters} style={{ fontSize: '0.8rem', color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            ✕ Clear filters
+          <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--danger)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <X size={12} /> Clear filters
           </button>
         )}
 
@@ -347,7 +355,7 @@ export default function ContactList({ onView, onExport }) {
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📋</div>
+            <div className="empty-icon"><Inbox size={40} /></div>
             <p>{totalCount === 0 ? 'Add your first contact or import a CSV' : 'No contacts match your filters'}</p>
           </div>
         ) : (

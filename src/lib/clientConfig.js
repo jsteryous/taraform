@@ -72,9 +72,9 @@ export const GENERIC_CONFIG = {
 };
 
 export const PRESET_TYPES = [
-  { value: 'land',       label: '🌲 Land Acquisition' },
-  { value: 'restaurant', label: '🍽️  Restaurant / Hospitality' },
-  { value: 'generic',    label: '📋 General Marketing' },
+  { value: 'land',       label: 'Land Acquisition' },
+  { value: 'restaurant', label: 'Restaurant / Hospitality' },
+  { value: 'generic',    label: 'General Marketing' },
 ];
 
 const PRESETS = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG };
@@ -102,4 +102,16 @@ export function resolveConfig(client) {
 export function getStatusColor(config, statusValue) {
   const s = config.statuses.find(s => s.value === statusValue);
   return s?.color || '#6b7280';
+}
+
+// Offer status palette. Plain hex (not CSS vars) because callers build
+// alpha-tinted backgrounds via string concat (`${c}18`). Light theme needs
+// darker shades for contrast on white surfaces.
+const OFFER_STATUS_COLORS = {
+  dark:  { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' },
+  light: { Pending: '#b45309', Accepted: '#047857', Rejected: '#dc2626', Countered: '#2563eb' },
+};
+
+export function getOfferStatusColors(theme) {
+  return OFFER_STATUS_COLORS[theme === 'light' ? 'light' : 'dark'];
 }

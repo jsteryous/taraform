@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { resolveConfig } from '../lib/clientConfig';
+import { resolveConfig, getOfferStatusColors } from '../lib/clientConfig';
 import { supabase } from '../lib/supabase';
+import { ArrowLeft, Download } from 'lucide-react';
 
 const PERIODS = [
   { value: 'today',   label: 'Today' },
@@ -21,10 +22,9 @@ function downloadOffersReport(recent, period) {
       Number(o.amount) || 0,
       o.status || '',
       o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '',
-      o.notes || '',
     ]);
 
-  const headers = ['Contact', 'County', 'Tax Map IDs', 'Amount', 'Status', 'Date', 'Notes'];
+  const headers = ['Contact', 'County', 'Tax Map IDs', 'Amount', 'Status', 'Date'];
   const csv = [headers, ...rows]
     .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
     .join('\n');
@@ -39,8 +39,9 @@ function downloadOffersReport(recent, period) {
 }
 
 export default function Dashboard({ onClose, onViewContact }) {
-  const { currentClientId, currentClient } = useApp();
+  const { currentClientId, currentClient, theme } = useApp();
   const cfg = resolveConfig(currentClient);
+  const offerColors = getOfferStatusColors(theme);
   const [period, setPeriod]         = useState('week');
   const [offerStats, setOfferStats] = useState(null);
   const [offerLoading, setOfferLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function Dashboard({ onClose, onViewContact }) {
     try {
       let q = supabase
         .from('contact_offers')
-        .select('id, contact_id, amount, status, notes, created_at, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
+        .select('id, contact_id, amount, status, created_at, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
         .eq('property_crm_contacts.client_id', currentClientId)
         .order('created_at', { ascending: false });
       if (since) q = q.gte('created_at', since);
@@ -73,7 +74,6 @@ export default function Dashboard({ onClose, onViewContact }) {
         contact_id: row.contact_id,
         amount: row.amount,
         status: row.status,
-        notes: row.notes,
         created_at: row.created_at,
         contactName: `${row.property_crm_contacts?.first_name || ''} ${row.property_crm_contacts?.last_name || ''}`.trim(),
         county: row.property_crm_contacts?.county || '',
@@ -93,7 +93,6 @@ export default function Dashboard({ onClose, onViewContact }) {
         taxMapIds:   o.taxMapIds,
         amount:      o.amount,
         status:      o.status,
-        notes:       o.notes,
         createdAt:   o.created_at,
       }));
 
@@ -132,7 +131,7 @@ export default function Dashboard({ onClose, onViewContact }) {
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingTop: '1rem' }}>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}>← Back</button>
+        <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}><ArrowLeft size={14} /> Back</button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Dashboard</h2>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentClient?.name}</span>
 
@@ -159,9 +158,9 @@ export default function Dashboard({ onClose, onViewContact }) {
             {offerStats && (
               <button
                 onClick={() => downloadOffersReport(offerStats.recent || [], period)}
-                style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
-                ↓ Download Report
+                <Download size={12} /> Download Report
               </button>
             )}
           </div>
@@ -179,24 +178,23 @@ export default function Dashboard({ onClose, onViewContact }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (offerStats.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
-                  <div style={{ ...bigNum, color: '#fbbf24' }}>{offerStats.count}</div>
+                  <div style={{ ...bigNum, color: offerColors.Pending }}>{offerStats.count}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats.totalCount} total offer{offerStats.totalCount !== 1 ? 's' : ''}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
-                  <div style={{ ...bigNum, color: '#60a5fa', fontSize: '1.5rem' }}>${offerStats.totalValue.toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: offerColors.Countered, fontSize: '1.5rem' }}>${offerStats.totalValue.toLocaleString()}</div>
                 </div>
                 <div>
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Accepted Value</div>
-                  <div style={{ ...bigNum, color: '#10b981', fontSize: '1.5rem' }}>${offerStats.acceptedValue.toLocaleString()}</div>
+                  <div style={{ ...bigNum, color: offerColors.Accepted, fontSize: '1.5rem' }}>${offerStats.acceptedValue.toLocaleString()}</div>
                 </div>
               </div>
 
               {Object.keys(offerStats.byStatus).length > 0 && (
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: offerStats.totalCount > 0 ? '1.25rem' : 0 }}>
                   {Object.entries(offerStats.byStatus).map(([status, count]) => {
-                    const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
-                    const c = colors[status] || '#6b7280';
+                    const c = offerColors[status] || '#6b7280';
                     return (
                       <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '20px', background: `${c}18`, border: `1px solid ${c}33` }}>
                         <span style={{ fontSize: '0.8rem', color: c, fontWeight: 600 }}>{count}</span>
@@ -215,7 +213,6 @@ export default function Dashboard({ onClose, onViewContact }) {
                   </div>
                   <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
                   {offerStats.recent.map((o, i) => {
-                    const colors = { Pending: '#fbbf24', Accepted: '#10b981', Rejected: '#f87171', Countered: '#60a5fa' };
                     return (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                         <span
@@ -224,7 +221,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                         >{o.contactName}</span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.county || '—'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>${Number(o.amount).toLocaleString()}</span>
-                        <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: colors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
+                        <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: offerColors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
                         <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</span>
                       </div>
                     );

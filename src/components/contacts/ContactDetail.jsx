@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
-import { getStatusClass, formatPhone, parseCustomFieldDefs } from '../../lib/utils';
+import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { ArrowLeft, Copy, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -63,6 +63,21 @@ export default function ContactDetail({ onClose }) {
   const { saveStatus, update, updateMultiple, updateCustomField } =
     useDraftSave(draft, setDraft, setCurrentContact, saveContact, showToast);
 
+  // Esc closes the overlay — but inner layers win: a focused field just
+  // blurs (which also triggers blur-to-save), and an open confirm dialog
+  // or dropdown swallows the press so a second Esc is needed to close.
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== 'Escape') return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) { el.blur(); return; }
+      if (document.querySelector('.confirm-overlay, .custom-select-dropdown, .filter-dropdown')) return;
+      onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (!currentContact || !draft) return null;
 
   async function handleDelete() {
@@ -96,7 +111,7 @@ export default function ContactDetail({ onClose }) {
       {ConfirmUI}
       {/* Header */}
       <div className="detail-page-header">
-        <button className="back-button" onClick={onClose}><ArrowLeft size={15} /> Back</button>
+        <button className="back-button" onClick={onClose}><ArrowLeft size={15} /> Back <kbd className="kbd-hint">esc</kbd></button>
         <span className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</span>
         {saveStatus === 'saving' && <span className="save-indicator">Saving…</span>}
         {saveStatus === 'saved' && <span className="save-indicator saved"><Check size={12} /> Saved</span>}
@@ -129,7 +144,7 @@ export default function ContactDetail({ onClose }) {
           {/* SMS status pill */}
           {smsStatus !== 'eligible' && (
             <div style={{ marginBottom: '0.75rem' }}>
-              <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600, background: `${smsColor}22`, color: smsColor, border: `1px solid ${smsColor}44`, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600, background: `color-mix(in srgb, ${smsColor} 13%, transparent)`, color: smsColor, border: `1px solid color-mix(in srgb, ${smsColor} 27%, transparent)`, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 SMS · {smsStatus.replace(/_/g, ' ')}
               </span>
             </div>
@@ -171,6 +186,8 @@ export default function ContactDetail({ onClose }) {
                   }}
                   onBlur={e => updatePhone(i, formatPhone(e.target.value))}
                 />
+                {p && <a className="copy-btn" href={`tel:+1${normalizePhone(p)}`} title="Call"><Phone size={13} /></a>}
+                {p && <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>}
                 {p && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>}
                 <button className="remove-field-btn" onClick={() => removePhone(i)}>×</button>
               </div>

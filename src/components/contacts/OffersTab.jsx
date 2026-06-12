@@ -3,15 +3,9 @@ import Select from '../shared/Select';
 import { useApp } from '../../context/AppContext';
 import { addOffer, updateOffer, deleteOffer } from '../../lib/api';
 import { useConfirm } from '../shared/ConfirmDialog';
+import { getOfferStatusColors } from '../../lib/clientConfig';
 
 const OFFER_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Countered'];
-
-const STATUS_COLORS = {
-  Pending:   '#fbbf24',
-  Accepted:  '#10b981',
-  Rejected:  '#f87171',
-  Countered: '#60a5fa',
-};
 
 // Latest offer drives contact status. Pre-offer (New Lead, Contacted) and
 // terminal (Closed, Dead/Pass) states stay manual via the header dropdown.
@@ -23,7 +17,8 @@ const OFFER_TO_CONTACT_STATUS = {
 };
 
 export default function OffersTab({ contact, onChangeMultiple, onOffersChange }) {
-  const { loadFullContact, showToast } = useApp();
+  const { loadFullContact, showToast, theme } = useApp();
+  const statusColors = getOfferStatusColors(theme);
   const [adding, setAdding] = useState(false);
   const [amount, setAmount] = useState('');
   const [confirmRemove, ConfirmUI] = useConfirm();
@@ -126,7 +121,7 @@ export default function OffersTab({ contact, onChangeMultiple, onOffersChange })
       {offers.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No offers yet.</div>
       ) : offers.map(offer => {
-        const color = STATUS_COLORS[offer.status] || 'var(--text-muted)';
+        const color = statusColors[offer.status] || 'var(--text-muted)';
         return (
           <div key={offer.id} className="offer-item">
             <div className="offer-header" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>

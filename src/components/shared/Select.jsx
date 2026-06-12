@@ -17,8 +17,15 @@ export default function Select({ value, onChange, options, emptyLabel = '—', s
     function handler(e) {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     }
+    function onKey(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   return (

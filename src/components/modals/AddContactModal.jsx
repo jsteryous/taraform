@@ -3,6 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { normalizeCounty, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
+import { AlertTriangle } from 'lucide-react';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
 
@@ -99,7 +100,7 @@ export default function AddContactModal({ open, onClose }) {
       {/* Duplicate warning */}
       {dupeWarning && (
         <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem' }}>
-          <div style={{ fontWeight: 600, color: '#fbbf24', marginBottom: '0.5rem' }}>⚠ Possible duplicate detected</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: 'var(--warning)', marginBottom: '0.5rem' }}><AlertTriangle size={14} /> Possible duplicate detected</div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>This contact may already exist:</div>
           {dupeWarning.dupes.map(d => (
             <div key={d.id} style={{ fontSize: '0.875rem', padding: '0.4rem 0.6rem', background: 'var(--surface)', borderRadius: '5px', marginBottom: '0.35rem' }}>

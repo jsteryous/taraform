@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RefreshCw, CircleDollarSign, StickyNote } from 'lucide-react';
 
 export default function NotesTab({ contact, onChange }) {
   const [newNote, setNewNote] = useState('');
@@ -46,7 +47,9 @@ export default function NotesTab({ contact, onChange }) {
           <div key={entry.id} className="note-item">
             <div className="note-header">
               <span className={`note-type-badge ${entry.type === 'status_change' ? 'badge-status' : entry.type === 'offer' ? 'badge-offer' : 'badge-note'}`}>
-                {entry.type === 'status_change' ? '⟳ Status' : entry.type === 'offer' ? '$ Offer' : '📝 Note'}
+                {entry.type === 'status_change' ? <><RefreshCw size={10} /> Status</>
+                  : entry.type === 'offer' ? <><CircleDollarSign size={10} /> Offer</>
+                  : <><StickyNote size={10} /> Note</>}
               </span>
               <span className="note-timestamp">{new Date(entry.timestamp).toLocaleString()}</span>
             </div>
