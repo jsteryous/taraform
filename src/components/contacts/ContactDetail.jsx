@@ -7,7 +7,8 @@ import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare, Pencil } from 'lucide-react';
+import CallSetupModal from '../modals/CallSetupModal';
+import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare, Pencil, HelpCircle } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -23,7 +24,18 @@ export default function ContactDetail({ onClose }) {
   const [tab, setTab] = useState('notes');
   const [draft, setDraft] = useState(null);
   const [editingPhone, setEditingPhone] = useState(null); // index of phone row in edit mode
+  const [showCallHelp, setShowCallHelp] = useState(false);
   const [confirmDelete, ConfirmUI] = useConfirm();
+
+  // Browsers can't tell us whether a tel: click reached a handler, so after
+  // the very first desktop call attempt we offer setup help once. The help
+  // icon next to the Phones label reopens it anytime.
+  function handleTelClick() {
+    if (/iPhone|iPad|Android/i.test(navigator.userAgent)) return; // phones just work
+    if (localStorage.getItem('taraform_call_help_seen')) return;
+    localStorage.setItem('taraform_call_help_seen', '1');
+    setTimeout(() => setShowCallHelp(true), 1200); // let the OS handoff happen first
+  }
   const [sidebarW, setSidebarW] = useState(() => {
     const v = parseInt(localStorage.getItem('taraform_sidebar_w'), 10);
     return Number.isFinite(v) ? Math.min(700, Math.max(220, v)) : 300;
@@ -73,7 +85,7 @@ export default function ContactDetail({ onClose }) {
       if (e.key !== 'Escape') return;
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) { el.blur(); return; }
-      if (document.querySelector('.confirm-overlay, .custom-select-dropdown, .filter-dropdown')) return;
+      if (document.querySelector('.confirm-overlay, .custom-select-dropdown, .filter-dropdown, .modal.active')) return;
       onClose();
     }
     window.addEventListener('keydown', onKey);
@@ -118,6 +130,7 @@ export default function ContactDetail({ onClose }) {
   return (
     <div id="contactDetailPage" className="active">
       {ConfirmUI}
+      <CallSetupModal open={showCallHelp} onClose={() => setShowCallHelp(false)} />
       {/* Header */}
       <div className="detail-page-header">
         <button className="back-button" onClick={onClose}><ArrowLeft size={15} /> Back <kbd className="kbd-hint">esc</kbd></button>
@@ -183,7 +196,10 @@ export default function ContactDetail({ onClose }) {
 
           {/* Phones */}
           <div style={{ marginBottom: '1rem' }}>
-            <div className="field-label">Phones</div>
+            <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              Phones
+              <button className="copy-btn" onClick={() => setShowCallHelp(true)} title="Set up click-to-call"><HelpCircle size={12} /></button>
+            </div>
             {(draft.phones?.length ? draft.phones : ['']).map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                 {(editingPhone === i || !p) ? (
@@ -204,7 +220,7 @@ export default function ContactDetail({ onClose }) {
                   </>
                 ) : (
                   <>
-                    <a className="phone-link" href={`tel:+1${normalizePhone(p)}`} title="Call">
+                    <a className="phone-link" href={`tel:+1${normalizePhone(p)}`} title="Call" onClick={handleTelClick}>
                       <Phone size={13} /> {p}
                     </a>
                     <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>
