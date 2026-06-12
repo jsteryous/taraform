@@ -275,6 +275,7 @@ export default function ContactDetail({ onClose }) {
                     onBlur={e => updateMultiField('taxMapIds', i, e.target.value)}
                     placeholder="—"
                   />
+                  {t && <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(t); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>}
                   <button className="remove-field-btn" onClick={() => removeFromMultiField('taxMapIds', i)}>×</button>
                 </div>
               ))}
