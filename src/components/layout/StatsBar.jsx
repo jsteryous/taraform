@@ -45,7 +45,7 @@ export default function StatsBar({ onFilterStatus }) {
   }, [currentClientId]);
 
   return (
-    <div style={{ padding: '0.75rem 2rem 0', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="stats-row">
       {cfg.statsPills.map(({ label, status, color }) => {
         const count = status === null
           ? (totalCount ?? '…')

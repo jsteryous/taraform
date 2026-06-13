@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
-import { normalizeCounty, mapDbContact, formatPhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
+import { normalizeCounty, mapDbContact, formatPhone, normalizePhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
 import { FileText } from 'lucide-react';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
@@ -221,7 +221,10 @@ export default function ImportModal({ open, onClose }) {
       if (!existing) {
         toAdd.push(c);
       } else {
-        const newPhones = c.phones.filter(p => !(existing.phones || []).includes(p));
+        // Compare normalized digits, not formatted strings — "(864) 555-1234"
+        // and "8645551234" are the same phone
+        const existingNorm = new Set((existing.phones || []).map(normalizePhone));
+        const newPhones = c.phones.filter(p => p && !existingNorm.has(normalizePhone(p)));
         if (newPhones.length > 0) {
           toUpdate.push({ existing, newPhones });
         } else {

@@ -31,7 +31,7 @@ Scoped guidance lives next to the code:
 
 ### Tier 2 — Correctness bugs / latent traps
 - [ ] **Unify contact ID generation.** Single-add uses `Date.now()` bigint keys; `ImportModal.jsx:244-261` inserts with no `id` (DB default). Pick one owner — prefer DB-side identity/UUID — and delete the `Date.now()` path. (Same-ms collisions also possible on bulk ops.)
-- [ ] **Normalize phones before dedup/merge.** Import compares `formatPhone`'d values (`ImportModal.jsx:223`) but `normalizePhone` (`utils.js:8`) isn't used in the match path → duplicate/missed merges on inconsistent formats.
+- [x] **Normalize phones before dedup/merge** — done 2026-06-12: `handlePreview`'s phone-merge path compares `normalizePhone`'d digits instead of formatted strings.
 - [ ] **De-duplicate the filter/export logic.** Note-activity filter is reimplemented in `ContactList` `filtered` memo, `App.jsx:45-57`, and `AppContext`. Collapse to one shared function (this is the documented root of past "Export All" breakage).
 
 ### Tier 3 — Safety nets (highest long-term leverage)

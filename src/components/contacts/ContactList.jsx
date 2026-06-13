@@ -218,7 +218,7 @@ export default function ContactList({ onView, onExport }) {
       <StatsBar onFilterStatus={handleStatPillFilter} />
 
       {/* Filter bar */}
-      <div style={{ padding: '1rem 2rem 0.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="filter-row">
 
         {/* Search */}
         <div style={{ flex: 1, minWidth: '220px', position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -322,7 +322,7 @@ export default function ContactList({ onView, onExport }) {
 
       {/* Bulk actions */}
       {selected.size > 0 && (
-        <div style={{ padding: '0.5rem 2rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.2)' }}>
+        <div className="bulk-bar">
           <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 500 }}>{selected.size} selected</span>
           <button className="btn-small" onClick={() => { onExport(filtered.filter(c => selected.has(c.id))); }}>Export Selected</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
@@ -331,7 +331,7 @@ export default function ContactList({ onView, onExport }) {
       )}
 
       {/* Select all */}
-      <div style={{ padding: '0.5rem 2rem', borderBottom: '1px solid var(--border)' }}>
+      <div className="select-all-row">
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
           <input ref={selectAllRef} type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
           Select all {filtered.length}
@@ -339,7 +339,7 @@ export default function ContactList({ onView, onExport }) {
       </div>
 
       {/* List */}
-      <div style={{ padding: '0 2rem' }}>
+      <div className="list-wrap">
         {loadingContacts && contacts.length === 0 ? (
           <div className="contact-skeleton-list">
             {[...Array(10)].map((_, i) => (

@@ -330,6 +330,37 @@ textarea {
     resize: vertical;
 }
 
+/* Padded list-page rows (classes so the mobile media query can shrink them) */
+.stats-row {
+    padding: 0.75rem 2rem 0;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.filter-row {
+    padding: 1rem 2rem 0.5rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.bulk-bar {
+    padding: 0.5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(59,130,246,0.08);
+    border-bottom: 1px solid rgba(59,130,246,0.2);
+}
+.select-all-row {
+    padding: 0.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+}
+.list-wrap {
+    padding: 0 2rem;
+}
+
 .contact-item {
     padding: 1rem 1.25rem 1rem 0;
     border-bottom: 1px solid var(--border);
@@ -667,18 +698,46 @@ input[type="file"] {
 }
 
 @media (max-width: 768px) {
+    .container { padding: 1rem 0.875rem; }
+    .stats-row, .filter-row, .bulk-bar, .select-all-row, .list-wrap {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+    }
+
+    /* Header: drop the email, tighten the action buttons */
+    .user-info > span { display: none; }
+    .header-actions { gap: 0.5rem; }
+    .header-actions button { padding: 0.5rem 0.7rem; font-size: var(--text-sm); }
+
+    /* Two-line contact rows: name + status on top, phone underneath.
+       The desktop 6-column grid has more children than fit a narrow
+       screen, so remap them into named areas (bar div and status div
+       have no class — target by position). */
     .contact-item {
-        grid-template-columns: 4px 36px 1fr 120px;
-        gap: 0 0.75rem;
+        grid-template-columns: 4px 32px 1fr auto;
+        grid-template-areas:
+            "bar check name   status"
+            "bar check phones status";
+        gap: 0.15rem 0.6rem;
+        padding: 0.75rem 0.25rem 0.75rem 0;
     }
+    .contact-item > div:first-child { grid-area: bar; }
+    .contact-checkbox { grid-area: check; align-self: center; }
+    .contact-name { grid-area: name; }
+    .contact-phones { grid-area: phones; font-size: var(--text-sm); }
+    .contact-county { display: none; }
+    .contact-item > div:last-child { grid-area: status; align-self: center; }
 
-    .contact-county {
-        display: none;
-    }
+    /* iOS Safari zooms the page when a focused input is under 16px */
+    .inline-input,
+    input[type="text"].search,
+    .note-add-form textarea { font-size: 16px; }
 
-    .contact-phones {
-        font-size: var(--text-sm);
-    }
+    /* No Esc key on a phone */
+    .kbd-hint { display: none; }
+
+    .detail-page-header { padding: 0.875rem; }
+    .detail-page-content { padding: 1rem 0.875rem; gap: 1rem; }
 
     .modal-content {
         margin: 0.5rem;
@@ -1060,6 +1119,13 @@ input[type="file"] {
         top: 0;
     }
     .sidebar-resize-handle { display: none; }
+    /* Stacked layout: side border becomes a top divider */
+    .offers-column {
+        border-left: none;
+        padding-left: 0;
+        border-top: 1px solid var(--border);
+        padding-top: 1rem;
+    }
 }
 /* ── ContactDetail field & sidebar styles ── */
 .field-label {
