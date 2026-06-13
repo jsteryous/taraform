@@ -26,7 +26,7 @@ Scoped guidance lives next to the code:
 
 ### Tier 1 — Security (do first; everything else is moot if tenant data leaks)
 - [x] **Audit & prove RLS** — done 2026-06-10 (Railway decommission). Audited `pg_policies`: `property_crm_contacts` and `contact_offers` already had membership-gated ALL policies; added the missing `clients` policies + member-management RPCs (`db/20260610_clients_rls.sql`). Proven by role simulation (authenticated-as-user-A vs user-B vs anon). `deleteContact`-by-id and ImportModal inserts are now bounded by RLS.
-- [ ] **Add a proof test:** user A cannot read/update/delete user B's rows via the anon client. Keep it as a regression guard. (One-off simulation was run 2026-06-10; an automated test is still missing.)
+- [x] **Add a proof test:** user A cannot read/update/delete user B's rows via the anon client — scaffolded 2026-06-13 (`f9b9cce`) in `src/lib/rls.proof.test.js`. Self-skips unless `RLS_TEST_*` creds are in env (see file header). **Still TODO:** seed two throwaway test users + set the env vars (locally or a protected CI job) so it actually executes — right now it's a skipped guard, not a running one.
 - [x] **Close the `getClients` gap** — done 2026-06-10: the Railway endpoint no longer exists; `getClients` is a direct `clients` select gated by RLS.
 
 ### Tier 2 — Correctness bugs / latent traps
@@ -35,7 +35,7 @@ Scoped guidance lives next to the code:
 - [ ] **De-duplicate the filter/export logic.** Note-activity filter is reimplemented in `ContactList` `filtered` memo, `App.jsx:45-57`, and `AppContext`. Collapse to one shared function (this is the documented root of past "Export All" breakage).
 
 ### Tier 3 — Safety nets (highest long-term leverage)
-- [ ] **Add a test harness.** Start with pure data-layer fns: `applyContactFilters`, `mapDbContact`/`mapContactToDb`, import dedup (`buildLookupMaps`/`findDuplicate`). Then backfill a test for each "bitten" bug documented in the subdir CLAUDE.md files.
+- [x] **Add a test harness** — done 2026-06-13 (`f9b9cce`). Vitest + `npm test`; 41 passing tests over the pure data-layer fns (`applyContactFilters`, `mapDbContact`/`mapContactToDb`, `normalizePhone`/`normalizeCounty`, `parseCSV`, import dedup). `applyContactFilters` and the dedup fns were extracted to `src/lib/contactFilters.js` + `src/lib/dedup.js` to make them importable. **Next:** backfill a regression test per "bitten" bug in the subdir CLAUDE.md files (TDZ ordering, Export-All filter drift, offers/status race).
 - [ ] **Adopt TypeScript incrementally**, starting in `src/lib/` (the snake_case↔camelCase mapping + bigint/jsonb shapes are where untyped bugs hide).
 
 ### Tier 4 — Maintainability & hygiene
