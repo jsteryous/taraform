@@ -32,7 +32,7 @@ Scoped guidance lives next to the code:
 ### Tier 2 — Correctness bugs / latent traps
 - [ ] **Unify contact ID generation.** Single-add uses `Date.now()` bigint keys; `ImportModal.jsx:244-261` inserts with no `id` (DB default). Pick one owner — prefer DB-side identity/UUID — and delete the `Date.now()` path. (Same-ms collisions also possible on bulk ops.)
 - [x] **Normalize phones before dedup/merge** — done 2026-06-12: `handlePreview`'s phone-merge path compares `normalizePhone`'d digits instead of formatted strings.
-- [ ] **De-duplicate the filter/export logic.** Note-activity filter is reimplemented in `ContactList` `filtered` memo, `App.jsx:45-57`, and `AppContext`. Collapse to one shared function (this is the documented root of past "Export All" breakage).
+- [x] **De-duplicate the filter/export logic** — done 2026-06-13 (`3ace9c0`). Extracted `filterByNoteActivity` into `contactFilters.js` (next to `applyContactFilters`); `ContactList.filtered` and `App.handleExport` now both call it. SMS-activity filtering was already centralized server-side in `applyContactFilters`. +7 regression tests.
 
 ### Tier 3 — Safety nets (highest long-term leverage)
 - [x] **Add a test harness** — done 2026-06-13 (`f9b9cce`). Vitest + `npm test`; 41 passing tests over the pure data-layer fns (`applyContactFilters`, `mapDbContact`/`mapContactToDb`, `normalizePhone`/`normalizeCounty`, `parseCSV`, import dedup). `applyContactFilters` and the dedup fns were extracted to `src/lib/contactFilters.js` + `src/lib/dedup.js` to make them importable. **Next:** backfill a regression test per "bitten" bug in the subdir CLAUDE.md files (TDZ ordering, Export-All filter drift, offers/status race).
