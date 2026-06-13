@@ -38,10 +38,11 @@ export const addClientUser = async (clientId, email) =>
 export const removeClientUser = async (clientId, userId) =>
   unwrap(await supabase.rpc('remove_client_member', { p_client_id: clientId, p_user_id: userId }));
 
-// Offers — contact_offers.id is bigint with no DB default, hence Date.now()
+// Offers — contact_offers.id is a DB-owned identity sequence (db/20260613_id_defaults.sql);
+// omit id on insert and read the generated one back from .select().
 export const addOffer = async (contactId, { amount, status, notes, clientId }) =>
   unwrap(await supabase.from('contact_offers')
-    .insert({ id: Date.now(), contact_id: contactId, client_id: clientId, amount, status, notes })
+    .insert({ contact_id: contactId, client_id: clientId, amount, status, notes })
     .select().single());
 
 export const updateOffer = async (contactId, offerId, { amount, status, notes }) =>

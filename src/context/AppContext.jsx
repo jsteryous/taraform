@@ -201,6 +201,22 @@ export function AppProvider({ children }) {
   const saveContact = useCallback(async (contact) => {
     if (!user || !currentClientId) return;
     const record = mapContactToDb(contact, user.id, currentClientId);
+
+    // New contact (no id): the DB owns the id (property_crm_contacts_id_seq), so
+    // insert without one and read the generated row back — local state then keys
+    // on the real id instead of a client-minted Date.now() that could collide.
+    if (contact.id == null) {
+      delete record.id;
+      const { data, error } = await supabase.from('property_crm_contacts')
+        .insert({ ...record, updated_at: new Date().toISOString() })
+        .select().single();
+      if (error) throw error;
+      const saved = mapDbContact(data);
+      _setContacts(prev => [saved, ...prev]);
+      return saved;
+    }
+
+    // Existing contact: upsert on the known id.
     const { error } = await supabase.from('property_crm_contacts')
       .upsert({ ...record, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (error) throw error;

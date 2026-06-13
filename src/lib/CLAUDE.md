@@ -2,7 +2,7 @@
 
 > All data access is direct-to-Supabase (anon key + RLS) since the 2026-06-10 Railway decommission. `api.js` is a thin wrapper over supabase-js; clients/members go through the RPCs in `db/20260610_clients_rls.sql`.
 
-**`property_crm_contacts.id` is bigint.** New contacts use `Date.now()` as a client-generated numeric ID. Never pass a string (e.g. UUID) — bigint column will reject it.
+**`property_crm_contacts.id` and `contact_offers.id` are DB-owned bigint sequences** (`db/20260613_id_defaults.sql`). Insert new rows **without** an `id` and read the generated one back via `.select()` — `saveContact` does this for contacts, `addOffer` for offers. Do NOT client-mint ids (the old `Date.now()` path collided across members/devices). Never pass a string (e.g. UUID) — bigint column will reject it.
 
 **Array-ish columns on `property_crm_contacts` are `jsonb`, not `text[]`.** `phones`, `tax_map_ids`, `property_addresses`, `activity_log`, `custom_fields` — all jsonb. PostgREST containment uses JSON array syntax `cs.["value"]`; the text-array form `cs.{value}` returns `22P02 invalid input syntax for type json`. Likely backed by GIN indexes for fast containment lookups.
 

@@ -46,7 +46,8 @@ export default function AddContactModal({ open, onClose }) {
       return;
     }
     const contact = {
-      id: Date.now(),
+      // No id — the DB assigns it via property_crm_contacts_id_seq. saveContact
+      // inserts new (id-less) contacts and reads the generated id back.
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phones: form.phones.map(p => p.trim()).filter(Boolean),
