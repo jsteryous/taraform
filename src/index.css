@@ -1084,6 +1084,27 @@ input[type="file"] {
     margin-top: 0.75rem;
     justify-content: flex-end;
 }
+/* One-click call-outcome notes above the textarea */
+.quick-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+.quick-note-chip {
+    padding: 0.3rem 0.7rem;
+    font-size: var(--text-xs);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+}
+.quick-note-chip:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
 /* Drag handle — child of .detail-page-content, floats over the grid gap
    right of the sidebar (the sidebar itself clips overflow, so the handle
    cannot live inside it) */

@@ -1,20 +1,19 @@
 import { useState } from 'react';
 import { RefreshCw, CircleDollarSign, StickyNote } from 'lucide-react';
 
-export default function NotesTab({ contact, onChange }) {
+export default function NotesTab({ contact, onChange, quickNotes = [] }) {
   const [newNote, setNewNote] = useState('');
+
+  // Append a note entry to the activity log (shared by the textarea + quick-note chips).
+  function addNote(text) {
+    const now = new Date().toISOString();
+    const entry = { id: crypto.randomUUID(), text, timestamp: now, createdAt: now, type: 'note' };
+    onChange('activityLog', [entry, ...(contact.activityLog || [])]);
+  }
 
   function saveNote() {
     if (!newNote.trim()) return;
-    const entry = {
-      id: crypto.randomUUID(),
-      text: newNote.trim(),
-      timestamp: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      type: 'note',
-    };
-    const log = [entry, ...(contact.activityLog || [])];
-    onChange('activityLog', log);
+    addNote(newNote.trim());
     setNewNote('');
   }
 
@@ -23,6 +22,15 @@ export default function NotesTab({ contact, onChange }) {
   return (
     <div id="detailTabNotes">
       <div className="note-add-form">
+        {quickNotes.length > 0 && (
+          <div className="quick-notes">
+            {quickNotes.map(q => (
+              <button key={q} type="button" className="quick-note-chip" onClick={() => addNote(q)}>
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
           id="newNoteText"
           value={newNote}

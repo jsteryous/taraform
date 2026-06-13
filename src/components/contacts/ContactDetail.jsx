@@ -416,7 +416,7 @@ export default function ContactDetail({ onClose }) {
             </button>
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
-            {tab === 'notes' && <NotesTab contact={draft} onChange={update} />}
+            {tab === 'notes' && <NotesTab contact={draft} onChange={update} quickNotes={cfg.quickNotes} />}
           </div>
         </div>
 

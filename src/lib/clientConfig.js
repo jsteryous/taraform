@@ -7,6 +7,8 @@ export const LAND_CONFIG = {
   terminology: { contact: 'Contact', contacts: 'Contacts' },
   leadSourceOptions: ['Launch Control', 'Snipe'],
   contactMethodOptions: ['Launch Control', 'Manual Text', 'Call'],
+  // One-click call-outcome notes (Notes tab). Each appends a note verbatim.
+  quickNotes: ['Left voicemail', 'Called — no answer', 'NFS', 'Wrong number', 'Not interested', 'Call back later'],
   statuses: [
     { value: 'New Lead',           color: '#6b7280' },
     { value: 'Contacted',          color: '#3b82f6' },
@@ -32,6 +34,7 @@ export const RESTAURANT_CONFIG = {
   terminology: { contact: 'Customer', contacts: 'Customers' },
   leadSourceOptions: [],
   contactMethodOptions: [],
+  quickNotes: [],
   statuses: [
     { value: 'New',      color: '#6b7280' },
     { value: 'Regular',  color: '#3b82f6' },
@@ -54,6 +57,7 @@ export const GENERIC_CONFIG = {
   terminology: { contact: 'Contact', contacts: 'Contacts' },
   leadSourceOptions: [],
   contactMethodOptions: [],
+  quickNotes: ['Left voicemail', 'Called — no answer', 'Not interested', 'Call back later'],
   statuses: [
     { value: 'New Lead',   color: '#6b7280' },
     { value: 'Contacted',  color: '#3b82f6' },
@@ -95,6 +99,7 @@ export function resolveConfig(client) {
     terminology: { ...base.terminology, ...(client.config.terminology || {}) },
     leadSourceOptions:    client.config.leadSourceOptions    ?? base.leadSourceOptions,
     contactMethodOptions: client.config.contactMethodOptions ?? base.contactMethodOptions,
+    quickNotes:           client.config.quickNotes           ?? base.quickNotes,
   };
 }
 
