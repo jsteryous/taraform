@@ -624,6 +624,21 @@ label {
 .badge-offer  { background: rgba(16,185,129,0.12); color: var(--success); }
 .note-timestamp { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); }
 
+.note-header-right { display: flex; align-items: center; gap: 0.5rem; }
+.note-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.15rem;
+    border-radius: 4px;
+    opacity: 0.55;
+    transition: color 0.12s, opacity 0.12s;
+}
+.note-delete-btn:hover { color: var(--danger); opacity: 1; }
+
 .offer-header, .note-header {
     display: flex;
     justify-content: space-between;
