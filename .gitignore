@@ -2,3 +2,13 @@ node_modules
 dist
 .env.local
 .env
+
+# Local Claude Code state + scratch worktrees — never commit to this PUBLIC repo
+.claude/
+
+# Code-intelligence tool indexes (local only, regenerated on demand)
+.codegraph/
+.understand-anything/
+
+# Throwaway scratch scripts (e.g. .tmp-mint-session.mjs)
+.tmp-*
