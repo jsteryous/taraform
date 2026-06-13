@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { AppProvider, useApp, fetchAllFilteredContacts } from './context/AppContext';
+import { filterByNoteActivity } from './lib/contactFilters';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
@@ -32,7 +33,7 @@ function CRM() {
       } else {
         if (!currentClientId) { showToast('Select a client first.', 'warning'); return; }
         const rows = await fetchAllFilteredContacts(currentClientId, filters);
-        let mapped = rows.map(d => ({
+        const mapped = rows.map(d => ({
           firstName: d.first_name, lastName: d.last_name,
           phones: d.phones || [], email: d.email || '',
           county: d.county, ownerAddress: d.owner_address,
@@ -40,22 +41,9 @@ function CRM() {
           taxMapIds: d.tax_map_ids || [], status: d.status, smsStatus: d.sms_status,
           activityLog: d.activity_log || [],
         }));
-        // Note activity filter is client-side (activity_log jsonb isn't server-filterable
-        // without an RPC). Mirror ContactList's filtered useMemo so export matches view.
-        if (filters?.activity?.startsWith('note_')) {
-          const period = filters.activity.split('_')[1];
-          const cutoff = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-          mapped = mapped.filter(c => {
-            const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
-            const lastNote = notes.map(e => new Date(e.timestamp || e.createdAt)).filter(d => !isNaN(d)).sort((a,b) => b-a)[0];
-            if (period === 'never') return !lastNote;
-            if (!lastNote) return false;
-            if (period === '7')  return lastNote >= cutoff(7);
-            if (period === '30') return lastNote >= cutoff(30);
-            return true;
-          });
-        }
-        source = mapped;
+        // Note activity is client-side (activity_log jsonb isn't server-filterable without
+        // an RPC). Shared with ContactList.filtered so export always matches the list view.
+        source = filterByNoteActivity(mapped, filters?.activity);
         filteredAll = true;
       }
       if (!source.length) { showToast('No contacts to export', 'warning'); return; }

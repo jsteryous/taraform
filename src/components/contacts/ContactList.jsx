@@ -4,6 +4,7 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
+import { filterByNoteActivity } from '../../lib/contactFilters';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
@@ -26,8 +27,6 @@ const EMAIL_OPTIONS = [
   { value: 'has',     label: 'Has email' },
   { value: 'missing', label: 'No email' },
 ];
-
-function daysAgo(n) { return new Date(Date.now() - n * 24 * 60 * 60 * 1000); }
 
 export default function ContactList({ onView, onExport }) {
   const {
@@ -76,19 +75,8 @@ export default function ContactList({ onView, onExport }) {
 
   // Note activity filter is client-side (activityLog JSONB not fetched in list query).
   // SMS activity filters are handled server-side via last_sms_at in buildQuery.
-  const filtered = useMemo(() => {
-    if (!activityFilter) return contacts;
-    const [type, period] = activityFilter.split('_');
-    if (type !== 'note') return contacts;
-    return contacts.filter(c => {
-      const notes = (c.activityLog || []).filter(e => e.type === 'note' || (!e.type && e.text));
-      const lastNote = notes.map(e => new Date(e.timestamp || e.createdAt)).filter(d => !isNaN(d)).sort((a,b) => b-a)[0];
-      if (period === 'never' && lastNote) return false;
-      if (period === '7'  && (!lastNote || lastNote < daysAgo(7)))  return false;
-      if (period === '30' && (!lastNote || lastNote < daysAgo(30))) return false;
-      return true;
-    });
-  }, [contacts, activityFilter]);
+  // Shared with App.handleExport so export always matches the list view.
+  const filtered = useMemo(() => filterByNoteActivity(contacts, activityFilter), [contacts, activityFilter]);
 
   // Reload when filters change
   useEffect(() => {

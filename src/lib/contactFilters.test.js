@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters } from './contactFilters';
+import { applyContactFilters, filterByNoteActivity } from './contactFilters';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
 // exactly which query operators applyContactFilters emits without a live DB.
@@ -95,5 +95,68 @@ describe('applyContactFilters', () => {
     // grammar verbatim — none of its metacharacters survive to break out of or()/cs.[].
     expect(expr).toContain('first_name.ilike.%abcde%');
     expect(expr).toContain('tax_map_ids.cs.["abcde"]');
+  });
+});
+
+describe('filterByNoteActivity', () => {
+  const daysAgoISO = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+  const withNote = (id, days) => ({
+    id,
+    activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }],
+  });
+  const noNotes = (id) => ({ id, activityLog: [] });
+
+  it('returns all contacts unchanged when there is no activity filter', () => {
+    const contacts = [withNote(1, 1), noNotes(2)];
+    expect(filterByNoteActivity(contacts, '')).toBe(contacts);
+    expect(filterByNoteActivity(contacts, undefined)).toBe(contacts);
+  });
+
+  it('passes SMS activity filters through untouched (handled server-side)', () => {
+    const contacts = [withNote(1, 1), noNotes(2)];
+    expect(filterByNoteActivity(contacts, 'sms_7')).toBe(contacts);
+    expect(filterByNoteActivity(contacts, 'sms_never')).toBe(contacts);
+  });
+
+  it('note_7 keeps only contacts with a note in the last 7 days', () => {
+    const ids = filterByNoteActivity(
+      [withNote(1, 2), withNote(2, 10), noNotes(3)],
+      'note_7',
+    ).map((c) => c.id);
+    expect(ids).toEqual([1]);
+  });
+
+  it('note_30 keeps notes within 30 days but excludes older', () => {
+    const ids = filterByNoteActivity(
+      [withNote(1, 5), withNote(2, 29), withNote(3, 45)],
+      'note_30',
+    ).map((c) => c.id);
+    expect(ids).toEqual([1, 2]);
+  });
+
+  it('note_never keeps only contacts with no notes at all', () => {
+    const ids = filterByNoteActivity(
+      [withNote(1, 1), noNotes(2), { id: 3 }],
+      'note_never',
+    ).map((c) => c.id);
+    expect(ids).toEqual([2, 3]);
+  });
+
+  it('uses the most recent note when a contact has several', () => {
+    const contact = {
+      id: 1,
+      activityLog: [
+        { type: 'note', text: 'old', timestamp: daysAgoISO(40) },
+        { type: 'note', text: 'recent', timestamp: daysAgoISO(3) },
+      ],
+    };
+    expect(filterByNoteActivity([contact], 'note_7')).toHaveLength(1);
+  });
+
+  it('counts untyped log entries with text as notes, ignores non-note types', () => {
+    const untyped = { id: 1, activityLog: [{ text: 'legacy note', timestamp: daysAgoISO(2) }] };
+    const smsOnly = { id: 2, activityLog: [{ type: 'sms', text: 'hi', timestamp: daysAgoISO(2) }] };
+    const ids = filterByNoteActivity([untyped, smsOnly], 'note_7').map((c) => c.id);
+    expect(ids).toEqual([1]);
   });
 });

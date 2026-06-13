@@ -47,3 +47,30 @@ export function applyContactFilters(q, filters = {}) {
 
   return q;
 }
+
+// Client-side note-activity filter. activity_log is jsonb and isn't server-filterable
+// without an RPC, so both the list view (ContactList.filtered) and the Export-All path
+// (App.handleExport) must filter by it in JS. Keep this the single source of truth —
+// past "Export All disagrees with the list" bugs came from two hand-mirrored copies.
+//
+// `activity` is the same string the SMS path uses ("note_7", "note_30", "note_never").
+// Non-note filters (no activity, or sms_*) pass through unchanged.
+export function filterByNoteActivity(contacts, activity) {
+  if (!activity) return contacts;
+  const [type, period] = activity.split('_');
+  if (type !== 'note') return contacts;
+
+  const cutoff = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+  return contacts.filter((c) => {
+    const notes = (c.activityLog || []).filter((e) => e.type === 'note' || (!e.type && e.text));
+    const lastNote = notes
+      .map((e) => new Date(e.timestamp || e.createdAt))
+      .filter((d) => !isNaN(d))
+      .sort((a, b) => b - a)[0];
+    if (period === 'never') return !lastNote;
+    if (!lastNote) return false;
+    if (period === '7') return lastNote >= cutoff(7);
+    if (period === '30') return lastNote >= cutoff(30);
+    return true;
+  });
+}
