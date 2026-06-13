@@ -103,12 +103,14 @@ export default function ContactDetail({ onClose }) {
   function updatePhone(idx, val) {
     const phones = [...(draft.phones || [])];
     phones[idx] = val;
-    update('phones', phones);
+    // Drop empty/whitespace entries so abandoned "+ Add Phone" slots never persist.
+    update('phones', phones.filter(p => p && p.trim()));
   }
+  // Local-only: just add an empty slot + focus it. The number is saved once, on blur.
+  // Do NOT save here — saving the empty slot used to race the blur-save and clobber it.
   function addPhone() {
-    const next = [...(draft.phones || []), ''];
-    update('phones', next);
-    setEditingPhone(next.length - 1);
+    setEditingPhone(draft.phones?.length || 0);
+    setDraft(d => ({ ...d, phones: [...(d.phones || []), ''] }));
   }
   async function removePhone(idx) {
     const val = (draft.phones || [])[idx];
