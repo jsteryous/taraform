@@ -8,7 +8,7 @@ import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
-import { ArrowLeft, Copy, Check, Trash2, Phone, MessageSquare, Pencil, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, MessageSquare, Pencil, HelpCircle } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -117,6 +117,14 @@ export default function ContactDetail({ onClose }) {
     if (val && !await confirmDelete(`Remove phone ${val}?`)) return;
     update('phones', (draft.phones || []).filter((_, i) => i !== idx));
     setEditingPhone(null);
+  }
+  // Mark a number "no good" (wrong/disconnected) without deleting it. We store the
+  // normalized digits so the flag survives a reformat; the number still shows, struck.
+  function toggleBadPhone(p) {
+    const digits = normalizePhone(p);
+    if (!digits) return;
+    const bad = draft.badPhones || [];
+    update('badPhones', bad.includes(digits) ? bad.filter(d => d !== digits) : [...bad, digits]);
   }
 
   function updateMultiField(field, idx, val) {
@@ -227,16 +235,25 @@ export default function ContactDetail({ onClose }) {
                     {/* preventDefault keeps the input focused so blur-save doesn't race the remove click */}
                     <button className="remove-field-btn" onMouseDown={e => e.preventDefault()} onClick={() => removePhone(i)}>×</button>
                   </>
-                ) : (
+                ) : (() => {
+                  const isBad = (draft.badPhones || []).includes(normalizePhone(p));
+                  return (
                   <>
-                    <a className="phone-link" href={`tel:+1${normalizePhone(p)}`} title="Call" onClick={handleTelClick}>
+                    <a className="phone-link" href={`tel:+1${normalizePhone(p)}`} title="Call" onClick={handleTelClick}
+                       style={isBad ? { textDecoration: 'line-through', opacity: 0.5 } : undefined}>
                       <Phone size={13} /> {p}
                     </a>
                     <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>
                     <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>
                     <button className="copy-btn" onClick={() => setEditingPhone(i)} title="Edit"><Pencil size={13} /></button>
+                    <button className="copy-btn" onClick={() => toggleBadPhone(p)}
+                            style={isBad ? { color: 'var(--danger)' } : undefined}
+                            title={isBad ? 'Unmark — number is OK' : 'Mark as no good'}>
+                      <PhoneOff size={13} />
+                    </button>
                   </>
-                )}
+                  );
+                })()}
               </div>
             ))}
             <button className="add-field-btn" onClick={addPhone}>+ Add Phone</button>

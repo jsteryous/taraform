@@ -65,6 +65,7 @@ export function mapDbContact(d) {
     firstName: d.first_name,
     lastName: d.last_name,
     phones: d.phones || [],
+    badPhones: d.bad_phones || [], // normalized digits of numbers marked "no good"
     email: d.email || '',
     ownerAddress: d.owner_address,
     propertyAddresses: d.property_addresses || [],
@@ -95,6 +96,7 @@ export function mapContactToDb(contact, userId, clientId) {
     first_name: contact.firstName,
     last_name: contact.lastName,
     phones: contact.phones,
+    bad_phones: contact.badPhones || [],
     email: contact.email || null,
     lead_source:    contact.leadSource    || null,
     contact_method: contact.contactMethod || null,

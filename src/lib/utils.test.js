@@ -106,6 +106,13 @@ describe('mapDbContact / mapContactToDb', () => {
     const back = mapContactToDb({ ...mapDbContact(dbRow), email: '' }, 'u', 'c');
     expect(back.email).toBeNull();
   });
+
+  it('round-trips bad_phones and defaults it to [] when the DB sends null', () => {
+    expect(mapDbContact({ ...dbRow, bad_phones: null }).badPhones).toEqual([]);
+    expect(mapDbContact({ ...dbRow, bad_phones: ['8645551234'] }).badPhones).toEqual(['8645551234']);
+    const back = mapContactToDb(mapDbContact({ ...dbRow, bad_phones: ['8645551234'] }), 'u', 'c');
+    expect(back.bad_phones).toEqual(['8645551234']);
+  });
 });
 
 describe('parseCSV', () => {
