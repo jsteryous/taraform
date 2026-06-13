@@ -3,6 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact, formatPhone, normalizePhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
+import { buildLookupMaps, findDuplicate } from '../../lib/dedup';
 import { FileText } from 'lucide-react';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
@@ -48,40 +49,7 @@ function autoMapCustomFields(headers, fieldDefs) {
   return cm;
 }
 
-// Build O(1) lookup maps from existing contacts — used in handlePreview
-function buildLookupMaps(contacts) {
-  const byName = new Map();
-  const byAddress = new Map();
-  const byTaxId = new Map();
-  for (const c of contacts) {
-    if (c.firstName && c.lastName) {
-      byName.set(`${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}`, c);
-    }
-    for (const a of c.propertyAddresses || []) byAddress.set(a.toLowerCase(), c);
-    // Tax map IDs are only unique within a county — key by county|id so same parcel ID
-    // in a different county isn't flagged as a duplicate.
-    const cKey = (c.county || '').toLowerCase();
-    for (const t of c.taxMapIds || []) byTaxId.set(`${cKey}|${t.toLowerCase()}`, c);
-  }
-  return { byName, byAddress, byTaxId };
-}
-
-function findDuplicate(contact, { byName, byAddress, byTaxId }) {
-  if (contact.firstName && contact.lastName) {
-    const match = byName.get(`${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`);
-    if (match) return match;
-  }
-  for (const a of contact.propertyAddresses || []) {
-    const match = byAddress.get(a.toLowerCase());
-    if (match) return match;
-  }
-  const cKey = (contact.county || '').toLowerCase();
-  for (const t of contact.taxMapIds || []) {
-    const match = byTaxId.get(`${cKey}|${t.toLowerCase()}`);
-    if (match) return match;
-  }
-  return null;
-}
+// buildLookupMaps / findDuplicate live in src/lib/dedup.js so they can be unit-tested.
 
 export default function ImportModal({ open, onClose }) {
   const { contacts, setContacts, currentClientId, currentClient, user, showToast } = useApp();
