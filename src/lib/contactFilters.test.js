@@ -87,6 +87,37 @@ describe('applyContactFilters', () => {
     expect(call.args[0]).toContain('and(first_name.ilike.%jane%,last_name.ilike.%doe%)');
   });
 
+  it('matches phones format-agnostically against the digit-only column', () => {
+    // Any of these formats should produce the same digit-only phone clause.
+    for (const term of ['8645551234', '864-555-1234', '(864) 555-1234', '864.555.1234']) {
+      const q = mockQuery();
+      applyContactFilters(q, { search: term });
+      expect(callsOf(q)[0].args[0]).toContain('phones_digits.ilike.%8645551234%');
+    }
+  });
+
+  it('treats a partial digit string (e.g. last 4) as a phone match', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { search: '1234' });
+    expect(callsOf(q)[0].args[0]).toContain('phones_digits.ilike.%1234%');
+  });
+
+  it('does not add a phone clause for short/no-digit searches', () => {
+    const name = mockQuery();
+    applyContactFilters(name, { search: 'smith' });
+    expect(callsOf(name)[0].args[0]).not.toContain('phones_digits');
+
+    const short = mockQuery();
+    applyContactFilters(short, { search: '12' });
+    expect(callsOf(short)[0].args[0]).not.toContain('phones_digits');
+  });
+
+  it('finds a phone even when typed with spaces (multi-word path)', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { search: '864 555 1234' });
+    expect(callsOf(q)[0].args[0]).toContain('phones_digits.ilike.%8645551234%');
+  });
+
   it('strips PostgREST/JSON control chars from search input (injection guard)', () => {
     const q = mockQuery();
     applyContactFilters(q, { search: 'a,b)c(d"e]' });

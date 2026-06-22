@@ -28,20 +28,27 @@ export function applyContactFilters(q, filters = {}) {
   }
 
   if (filters.search) {
-    // tax_map_ids, property_addresses, phones are jsonb (not text[]) — cs uses JSON array
+    // tax_map_ids, property_addresses are jsonb (not text[]) — cs uses JSON array
     // syntax `cs.["value"]`, not Postgres array literal `cs.{value}`. Exact-element match,
     // case-sensitive. Partial/case-insensitive would need an RPC.
     // Strip PostgREST filter-syntax + JSON control chars before interpolation.
     const raw = filters.search.trim().replace(/[(),{}\[\]"\\]/g, '');
     const s   = raw.toLowerCase();
     const words = s.split(/\s+/).filter(Boolean);
-    const arrayMatch = `tax_map_ids.cs.["${raw}"],property_addresses.cs.["${raw}"],phones.cs.["${raw}"]`;
+    const arrayMatch = `tax_map_ids.cs.["${raw}"],property_addresses.cs.["${raw}"]`;
+    // Phones are stored formatted ("(864) 555-1234"); match against the digit-only
+    // generated column (db/20260622_phone_search.sql) so any format the user types —
+    // or just the last 4 digits — finds the number. >=4 digits keeps short address/
+    // parcel numbers from flooding name searches. Digits are 0-9 only, so safe to
+    // interpolate verbatim. See src/lib/CLAUDE.md.
+    const digits = filters.search.replace(/\D/g, '');
+    const phoneMatch = digits.length >= 4 ? `,phones_digits.ilike.%${digits}%` : '';
     if (words.length === 1) {
-      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}`);
+      q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}${phoneMatch}`);
     } else if (words.length > 1) {
       const first = words[0];
       const last  = words.slice(1).join(' ');
-      q = q.or(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%),owner_address.ilike.%${s}%,${arrayMatch}`);
+      q = q.or(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%),owner_address.ilike.%${s}%,${arrayMatch}${phoneMatch}`);
     }
   }
 
