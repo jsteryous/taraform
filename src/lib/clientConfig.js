@@ -6,12 +6,13 @@ export const LAND_CONFIG = {
   type: 'land',
   terminology: { contact: 'Contact', contacts: 'Contacts' },
   leadSourceOptions: ['Launch Control', 'Snipe'],
-  contactMethodOptions: ['Launch Control', 'Manual Text', 'Call'],
+  contactMethodOptions: [],
   // One-click call-outcome notes (Notes tab). Each appends a note verbatim.
   quickNotes: ['Left voicemail', 'Called — no answer', 'NFS', 'Wrong number', 'Not interested', 'Call back later'],
   statuses: [
     { value: 'New Lead',           color: '#6b7280' },
     { value: 'Contacted',          color: '#3b82f6' },
+    { value: 'Hot Lead',           color: '#f97316' },
     { value: 'Offer Made',         color: '#f59e0b' },
     { value: 'Offer Rejected/NFS', color: '#a855f7' },
     { value: 'UC',                 color: '#10b981' },

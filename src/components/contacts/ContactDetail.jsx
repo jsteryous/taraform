@@ -202,14 +202,6 @@ export default function ContactDetail({ onClose }) {
             </div>
           )}
 
-          {/* Contact Method */}
-          {cfg.contactMethodOptions?.length > 0 && (
-            <div style={{ marginBottom: '1rem' }}>
-              <div className="field-label">Contact Method</div>
-              <Select value={draft.contactMethod || ''} onChange={v => update('contactMethod', v)} options={cfg.contactMethodOptions} />
-            </div>
-          )}
-
           {/* Phones — blue panel so it's findable at a glance when keying
               in numbers from another screen (e.g. Forewarn) */}
           <div className="phone-section">

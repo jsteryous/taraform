@@ -37,6 +37,7 @@ export function getBarClass(status) {
   const map = {
     'New Lead': 'bar-new-lead',
     'Contacted': 'bar-contacted',
+    'Hot Lead': 'bar-hot-lead',
     'Offer Made': 'bar-offer-made',
     'Offer Rejected/NFS': 'bar-offer-rejected',
     'UC': 'bar-uc',
@@ -50,6 +51,7 @@ export function getStatusClass(status) {
   const map = {
     'New Lead': 'status-new-lead',
     'Contacted': 'status-contacted',
+    'Hot Lead': 'status-hot-lead',
     'Offer Made': 'status-offer-made',
     'Offer Rejected/NFS': 'status-offer-rejected',
     'UC': 'status-uc',
