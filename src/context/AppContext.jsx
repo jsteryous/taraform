@@ -59,6 +59,25 @@ export async function fetchAllFilteredContacts(clientId, filters = {}) {
   return all;
 }
 
+// Refetches full rows (`select('*')`) for a set of ids. Used by Export Selected, whose
+// source objects come from the list view (LIST_FIELDS) and therefore lack owner_address /
+// property_addresses. Chunked to stay under URL-length limits on the `in` filter.
+export async function fetchContactsByIds(ids) {
+  if (!ids?.length) return [];
+  const CHUNK = 200;
+  const all = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('property_crm_contacts')
+      .select('*')
+      .in('id', slice);
+    if (error) throw error;
+    all.push(...(data || []));
+  }
+  return all;
+}
+
 export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '' };
 
 export function AppProvider({ children }) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { AppProvider, useApp, fetchAllFilteredContacts } from './context/AppContext';
+import { AppProvider, useApp, fetchAllFilteredContacts, fetchContactsByIds } from './context/AppContext';
 import { filterByNoteActivity } from './lib/contactFilters';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
@@ -18,6 +18,22 @@ function hasActiveFilters(f) {
   return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity);
 }
 
+// Notes live in two places: the freeform `notes` text column (written at create / CSV import,
+// but never re-shown in the UI) and `activity_log` note entries (what the Notes tab reads).
+// Merge both into one CSV cell, de-duped so the create-path — which writes the same text to
+// both — doesn't print twice. Status/offer audit entries in the log are excluded.
+function notesForExport(d) {
+  const parts = [];
+  const freeform = (d.notes || '').trim();
+  if (freeform) parts.push(freeform);
+  for (const e of (d.activity_log || [])) {
+    if (!e || (e.type && e.type !== 'note')) continue;
+    const t = (e.text || '').trim();
+    if (t && !parts.includes(t)) parts.push(t);
+  }
+  return parts.join(' | ');
+}
+
 function CRM() {
   const { user, setUser, theme, setTheme, currentContact, setCurrentContact, contacts, currentClientId, loadFullContact, showToast, filters } = useApp();
   const navigate = useNavigate();
@@ -28,19 +44,25 @@ function CRM() {
     try {
       let source;
       let filteredAll = false;
+      // Both paths refetch full rows (select('*')) because the list view loads LIST_FIELDS,
+      // which omits owner_address / property_addresses (and activity_log). Passing the lean
+      // list objects straight through left those CSV columns blank for un-opened contacts.
+      const toExportRow = d => ({
+        firstName: d.first_name, lastName: d.last_name,
+        phones: d.phones || [], email: d.email || '',
+        county: d.county, ownerAddress: d.owner_address,
+        propertyAddresses: d.property_addresses || [],
+        taxMapIds: d.tax_map_ids || [], status: d.status,
+        activityLog: d.activity_log || [],
+        notes: notesForExport(d),
+      });
       if (selectedContacts?.length) {
-        source = selectedContacts;
+        const rows = await fetchContactsByIds(selectedContacts.map(c => c.id));
+        source = rows.map(toExportRow);
       } else {
         if (!currentClientId) { showToast('Select a client first.', 'warning'); return; }
         const rows = await fetchAllFilteredContacts(currentClientId, filters);
-        const mapped = rows.map(d => ({
-          firstName: d.first_name, lastName: d.last_name,
-          phones: d.phones || [], email: d.email || '',
-          county: d.county, ownerAddress: d.owner_address,
-          propertyAddresses: d.property_addresses || [],
-          taxMapIds: d.tax_map_ids || [], status: d.status, smsStatus: d.sms_status,
-          activityLog: d.activity_log || [],
-        }));
+        const mapped = rows.map(toExportRow);
         // Note activity is client-side (activity_log jsonb isn't server-filterable without
         // an RPC). Shared with ContactList.filtered so export always matches the list view.
         source = filterByNoteActivity(mapped, filters?.activity);
@@ -50,9 +72,9 @@ function CRM() {
       const rows = source.map(c => [
         c.firstName, c.lastName, (c.phones||[]).join(';'), c.email || '',
         c.county, c.ownerAddress, (c.propertyAddresses||[]).join(';'),
-        (c.taxMapIds||[]).join(';'), c.status, c.smsStatus,
+        (c.taxMapIds||[]).join(';'), c.status, c.notes,
       ]);
-      const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,SMS Status';
+      const header = 'First Name,Last Name,Phones,Email,County,Owner Address,Property Addresses,Tax Map IDs,Status,Notes';
       const csv = [header, ...rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','))].join('\n');
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
       const a = document.createElement('a');
