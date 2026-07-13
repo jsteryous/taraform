@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { AppProvider, useApp, fetchAllFilteredContacts, fetchContactsByIds } from './context/AppContext';
-import { filterByNoteActivity } from './lib/contactFilters';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
@@ -61,11 +60,11 @@ function CRM() {
         source = rows.map(toExportRow);
       } else {
         if (!currentClientId) { showToast('Select a client first.', 'warning'); return; }
+        // All facets (incl. phone via has_good_phone and note via last_note_at) are now
+        // filtered server-side in applyContactFilters, so the export matches the list view
+        // without any client-side re-filtering here.
         const rows = await fetchAllFilteredContacts(currentClientId, filters);
-        const mapped = rows.map(toExportRow);
-        // Note activity is client-side (activity_log jsonb isn't server-filterable without
-        // an RPC). Shared with ContactList.filtered so export always matches the list view.
-        source = filterByNoteActivity(mapped, filters?.activity);
+        source = rows.map(toExportRow);
         filteredAll = true;
       }
       if (!source.length) { showToast('No contacts to export', 'warning'); return; }

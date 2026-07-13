@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, filterByNoteActivity, contactMatchesFilters } from './contactFilters';
+import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone } from './contactFilters';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
 // exactly which query operators applyContactFilters emits without a live DB.
@@ -35,14 +35,14 @@ describe('applyContactFilters', () => {
     ]);
   });
 
-  it('treats the empty jsonb array [] as "no phone"', () => {
+  it('filters phone has/missing on the has_good_phone column', () => {
     const has = mockQuery();
     applyContactFilters(has, { phone: 'has' });
-    expect(callsOf(has)).toEqual([{ method: 'not', args: ['phones', 'eq', '[]'] }]);
+    expect(callsOf(has)).toEqual([{ method: 'eq', args: ['has_good_phone', true] }]);
 
     const missing = mockQuery();
     applyContactFilters(missing, { phone: 'missing' });
-    expect(callsOf(missing)).toEqual([{ method: 'or', args: ['phones.is.null,phones.eq.[]'] }]);
+    expect(callsOf(missing)).toEqual([{ method: 'eq', args: ['has_good_phone', false] }]);
   });
 
   it('handles email has/missing', () => {
@@ -54,9 +54,34 @@ describe('applyContactFilters', () => {
     ]);
   });
 
-  it('emits no server operators for a note-activity filter (client-side only)', () => {
+  it('maps note_never to a last_note_at is-null check', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { activity: 'note_never' });
+    expect(callsOf(q)).toEqual([{ method: 'is', args: ['last_note_at', null] }]);
+  });
+
+  it('maps note_lt_N to a last_note_at gte cutoff ~N days ago', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { activity: 'note_lt_15' });
+    const [call] = callsOf(q);
+    expect(call.method).toBe('gte');
+    expect(call.args[0]).toBe('last_note_at');
+    const cutoff = new Date(call.args[1]).getTime();
+    const expected = Date.now() - 15 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(cutoff - expected)).toBeLessThan(5000);
+  });
+
+  it('maps note_gt_N to "older than cutoff OR never noted"', () => {
     const q = mockQuery();
     applyContactFilters(q, { activity: 'note_gt_15' });
+    const [call] = callsOf(q);
+    expect(call.method).toBe('or');
+    expect(call.args[0]).toMatch(/^last_note_at\.lt\..+,last_note_at\.is\.null$/);
+  });
+
+  it('emits no note operator for a malformed day count', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { activity: 'note_lt_abc' });
     expect(callsOf(q)).toHaveLength(0);
   });
 
@@ -118,87 +143,59 @@ describe('applyContactFilters', () => {
   });
 });
 
-describe('filterByNoteActivity', () => {
+// matchesNoteActivity mirrors the server-side last_note_at filter; it's the per-contact
+// predicate used by contactMatchesFilters for the detail-overlay drift re-check.
+describe('matchesNoteActivity', () => {
   const daysAgoISO = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
-  const withNote = (id, days) => ({
-    id,
-    activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }],
-  });
-  const noNotes = (id) => ({ id, activityLog: [] });
+  const withNote = (days) => ({ activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }] });
+  const noNotes = { activityLog: [] };
 
-  it('returns all contacts unchanged when there is no activity filter', () => {
-    const contacts = [withNote(1, 1), noNotes(2)];
-    expect(filterByNoteActivity(contacts, '')).toBe(contacts);
-    expect(filterByNoteActivity(contacts, undefined)).toBe(contacts);
+  it('matches everything when there is no activity filter or a non-note value', () => {
+    expect(matchesNoteActivity(withNote(1), '')).toBe(true);
+    expect(matchesNoteActivity(withNote(1), undefined)).toBe(true);
+    expect(matchesNoteActivity(withNote(1), 'sms_7')).toBe(true);
   });
 
-  it('passes non-note activity values through untouched (only note_* is client-filtered)', () => {
-    const contacts = [withNote(1, 1), noNotes(2)];
-    expect(filterByNoteActivity(contacts, 'sms_7')).toBe(contacts);
-    expect(filterByNoteActivity(contacts, 'other')).toBe(contacts);
+  it('note_lt_N is true only for a note within the last N days', () => {
+    expect(matchesNoteActivity(withNote(2), 'note_lt_7')).toBe(true);
+    expect(matchesNoteActivity(withNote(10), 'note_lt_7')).toBe(false);
+    expect(matchesNoteActivity(noNotes, 'note_lt_7')).toBe(false);
+    // arbitrary day count
+    expect(matchesNoteActivity(withNote(12), 'note_lt_14')).toBe(true);
+    expect(matchesNoteActivity(withNote(20), 'note_lt_14')).toBe(false);
   });
 
-  it('note_lt_7 keeps only contacts with a note in the last 7 days', () => {
-    const ids = filterByNoteActivity(
-      [withNote(1, 2), withNote(2, 10), noNotes(3)],
-      'note_lt_7',
-    ).map((c) => c.id);
-    expect(ids).toEqual([1]);
+  it('note_gt_N is true when the last note is older than N days, incl. never-noted', () => {
+    expect(matchesNoteActivity(withNote(20), 'note_gt_14')).toBe(true);
+    expect(matchesNoteActivity(withNote(5), 'note_gt_14')).toBe(false);
+    expect(matchesNoteActivity(noNotes, 'note_gt_14')).toBe(true);
+    expect(matchesNoteActivity({}, 'note_gt_14')).toBe(true);
   });
 
-  it('note_lt_30 keeps notes within 30 days but excludes older', () => {
-    const ids = filterByNoteActivity(
-      [withNote(1, 5), withNote(2, 29), withNote(3, 45)],
-      'note_lt_30',
-    ).map((c) => c.id);
-    expect(ids).toEqual([1, 2]);
+  it('note_never is true only with no notes at all', () => {
+    expect(matchesNoteActivity(noNotes, 'note_never')).toBe(true);
+    expect(matchesNoteActivity({}, 'note_never')).toBe(true);
+    expect(matchesNoteActivity(withNote(1), 'note_never')).toBe(false);
   });
 
-  it('note_lt honors an arbitrary day count', () => {
-    const ids = filterByNoteActivity(
-      [withNote(1, 5), withNote(2, 12), withNote(3, 20)],
-      'note_lt_14',
-    ).map((c) => c.id);
-    expect(ids).toEqual([1, 2]);
-  });
-
-  it('note_gt keeps contacts whose last note is older than N days, including never-noted', () => {
-    const ids = filterByNoteActivity(
-      [withNote(1, 5), withNote(2, 20), noNotes(3), { id: 4 }],
-      'note_gt_14',
-    ).map((c) => c.id);
-    expect(ids).toEqual([2, 3, 4]);
-  });
-
-  it('passes contacts through on a malformed day count', () => {
-    const contacts = [withNote(1, 5), noNotes(2)];
-    expect(filterByNoteActivity(contacts, 'note_lt_abc')).toHaveLength(2);
-  });
-
-  it('note_never keeps only contacts with no notes at all', () => {
-    const ids = filterByNoteActivity(
-      [withNote(1, 1), noNotes(2), { id: 3 }],
-      'note_never',
-    ).map((c) => c.id);
-    expect(ids).toEqual([2, 3]);
+  it('matches everything on a malformed day count', () => {
+    expect(matchesNoteActivity(withNote(5), 'note_lt_abc')).toBe(true);
+    expect(matchesNoteActivity(noNotes, 'note_gt_abc')).toBe(true);
   });
 
   it('uses the most recent note when a contact has several', () => {
-    const contact = {
-      id: 1,
-      activityLog: [
-        { type: 'note', text: 'old', timestamp: daysAgoISO(40) },
-        { type: 'note', text: 'recent', timestamp: daysAgoISO(3) },
-      ],
-    };
-    expect(filterByNoteActivity([contact], 'note_lt_7')).toHaveLength(1);
+    const contact = { activityLog: [
+      { type: 'note', text: 'old', timestamp: daysAgoISO(40) },
+      { type: 'note', text: 'recent', timestamp: daysAgoISO(3) },
+    ] };
+    expect(matchesNoteActivity(contact, 'note_lt_7')).toBe(true);
   });
 
   it('counts untyped log entries with text as notes, ignores non-note types', () => {
-    const untyped = { id: 1, activityLog: [{ text: 'legacy note', timestamp: daysAgoISO(2) }] };
-    const smsOnly = { id: 2, activityLog: [{ type: 'sms', text: 'hi', timestamp: daysAgoISO(2) }] };
-    const ids = filterByNoteActivity([untyped, smsOnly], 'note_lt_7').map((c) => c.id);
-    expect(ids).toEqual([1]);
+    const untyped = { activityLog: [{ text: 'legacy note', timestamp: daysAgoISO(2) }] };
+    const smsOnly = { activityLog: [{ type: 'sms', text: 'hi', timestamp: daysAgoISO(2) }] };
+    expect(matchesNoteActivity(untyped, 'note_lt_7')).toBe(true);
+    expect(matchesNoteActivity(smsOnly, 'note_lt_7')).toBe(false);
   });
 });
 
@@ -220,11 +217,15 @@ describe('contactMatchesFilters', () => {
     expect(contactMatchesFilters(base, { counties: ['Pickens'] })).toBe(false);
   });
 
-  it('applies phone has/missing', () => {
+  it('applies phone has/missing on good (non-struck) phones', () => {
     expect(contactMatchesFilters(base, { phone: 'has' })).toBe(true);
     expect(contactMatchesFilters(base, { phone: 'missing' })).toBe(false);
     expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'missing' })).toBe(true);
     expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'has' })).toBe(false);
+    // Every number struck through → not "has phone", counts as "missing".
+    const allStruck = { ...base, phones: ['(864) 555-1234'], badPhones: ['8645551234'] };
+    expect(contactMatchesFilters(allStruck, { phone: 'has' })).toBe(false);
+    expect(contactMatchesFilters(allStruck, { phone: 'missing' })).toBe(true);
   });
 
   it('applies email has/missing (whitespace-only counts as missing)', () => {
@@ -243,5 +244,24 @@ describe('contactMatchesFilters', () => {
   it('requires every active facet to pass (AND semantics)', () => {
     expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'has' })).toBe(true);
     expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'missing' })).toBe(false);
+  });
+});
+
+describe('hasGoodPhone', () => {
+  it('is true when at least one number is not struck through', () => {
+    expect(hasGoodPhone({ phones: ['(864) 555-1234'], badPhones: [] })).toBe(true);
+    expect(hasGoodPhone({ phones: ['(864) 555-1234', '(803) 111-2222'], badPhones: ['8645551234'] })).toBe(true);
+  });
+
+  it('is false when there are no numbers or all are struck through', () => {
+    expect(hasGoodPhone({ phones: [], badPhones: [] })).toBe(false);
+    expect(hasGoodPhone({ phones: ['(864) 555-1234'], badPhones: ['8645551234'] })).toBe(false);
+    expect(hasGoodPhone({})).toBe(false);
+  });
+
+  it('matches bad_phones regardless of the stored phone format (normalizePhone)', () => {
+    // badPhones holds last-10-digit form; phone can be stored any way.
+    expect(hasGoodPhone({ phones: ['864.555.1234'], badPhones: ['8645551234'] })).toBe(false);
+    expect(hasGoodPhone({ phones: ['1 (864) 555-1234'], badPhones: ['8645551234'] })).toBe(false);
   });
 });

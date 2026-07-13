@@ -1,3 +1,18 @@
+import { normalizePhone } from './utils';
+
+// A contact "has a phone" only if at least one number isn't struck through. `bad_phones`
+// stores normalizePhone() digits of flagged numbers; a phone is good when its normalized
+// form isn't in that set. Used by the client-side has/missing refinement below — the
+// server "has" query is only the coarse `phones != []` prefilter (it can't compare the
+// formatted `phones` array against the normalized `bad_phones` array without an RPC).
+export function hasGoodPhone(contact) {
+  const bad = new Set(contact.badPhones || []);
+  return (contact.phones || []).some((p) => {
+    const d = normalizePhone(p);
+    return d && !bad.has(d);
+  });
+}
+
 // Pure query-shaping for property_crm_contacts list/export.
 // Takes a PostgREST query builder `q` and the current `filters` object, applies
 // the active filters, and returns the builder. No supabase/component state here so
@@ -8,14 +23,31 @@
 export function applyContactFilters(q, filters = {}) {
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
   if (filters.counties?.length) q = q.in('county', filters.counties);
-  // phones is jsonb — empty value is [] (JSON array), not {} (object).
-  if (filters.phone === 'has')     q = q.not('phones', 'eq', '[]');
-  if (filters.phone === 'missing') q = q.or('phones.is.null,phones.eq.[]');
+  // has_good_phone (db/20260713_filter_columns.sql) is true iff a non-struck number
+  // exists, so "missing" correctly covers both no-phone and all-struck contacts.
+  if (filters.phone === 'has')     q = q.eq('has_good_phone', true);
+  if (filters.phone === 'missing') q = q.eq('has_good_phone', false);
   if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
   if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
 
-  // Note-activity (`filters.activity`) is filtered client-side — activity_log is jsonb
-  // and isn't server-filterable without an RPC. See contactMatchesFilters below.
+  // Note-activity via the last_note_at generated column (max note timestamp). Mirrors the
+  // JS matchesNoteActivity semantics so the client drift re-check agrees on a fresh load.
+  if (filters.activity) {
+    const [type, op, days] = filters.activity.split('_');
+    if (type === 'note') {
+      if (op === 'never') {
+        q = q.is('last_note_at', null);
+      } else {
+        const n = parseInt(days, 10);
+        if (!isNaN(n)) {
+          const cutoff = new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+          // lt = a note within the last N days; gt = last note older than N days (or none).
+          if (op === 'lt') q = q.gte('last_note_at', cutoff);
+          else if (op === 'gt') q = q.or(`last_note_at.lt.${cutoff},last_note_at.is.null`);
+        }
+      }
+    }
+  }
 
   if (filters.search) {
     // tax_map_ids, property_addresses are jsonb (not text[]) — cs uses JSON array
@@ -45,13 +77,13 @@ export function applyContactFilters(q, filters = {}) {
   return q;
 }
 
-// Client-side note-activity predicate for a single contact. activity_log is jsonb and
-// isn't server-filterable without an RPC, so this runs in JS everywhere the filter is
-// needed. `activity` values: "note_never", or "note_lt_N" / "note_gt_N" with a custom
-// day count N from the filter UI. lt = has a note within the last N days; gt = last
-// note is more than N days old — contacts with no notes at all count as gt (the use
-// case is "who haven't we touched in N days"; "note_never" remains for exactly-never).
-// Empty/non-note activity matches everything (pass-through).
+// Client-side note-activity predicate for a single contact — the counterpart to the
+// server-side last_note_at filter (applyContactFilters), kept in sync so the drift
+// re-check below agrees with what the server returned. `activity` values: "note_never",
+// or "note_lt_N" / "note_gt_N" with a custom day count N from the filter UI. lt = has a
+// note within the last N days; gt = last note is more than N days old — contacts with no
+// notes at all count as gt ("who haven't we touched in N days"; "note_never" is exactly-
+// never). Empty/non-note activity matches everything (pass-through).
 export function matchesNoteActivity(contact, activity) {
   if (!activity) return true;
   const [type, op, days] = activity.split('_');
@@ -72,15 +104,6 @@ export function matchesNoteActivity(contact, activity) {
   return true;
 }
 
-// Array wrapper for matchesNoteActivity, used by the Export-All path (App.handleExport).
-// Returns the same array reference when there's nothing to filter so callers can cheaply
-// detect a no-op. Kept as the single source of truth alongside contactMatchesFilters —
-// past "Export All disagrees with the list" bugs came from hand-mirrored copies.
-export function filterByNoteActivity(contacts, activity) {
-  if (!activity || !/^note_/.test(activity)) return contacts;
-  return contacts.filter((c) => matchesNoteActivity(c, activity));
-}
-
 // Full client-side filter predicate for a single contact. The list is already
 // server-filtered (applyContactFilters), but a row edited in the detail overlay can
 // drift out of the active filter — a status change to Dead/Pass, a logged note, etc.
@@ -92,9 +115,9 @@ export function contactMatchesFilters(contact, filters = {}) {
   if (statuses && !statuses.includes(contact.status)) return false;
   if (counties?.length && !counties.includes(contact.county)) return false;
 
-  const hasPhone = (contact.phones?.length ?? 0) > 0;
-  if (phone === 'has' && !hasPhone) return false;
-  if (phone === 'missing' && hasPhone) return false;
+  const goodPhone = hasGoodPhone(contact);
+  if (phone === 'has' && !goodPhone) return false;
+  if (phone === 'missing' && goodPhone) return false;
 
   const hasEmail = !!(contact.email && contact.email.trim());
   if (email === 'has' && !hasEmail) return false;
