@@ -8,7 +8,10 @@ import { applyContactFilters } from '../lib/contactFilters';
 const AppDataContext = createContext(null);
 const AppUIContext   = createContext(null);
 
-const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,last_sms_at,lead_source,contact_method,acreage,tax_map_ids,updated_at,created_at,client_id,user_id';
+// activity_log is included so the client-side note-activity filter can evaluate every
+// row (not just contacts opened in the detail view). It's jsonb of short note entries —
+// acceptable payload at PAGE_SIZE rows for the follow-up-queue filtering it enables.
+const LIST_FIELDS = 'id,first_name,last_name,phones,email,county,status,sms_status,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
 
 // ── Error classification ──────────────────────────────────────

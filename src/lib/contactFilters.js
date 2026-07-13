@@ -14,18 +14,8 @@ export function applyContactFilters(q, filters = {}) {
   if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
   if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
 
-  if (filters.activity) {
-    const [type, period] = filters.activity.split('_');
-    if (type === 'sms') {
-      if (period === 'never') {
-        q = q.is('last_sms_at', null);
-      } else {
-        const days = parseInt(period, 10);
-        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        q = q.gte('last_sms_at', cutoff);
-      }
-    }
-  }
+  // Note-activity (`filters.activity`) is filtered client-side — activity_log is jsonb
+  // and isn't server-filterable without an RPC. See contactMatchesFilters below.
 
   if (filters.search) {
     // tax_map_ids, property_addresses are jsonb (not text[]) — cs uses JSON array
@@ -55,29 +45,60 @@ export function applyContactFilters(q, filters = {}) {
   return q;
 }
 
-// Client-side note-activity filter. activity_log is jsonb and isn't server-filterable
-// without an RPC, so both the list view (ContactList.filtered) and the Export-All path
-// (App.handleExport) must filter by it in JS. Keep this the single source of truth —
-// past "Export All disagrees with the list" bugs came from two hand-mirrored copies.
-//
-// `activity` is the same string the SMS path uses ("note_7", "note_30", "note_never").
-// Non-note filters (no activity, or sms_*) pass through unchanged.
-export function filterByNoteActivity(contacts, activity) {
-  if (!activity) return contacts;
-  const [type, period] = activity.split('_');
-  if (type !== 'note') return contacts;
+// Client-side note-activity predicate for a single contact. activity_log is jsonb and
+// isn't server-filterable without an RPC, so this runs in JS everywhere the filter is
+// needed. `activity` values: "note_never", or "note_lt_N" / "note_gt_N" with a custom
+// day count N from the filter UI. lt = has a note within the last N days; gt = last
+// note is more than N days old — contacts with no notes at all count as gt (the use
+// case is "who haven't we touched in N days"; "note_never" remains for exactly-never).
+// Empty/non-note activity matches everything (pass-through).
+export function matchesNoteActivity(contact, activity) {
+  if (!activity) return true;
+  const [type, op, days] = activity.split('_');
+  if (type !== 'note') return true;
 
-  const cutoff = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-  return contacts.filter((c) => {
-    const notes = (c.activityLog || []).filter((e) => e.type === 'note' || (!e.type && e.text));
-    const lastNote = notes
-      .map((e) => new Date(e.timestamp || e.createdAt))
-      .filter((d) => !isNaN(d))
-      .sort((a, b) => b - a)[0];
-    if (period === 'never') return !lastNote;
-    if (!lastNote) return false;
-    if (period === '7') return lastNote >= cutoff(7);
-    if (period === '30') return lastNote >= cutoff(30);
-    return true;
-  });
+  const notes = (contact.activityLog || []).filter((e) => e.type === 'note' || (!e.type && e.text));
+  const lastNote = notes
+    .map((e) => new Date(e.timestamp || e.createdAt))
+    .filter((d) => !isNaN(d))
+    .sort((a, b) => b - a)[0];
+  if (op === 'never') return !lastNote;
+
+  const n = parseInt(days, 10);
+  if (isNaN(n)) return true;
+  const cutoff = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+  if (op === 'lt') return !!lastNote && lastNote >= cutoff;
+  if (op === 'gt') return !lastNote || lastNote < cutoff;
+  return true;
+}
+
+// Array wrapper for matchesNoteActivity, used by the Export-All path (App.handleExport).
+// Returns the same array reference when there's nothing to filter so callers can cheaply
+// detect a no-op. Kept as the single source of truth alongside contactMatchesFilters —
+// past "Export All disagrees with the list" bugs came from hand-mirrored copies.
+export function filterByNoteActivity(contacts, activity) {
+  if (!activity || !/^note_/.test(activity)) return contacts;
+  return contacts.filter((c) => matchesNoteActivity(c, activity));
+}
+
+// Full client-side filter predicate for a single contact. The list is already
+// server-filtered (applyContactFilters), but a row edited in the detail overlay can
+// drift out of the active filter — a status change to Dead/Pass, a logged note, etc.
+// Re-checking every row against these facets on render drops the drifted row without a
+// refetch, so the follow-up work queue shrinks as you clear contacts. `search` is
+// intentionally omitted — it's server-only (ilike / jsonb containment) and rarely drifts.
+export function contactMatchesFilters(contact, filters = {}) {
+  const { statuses, counties, phone, email, activity } = filters;
+  if (statuses && !statuses.includes(contact.status)) return false;
+  if (counties?.length && !counties.includes(contact.county)) return false;
+
+  const hasPhone = (contact.phones?.length ?? 0) > 0;
+  if (phone === 'has' && !hasPhone) return false;
+  if (phone === 'missing' && hasPhone) return false;
+
+  const hasEmail = !!(contact.email && contact.email.trim());
+  if (email === 'has' && !hasEmail) return false;
+  if (email === 'missing' && hasEmail) return false;
+
+  return matchesNoteActivity(contact, activity);
 }

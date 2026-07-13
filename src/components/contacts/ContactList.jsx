@@ -4,18 +4,15 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
-import { filterByNoteActivity } from '../../lib/contactFilters';
+import { contactMatchesFilters } from '../../lib/contactFilters';
 import { useConfirm } from '../shared/ConfirmDialog';
+import Select from '../shared/Select';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
-const ACTIVITY_OPTIONS = [
-  { value: '',           label: 'Any Activity' },
-  { value: 'note_7',     label: 'Note in last 7 days' },
-  { value: 'note_30',    label: 'Note in last 30 days' },
-  { value: 'note_never', label: 'No notes ever' },
-  { value: 'sms_7',      label: 'SMS in last 7 days' },
-  { value: 'sms_30',     label: 'SMS in last 30 days' },
-  { value: 'sms_never',  label: 'No SMS ever' },
+// The "Note … N days" row is rendered separately with a custom day input.
+const NOTE_OP_OPTIONS = [
+  { value: 'lt', label: 'within last' },
+  { value: 'gt', label: 'none in last' },
 ];
 const PHONE_OPTIONS = [
   { value: '',        label: 'Any Phone' },
@@ -57,10 +54,17 @@ export default function ContactList({ onView, onExport }) {
   const [moreOpen,      setMoreOpen]      = useState(false);
   const [confirmBulkDelete, ConfirmUI]    = useConfirm();
 
+  // Draft op/days for the custom "Note … N days" activity filter. Kept locally so
+  // the inputs hold their values while the radio is off or the day field is mid-edit;
+  // committed into filters.activity as "note_lt_N" / "note_gt_N".
+  const [noteOp,   setNoteOp]   = useState('lt');
+  const [noteDays, setNoteDays] = useState('30');
+
   const statusRef    = useRef(null);
   const countyRef    = useRef(null);
   const moreRef      = useRef(null);
   const searchTimer  = useRef(null);
+  const noteTimer    = useRef(null);
   const selectAllRef = useRef(null);
 
   // Derive working values from props
@@ -73,10 +77,11 @@ export default function ContactList({ onView, onExport }) {
   const selectedStatuses = useMemo(() => new Set(filterStatuses ?? ALL_STATUSES), [filterStatuses, ALL_STATUSES]);
   const selectedCounties = useMemo(() => new Set(filterCounties ?? []), [filterCounties]);
 
-  // Note activity filter is client-side (activityLog JSONB not fetched in list query).
-  // SMS activity filters are handled server-side via last_sms_at in buildQuery.
-  // Shared with App.handleExport so export always matches the list view.
-  const filtered = useMemo(() => filterByNoteActivity(contacts, activityFilter), [contacts, activityFilter]);
+  // Re-apply the active filters client-side. The list is already server-filtered, but a
+  // contact edited in the detail overlay (status → Dead/Pass, a freshly logged note, …)
+  // can drift out of the filter; re-checking here drops it on return without a refetch.
+  // Note activity needs activity_log, which is now in LIST_FIELDS. See contactFilters.js.
+  const filtered = useMemo(() => contacts.filter(c => contactMatchesFilters(c, filters)), [contacts, filters]);
 
   // Reload when filters change
   useEffect(() => {
@@ -137,6 +142,28 @@ export default function ContactList({ onView, onExport }) {
 
   function clearAllFilters() {
     setFilters(EMPTY_FILTERS);
+  }
+
+  // Custom note-activity row. Interacting with any of its controls applies the
+  // filter; the day input debounces like search so typing doesn't reload per keystroke.
+  const noteActive = /^note_(lt|gt)_/.test(activityFilter);
+  function activateNoteFilter() {
+    const n = parseInt(noteDays, 10) || 30;
+    setNoteDays(String(n));
+    setFilterActivity(`note_${noteOp}_${n}`);
+  }
+  function onNoteOpChange(op) {
+    setNoteOp(op);
+    const n = parseInt(noteDays, 10) || 30;
+    setNoteDays(String(n));
+    setFilterActivity(`note_${op}_${n}`);
+  }
+  function onNoteDaysChange(val) {
+    setNoteDays(val);
+    const n = parseInt(val, 10);
+    if (!n || n < 1) return;
+    clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setFilterActivity(`note_${noteOp}_${n}`), 400);
   }
 
   const counties = useMemo(
@@ -271,7 +298,7 @@ export default function ContactList({ onView, onExport }) {
             <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
           </button>
           {moreOpen && (
-            <div className="filter-dropdown" style={{ minWidth: '240px' }}>
+            <div className="filter-dropdown" style={{ minWidth: '280px' }}>
               <div className="filter-dropdown-section">Phone</div>
               {PHONE_OPTIONS.map(o => (
                 <label key={o.value} className="filter-dropdown-item">
@@ -287,12 +314,27 @@ export default function ContactList({ onView, onExport }) {
                 </label>
               ))}
               <div className="filter-dropdown-section">Activity</div>
-              {ACTIVITY_OPTIONS.map(o => (
-                <label key={o.value} className="filter-dropdown-item">
-                  <input type="radio" name="activity_filter" checked={activityFilter === o.value} onChange={() => setFilterActivity(o.value)} style={{ width: '14px', height: '14px' }} />
-                  {o.label}
-                </label>
-              ))}
+              <label className="filter-dropdown-item">
+                <input type="radio" name="activity_filter" checked={activityFilter === ''} onChange={() => setFilterActivity('')} style={{ width: '14px', height: '14px' }} />
+                Any Activity
+              </label>
+              <div className="filter-dropdown-item" style={{ gap: '0.4rem' }}>
+                <input type="radio" name="activity_filter" checked={noteActive} onChange={activateNoteFilter} style={{ width: '14px', height: '14px', flexShrink: 0 }} />
+                <span onClick={activateNoteFilter} style={{ cursor: 'pointer' }}>Note</span>
+                <Select value={noteOp} onChange={onNoteOpChange} options={NOTE_OP_OPTIONS} emptyLabel={null} style={{ minWidth: '108px' }} />
+                <input
+                  type="number" min="1" value={noteDays}
+                  onChange={e => onNoteDaysChange(e.target.value)}
+                  onFocus={() => { if (!noteActive) activateNoteFilter(); }}
+                  aria-label="Note activity days"
+                  style={{ width: '3.25rem', padding: '0.2rem 0.3rem', fontSize: 'var(--text-xs)', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px' }}
+                />
+                days
+              </div>
+              <label className="filter-dropdown-item">
+                <input type="radio" name="activity_filter" checked={activityFilter === 'note_never'} onChange={() => setFilterActivity('note_never')} style={{ width: '14px', height: '14px' }} />
+                No notes ever
+              </label>
             </div>
           )}
         </div>

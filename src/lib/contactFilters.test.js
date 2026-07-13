@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, filterByNoteActivity } from './contactFilters';
+import { applyContactFilters, filterByNoteActivity, contactMatchesFilters } from './contactFilters';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
 // exactly which query operators applyContactFilters emits without a live DB.
@@ -54,21 +54,10 @@ describe('applyContactFilters', () => {
     ]);
   });
 
-  it('maps sms_never to an is-null check', () => {
+  it('emits no server operators for a note-activity filter (client-side only)', () => {
     const q = mockQuery();
-    applyContactFilters(q, { activity: 'sms_never' });
-    expect(callsOf(q)).toEqual([{ method: 'is', args: ['last_sms_at', null] }]);
-  });
-
-  it('maps sms_7 to a gte cutoff ~7 days ago', () => {
-    const q = mockQuery();
-    applyContactFilters(q, { activity: 'sms_7' });
-    const [call] = callsOf(q);
-    expect(call.method).toBe('gte');
-    expect(call.args[0]).toBe('last_sms_at');
-    const cutoff = new Date(call.args[1]).getTime();
-    const expected = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    expect(Math.abs(cutoff - expected)).toBeLessThan(5000);
+    applyContactFilters(q, { activity: 'note_gt_15' });
+    expect(callsOf(q)).toHaveLength(0);
   });
 
   it('builds a single-word search across text and jsonb columns', () => {
@@ -143,26 +132,47 @@ describe('filterByNoteActivity', () => {
     expect(filterByNoteActivity(contacts, undefined)).toBe(contacts);
   });
 
-  it('passes SMS activity filters through untouched (handled server-side)', () => {
+  it('passes non-note activity values through untouched (only note_* is client-filtered)', () => {
     const contacts = [withNote(1, 1), noNotes(2)];
     expect(filterByNoteActivity(contacts, 'sms_7')).toBe(contacts);
-    expect(filterByNoteActivity(contacts, 'sms_never')).toBe(contacts);
+    expect(filterByNoteActivity(contacts, 'other')).toBe(contacts);
   });
 
-  it('note_7 keeps only contacts with a note in the last 7 days', () => {
+  it('note_lt_7 keeps only contacts with a note in the last 7 days', () => {
     const ids = filterByNoteActivity(
       [withNote(1, 2), withNote(2, 10), noNotes(3)],
-      'note_7',
+      'note_lt_7',
     ).map((c) => c.id);
     expect(ids).toEqual([1]);
   });
 
-  it('note_30 keeps notes within 30 days but excludes older', () => {
+  it('note_lt_30 keeps notes within 30 days but excludes older', () => {
     const ids = filterByNoteActivity(
       [withNote(1, 5), withNote(2, 29), withNote(3, 45)],
-      'note_30',
+      'note_lt_30',
     ).map((c) => c.id);
     expect(ids).toEqual([1, 2]);
+  });
+
+  it('note_lt honors an arbitrary day count', () => {
+    const ids = filterByNoteActivity(
+      [withNote(1, 5), withNote(2, 12), withNote(3, 20)],
+      'note_lt_14',
+    ).map((c) => c.id);
+    expect(ids).toEqual([1, 2]);
+  });
+
+  it('note_gt keeps contacts whose last note is older than N days, including never-noted', () => {
+    const ids = filterByNoteActivity(
+      [withNote(1, 5), withNote(2, 20), noNotes(3), { id: 4 }],
+      'note_gt_14',
+    ).map((c) => c.id);
+    expect(ids).toEqual([2, 3, 4]);
+  });
+
+  it('passes contacts through on a malformed day count', () => {
+    const contacts = [withNote(1, 5), noNotes(2)];
+    expect(filterByNoteActivity(contacts, 'note_lt_abc')).toHaveLength(2);
   });
 
   it('note_never keeps only contacts with no notes at all', () => {
@@ -181,13 +191,57 @@ describe('filterByNoteActivity', () => {
         { type: 'note', text: 'recent', timestamp: daysAgoISO(3) },
       ],
     };
-    expect(filterByNoteActivity([contact], 'note_7')).toHaveLength(1);
+    expect(filterByNoteActivity([contact], 'note_lt_7')).toHaveLength(1);
   });
 
   it('counts untyped log entries with text as notes, ignores non-note types', () => {
     const untyped = { id: 1, activityLog: [{ text: 'legacy note', timestamp: daysAgoISO(2) }] };
     const smsOnly = { id: 2, activityLog: [{ type: 'sms', text: 'hi', timestamp: daysAgoISO(2) }] };
-    const ids = filterByNoteActivity([untyped, smsOnly], 'note_7').map((c) => c.id);
+    const ids = filterByNoteActivity([untyped, smsOnly], 'note_lt_7').map((c) => c.id);
     expect(ids).toEqual([1]);
+  });
+});
+
+describe('contactMatchesFilters', () => {
+  const base = { status: 'Contacted', county: 'Greenville', phones: ['(864) 555-1234'], email: 'a@b.com', activityLog: [] };
+
+  it('matches everything under empty filters', () => {
+    expect(contactMatchesFilters(base, {})).toBe(true);
+    expect(contactMatchesFilters(base, { statuses: null, counties: [], phone: '', email: '', activity: '' })).toBe(true);
+  });
+
+  it('drops a contact whose status is not in the selected statuses', () => {
+    expect(contactMatchesFilters(base, { statuses: ['Contacted'] })).toBe(true);
+    expect(contactMatchesFilters({ ...base, status: 'Dead/Pass' }, { statuses: ['Contacted'] })).toBe(false);
+  });
+
+  it('drops a contact whose county is not selected', () => {
+    expect(contactMatchesFilters(base, { counties: ['Greenville'] })).toBe(true);
+    expect(contactMatchesFilters(base, { counties: ['Pickens'] })).toBe(false);
+  });
+
+  it('applies phone has/missing', () => {
+    expect(contactMatchesFilters(base, { phone: 'has' })).toBe(true);
+    expect(contactMatchesFilters(base, { phone: 'missing' })).toBe(false);
+    expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'missing' })).toBe(true);
+    expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'has' })).toBe(false);
+  });
+
+  it('applies email has/missing (whitespace-only counts as missing)', () => {
+    expect(contactMatchesFilters(base, { email: 'has' })).toBe(true);
+    expect(contactMatchesFilters({ ...base, email: '' }, { email: 'missing' })).toBe(true);
+    expect(contactMatchesFilters({ ...base, email: '  ' }, { email: 'has' })).toBe(false);
+  });
+
+  it('applies the note-activity facet — a fresh note drops a "none in last N days" row', () => {
+    const stale = { ...base, activityLog: [{ type: 'note', text: 'x', timestamp: new Date(Date.now() - 20 * 86400000).toISOString() }] };
+    const fresh = { ...base, activityLog: [{ type: 'note', text: 'x', timestamp: new Date().toISOString() }] };
+    expect(contactMatchesFilters(stale, { activity: 'note_gt_15' })).toBe(true);
+    expect(contactMatchesFilters(fresh, { activity: 'note_gt_15' })).toBe(false);
+  });
+
+  it('requires every active facet to pass (AND semantics)', () => {
+    expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'has' })).toBe(true);
+    expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'missing' })).toBe(false);
   });
 });
