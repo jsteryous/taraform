@@ -933,15 +933,102 @@ input[type="file"] {
 .filter-btn {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    min-width: 140px;
-    justify-content: space-between;
+    gap: 0.4rem;
+    /* Fixed width + stable noun labels + count badges keep the bar from reflowing
+       as selections change — the whole point of the badge pattern. */
+    min-width: 124px;
+    flex-shrink: 0;
+    justify-content: flex-start;
+}
+.filter-btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.filter-chevron {
+    flex-shrink: 0;
+    margin-left: auto;
+    opacity: 0.5;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.filter-btn[aria-expanded="true"] .filter-chevron {
+    transform: rotate(180deg);
+    opacity: 0.9;
 }
 .filter-btn.active {
-    background: rgba(59, 130, 246, 0.12);
-    border-color: rgba(59, 130, 246, 0.5);
-    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.55);
+    background: rgba(59, 130, 246, 0.06);
 }
+.filter-btn.active .filter-btn-label { color: #cfe0ff; }
+.filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
+}
+/* Right-side cluster (result count + clear). Sits past a flex spacer so its
+   width changes never shift the trigger buttons. */
+.filter-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    white-space: nowrap;
+}
+.filter-clear {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--text-sm);
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+}
+.filter-clear:hover { background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.4); }
+.filter-count-text { font-size: var(--text-sm); color: var(--text-muted); }
+/* Segmented toggle (note-activity direction) */
+.seg-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg-btn {
+    border: none;
+    border-radius: 0;
+    padding: 0.3rem 0.6rem;
+    font-size: var(--text-xs);
+    background: var(--surface);
+    color: var(--text-muted);
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn:hover { background: var(--surface-hover); color: var(--text); }
+.seg-btn.active { background: var(--accent); color: #fff; }
+/* Note-activity day input row, indented under its radio */
+.filter-note-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.2rem 0.5rem 0.5rem 1.85rem;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+.filter-note-days {
+    width: 3.25rem;
+    padding: 0.3rem 0.4rem;
+    font-size: var(--text-xs);
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--sans);
+}
+.filter-note-days:focus { border-color: var(--accent); outline: none; }
 .filter-dropdown {
     position: absolute;
     top: calc(100% + 6px);
@@ -957,6 +1044,8 @@ input[type="file"] {
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     animation: dropdownFade 0.15s ease;
 }
+/* Wide panel (Filters) anchors to its right edge so it can't overflow the viewport. */
+.filter-dropdown--right { left: auto; right: 0; min-width: 300px; }
 .filter-dropdown-section {
     padding: 0.35rem 0.5rem;
     font-size: var(--text-2xs);

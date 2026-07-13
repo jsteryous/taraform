@@ -6,14 +6,8 @@ import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
 import { contactMatchesFilters } from '../../lib/contactFilters';
 import { useConfirm } from '../shared/ConfirmDialog';
-import Select from '../shared/Select';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
-// The "Note … N days" row is rendered separately with a custom day input.
-const NOTE_OP_OPTIONS = [
-  { value: 'lt', label: 'within last' },
-  { value: 'gt', label: 'none in last' },
-];
 const PHONE_OPTIONS = [
   { value: '',        label: 'Any Phone' },
   { value: 'has',     label: 'Has phone' },
@@ -59,6 +53,10 @@ export default function ContactList({ onView, onExport }) {
   // committed into filters.activity as "note_lt_N" / "note_gt_N".
   const [noteOp,   setNoteOp]   = useState('lt');
   const [noteDays, setNoteDays] = useState('30');
+
+  // Accumulated county options (see the effect below) — reset per client.
+  const [countyPool, setCountyPool] = useState([]);
+  const countyPoolClient = useRef(null);
 
   const statusRef    = useRef(null);
   const countyRef    = useRef(null);
@@ -166,10 +164,27 @@ export default function ContactList({ onView, onExport }) {
     noteTimer.current = setTimeout(() => setFilterActivity(`note_${noteOp}_${n}`), 400);
   }
 
-  const counties = useMemo(
-    () => [...new Set(contacts.map(c => c.county).filter(Boolean))].sort(),
-    [contacts]
-  );
+  // County options are gathered from loaded contacts but never removed once seen, so
+  // selecting a county (which server-narrows `contacts` to just that county) doesn't make
+  // the other options disappear. Reset when the client changes; the clientId guard keeps
+  // a stale in-between render of the previous client's contacts from leaking in.
+  useEffect(() => {
+    setCountyPool(prev => {
+      const reset = countyPoolClient.current !== currentClientId;
+      countyPoolClient.current = currentClientId;
+      const set = new Set(reset ? [] : prev);
+      for (const c of contacts) if (c.county && c.clientId === currentClientId) set.add(c.county);
+      const next = [...set];
+      return (!reset && next.length === prev.length) ? prev : next;
+    });
+  }, [currentClientId, contacts]);
+
+  // Always include the currently-selected counties so a fresh pick is never hidden.
+  const counties = useMemo(() => {
+    const set = new Set(countyPool);
+    selectedCounties.forEach(c => set.add(c));
+    return [...set].sort();
+  }, [countyPool, selectedCounties]);
 
   function toggleStatus(s) {
     const next = new Set(selectedStatuses);
@@ -195,15 +210,10 @@ export default function ContactList({ onView, onExport }) {
     showToast(`${count} contacts deleted`);
   }
 
-  const statusLabel = selectedStatuses.size === ALL_STATUSES.length ? 'All Statuses'
-    : selectedStatuses.size === 0 ? 'No Status'
-    : selectedStatuses.size === 1 ? [...selectedStatuses][0]
-    : `${selectedStatuses.size} statuses`;
-
-  const countyLabel = selectedCounties.size === 0 ? 'All Counties'
-    : selectedCounties.size === 1 ? [...selectedCounties][0]
-    : `${selectedCounties.size} counties`;
-
+  // Triggers show a stable noun label + a count badge when a non-default selection is
+  // active, so the bar never reflows as the selection changes.
+  const statusActive = selectedStatuses.size < ALL_STATUSES.length;
+  const countyActive = selectedCounties.size > 0;
   const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0);
 
   // Current filter snapshot — used for load-more to continue with same query params
@@ -235,8 +245,9 @@ export default function ContactList({ onView, onExport }) {
       {/* Filter bar */}
       <div className="filter-row">
 
-        {/* Search */}
-        <div style={{ flex: 1, minWidth: '220px', position: 'relative', display: 'flex', alignItems: 'center' }}>
+        {/* Search — grows to a comfortable cap, then a spacer (below) takes the slack so
+            the trigger buttons keep fixed positions. */}
+        <div style={{ flex: '1 1 240px', maxWidth: '460px', minWidth: '200px', position: 'relative', display: 'flex', alignItems: 'center' }}>
           <Search size={14} style={{ position: 'absolute', left: '0.875rem', color: 'rgba(99,160,255,0.6)', pointerEvents: 'none', zIndex: 1 }} />
           <input type="text" className="search"
             placeholder="Search by name, phone, address, tax map ID…"
@@ -248,9 +259,10 @@ export default function ContactList({ onView, onExport }) {
 
         {/* Status */}
         <div ref={statusRef} style={{ position: 'relative' }}>
-          <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" className={filterBtnClass(selectedStatuses.size < ALL_STATUSES.length)}>
-            <span>{statusLabel}</span>
-            <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
+          <button onClick={() => setStatusOpen(o => !o)} aria-expanded={statusOpen} aria-label="Filter by status" className={filterBtnClass(statusActive)}>
+            <span className="filter-btn-label">Status</span>
+            {statusActive && <span className="filter-count">{selectedStatuses.size}</span>}
+            <ChevronDown size={12} className="filter-chevron" />
           </button>
           {statusOpen && (
             <div className="filter-dropdown">
@@ -271,9 +283,10 @@ export default function ContactList({ onView, onExport }) {
         {/* County */}
         {counties.length > 0 && (
           <div ref={countyRef} style={{ position: 'relative' }}>
-            <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" className={filterBtnClass(selectedCounties.size > 0)}>
-              <span>{countyLabel}</span>
-              <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
+            <button onClick={() => setCountyOpen(o => !o)} aria-expanded={countyOpen} aria-label="Filter by county" className={filterBtnClass(countyActive)}>
+              <span className="filter-btn-label">County</span>
+              {countyActive && <span className="filter-count">{selectedCounties.size}</span>}
+              <ChevronDown size={12} className="filter-chevron" />
             </button>
             {countyOpen && (
               <div className="filter-dropdown">
@@ -293,12 +306,13 @@ export default function ContactList({ onView, onExport }) {
 
         {/* More filters */}
         <div ref={moreRef} style={{ position: 'relative' }}>
-          <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" className={filterBtnClass(moreActiveCount > 0)} style={{ minWidth: 'auto', gap: '0.4rem' }}>
-            <span>Filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}</span>
-            <ChevronDown size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
+          <button onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen} aria-label="More filters" className={filterBtnClass(moreActiveCount > 0)}>
+            <span className="filter-btn-label">Filters</span>
+            {moreActiveCount > 0 && <span className="filter-count">{moreActiveCount}</span>}
+            <ChevronDown size={12} className="filter-chevron" />
           </button>
           {moreOpen && (
-            <div className="filter-dropdown" style={{ minWidth: '280px' }}>
+            <div className="filter-dropdown filter-dropdown--right">
               <div className="filter-dropdown-section">Phone</div>
               {PHONE_OPTIONS.map(o => (
                 <label key={o.value} className="filter-dropdown-item">
@@ -316,21 +330,27 @@ export default function ContactList({ onView, onExport }) {
               <div className="filter-dropdown-section">Activity</div>
               <label className="filter-dropdown-item">
                 <input type="radio" name="activity_filter" checked={activityFilter === ''} onChange={() => setFilterActivity('')} style={{ width: '14px', height: '14px' }} />
-                Any Activity
+                Any activity
               </label>
-              <div className="filter-dropdown-item" style={{ gap: '0.4rem' }}>
-                <input type="radio" name="activity_filter" checked={noteActive} onChange={activateNoteFilter} style={{ width: '14px', height: '14px', flexShrink: 0 }} />
-                <span onClick={activateNoteFilter} style={{ cursor: 'pointer' }}>Note</span>
-                <Select value={noteOp} onChange={onNoteOpChange} options={NOTE_OP_OPTIONS} emptyLabel={null} style={{ minWidth: '108px' }} />
-                <input
-                  type="number" min="1" value={noteDays}
-                  onChange={e => onNoteDaysChange(e.target.value)}
-                  onFocus={() => { if (!noteActive) activateNoteFilter(); }}
-                  aria-label="Note activity days"
-                  style={{ width: '3.25rem', padding: '0.2rem 0.3rem', fontSize: 'var(--text-xs)', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px' }}
-                />
-                days
-              </div>
+              <label className="filter-dropdown-item">
+                <input type="radio" name="activity_filter" checked={noteActive} onChange={activateNoteFilter} style={{ width: '14px', height: '14px' }} />
+                Note activity…
+              </label>
+              {noteActive && (
+                <div className="filter-note-controls">
+                  <div className="seg-toggle" role="group" aria-label="Note activity direction">
+                    <button type="button" className={`seg-btn${noteOp === 'lt' ? ' active' : ''}`} onClick={() => onNoteOpChange('lt')}>Within</button>
+                    <button type="button" className={`seg-btn${noteOp === 'gt' ? ' active' : ''}`} onClick={() => onNoteOpChange('gt')}>Older than</button>
+                  </div>
+                  <input
+                    type="number" min="1" value={noteDays}
+                    onChange={e => onNoteDaysChange(e.target.value)}
+                    aria-label="Note activity days"
+                    className="filter-note-days"
+                  />
+                  days
+                </div>
+              )}
               <label className="filter-dropdown-item">
                 <input type="radio" name="activity_filter" checked={activityFilter === 'note_never'} onChange={() => setFilterActivity('note_never')} style={{ width: '14px', height: '14px' }} />
                 No notes ever
@@ -339,15 +359,19 @@ export default function ContactList({ onView, onExport }) {
           )}
         </div>
 
-        {hasActiveFilters && (
-          <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--danger)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <X size={12} /> Clear filters
-          </button>
-        )}
+        {/* Spacer absorbs the width of the clear button appearing so the triggers don't move. */}
+        <div style={{ flex: '1 1 0', minWidth: '0.5rem' }} />
 
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-          {loadingContacts ? 'Loading…' : `${filtered.length} of ${totalCount}`}
-        </span>
+        <div className="filter-meta">
+          {hasActiveFilters && (
+            <button className="filter-clear" onClick={clearAllFilters}>
+              <X size={12} /> Clear filters
+            </button>
+          )}
+          <span className="filter-count-text">
+            {loadingContacts ? 'Loading…' : `${filtered.length} of ${totalCount}`}
+          </span>
+        </div>
       </div>
 
       {/* Bulk actions */}
