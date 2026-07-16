@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { resolveConfig, getOfferStatusColors } from '../lib/clientConfig';
+import { summarizeNoteActivity } from '../lib/activityStats';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, Download } from 'lucide-react';
 
@@ -46,6 +47,35 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [offerStats, setOfferStats] = useState(null);
   const [offerLoading, setOfferLoading] = useState(true);
   const [offerError, setOfferError] = useState(null);
+  const [noteStats, setNoteStats]     = useState(null);
+  const [noteLoading, setNoteLoading] = useState(true);
+  const [noteError, setNoteError]     = useState(null);
+
+  // Notes logged across the client's contacts, bucketed today/7d/30d. One fetch per
+  // client (the card shows all three windows at once, so the period toggle doesn't apply).
+  const loadNoteStats = useCallback(async () => {
+    setNoteLoading(true);
+    setNoteError(null);
+    if (!currentClientId) { setNoteLoading(false); return; }
+    try {
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { data, error } = await supabase.rpc('note_activity', {
+        p_client_id: currentClientId,
+        p_since: since,
+      });
+      if (error) throw error;
+      setNoteStats(summarizeNoteActivity(data));
+    } catch (e) {
+      console.error('loadNoteStats error:', e);
+      setNoteError(e.message);
+    } finally {
+      setNoteLoading(false);
+    }
+  }, [currentClientId]);
+
+  useEffect(() => {
+    loadNoteStats();
+  }, [loadNoteStats]);
 
   const loadOfferStats = useCallback(async (p) => {
     setOfferLoading(true);
@@ -150,6 +180,37 @@ export default function Dashboard({ onClose, onViewContact }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+        {/* ── Activity (notes logged) ── */}
+        <div style={card}>
+          <div style={sectionTitle}>Activity — Notes Logged</div>
+
+          {noteLoading && (
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading…</div>
+          )}
+
+          {noteError && (
+            <div style={{ color: '#f87171', fontSize: '0.875rem' }}>Failed to load activity: {noteError}</div>
+          )}
+
+          {!noteLoading && noteStats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+              {[
+                { key: 'today', label: 'Today' },
+                { key: 'week',  label: '7 Days' },
+                { key: 'month', label: '30 Days' },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>{label}</div>
+                  <div style={{ ...bigNum, color: 'var(--accent)' }}>{noteStats[key].notes}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    {noteStats[key].contacts} contact{noteStats[key].contacts !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* ── Offers ── */}
         <div style={card}>
