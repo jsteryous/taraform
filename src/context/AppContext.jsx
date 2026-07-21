@@ -12,7 +12,7 @@ const AppUIContext   = createContext(null);
 // activity_log + bad_phones are still carried so the client drift re-check
 // (contactMatchesFilters) can drop a contact edited in the detail overlay — a logged note
 // or a struck-through number — without a refetch. Small jsonb at PAGE_SIZE rows.
-const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,email,county,status,sms_status,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
+const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,sms_status,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
 const PAGE_SIZE   = 50;
 
 // ── Error classification ──────────────────────────────────────

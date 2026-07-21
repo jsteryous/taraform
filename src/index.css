@@ -1354,6 +1354,12 @@ input[type="file"] {
 .phone-bad { text-decoration: line-through; opacity: 0.5; }
 .phone-bad:hover { text-decoration: line-through underline; }
 .phone-bad-toggle { color: var(--danger); }
+/* A number marked "verified" (confirmed working) — the opposite of .phone-bad. */
+.phone-verified { color: var(--success); font-weight: 600; }
+.phone-verified svg { color: var(--success); }
+.phone-verified:hover { color: var(--success); }
+.phone-verified:hover svg { color: var(--success); }
+.phone-verified-toggle { color: var(--success); }
 /* Keyboard shortcut hint chip (e.g. "esc" on the detail back button) */
 .kbd-hint {
     font-family: var(--mono);

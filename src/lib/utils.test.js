@@ -113,6 +113,13 @@ describe('mapDbContact / mapContactToDb', () => {
     const back = mapContactToDb(mapDbContact({ ...dbRow, bad_phones: ['8645551234'] }), 'u', 'c');
     expect(back.bad_phones).toEqual(['8645551234']);
   });
+
+  it('round-trips verified_phones and defaults it to [] when the DB sends null', () => {
+    expect(mapDbContact({ ...dbRow, verified_phones: null }).verifiedPhones).toEqual([]);
+    expect(mapDbContact({ ...dbRow, verified_phones: ['8645551234'] }).verifiedPhones).toEqual(['8645551234']);
+    const back = mapContactToDb(mapDbContact({ ...dbRow, verified_phones: ['8645551234'] }), 'u', 'c');
+    expect(back.verified_phones).toEqual(['8645551234']);
+  });
 });
 
 describe('parseCSV', () => {

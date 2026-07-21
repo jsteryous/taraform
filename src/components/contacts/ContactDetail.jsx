@@ -8,7 +8,7 @@ import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
-import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, MessageSquare, Pencil, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, Pencil, HelpCircle } from 'lucide-react';
 
 const SMS_STATUS_COLORS = {
   eligible: 'var(--text-muted)', contacted: 'var(--accent)',
@@ -120,11 +120,28 @@ export default function ContactDetail({ onClose }) {
   }
   // Mark a number "no good" (wrong/disconnected) without deleting it. We store the
   // normalized digits so the flag survives a reformat; the number still shows, struck.
+  // Marking a number bad clears "verified" for it — the two states are mutually exclusive.
   function toggleBadPhone(p) {
     const digits = normalizePhone(p);
     if (!digits) return;
     const bad = draft.badPhones || [];
-    update('badPhones', bad.includes(digits) ? bad.filter(d => d !== digits) : [...bad, digits]);
+    const nowBad = !bad.includes(digits);
+    updateMultiple({
+      badPhones: nowBad ? [...bad, digits] : bad.filter(d => d !== digits),
+      ...(nowBad ? { verifiedPhones: (draft.verifiedPhones || []).filter(d => d !== digits) } : {}),
+    });
+  }
+  // Mark a number "verified" (confirmed working) — the opposite of toggleBadPhone.
+  // Marking a number verified clears "no good" for it.
+  function toggleVerifiedPhone(p) {
+    const digits = normalizePhone(p);
+    if (!digits) return;
+    const verified = draft.verifiedPhones || [];
+    const nowVerified = !verified.includes(digits);
+    updateMultiple({
+      verifiedPhones: nowVerified ? [...verified, digits] : verified.filter(d => d !== digits),
+      ...(nowVerified ? { badPhones: (draft.badPhones || []).filter(d => d !== digits) } : {}),
+    });
   }
 
   function updateMultiField(field, idx, val) {
@@ -211,6 +228,7 @@ export default function ContactDetail({ onClose }) {
             </div>
             {(draft.phones?.length ? draft.phones : ['']).map((p, i) => {
               const isBad = (draft.badPhones || []).includes(normalizePhone(p));
+              const isVerified = (draft.verifiedPhones || []).includes(normalizePhone(p));
               return (
               <div key={i} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem' }}>
                 {(editingPhone === i || !p) ? (
@@ -231,10 +249,13 @@ export default function ContactDetail({ onClose }) {
                   </>
                 ) : (
                   <>
-                    <a className={`phone-link${isBad ? ' phone-bad' : ''}`} href={`tel:+1${normalizePhone(p)}`} title="Call" onClick={handleTelClick}>
+                    <a className={`phone-link${isBad ? ' phone-bad' : ''}${isVerified ? ' phone-verified' : ''}`} href={`tel:+1${normalizePhone(p)}`} title="Call" onClick={handleTelClick}>
                       <Phone size={13} /> {p}
                     </a>
-                    <a className="copy-btn" href={`sms:+1${normalizePhone(p)}`} title="Text"><MessageSquare size={13} /></a>
+                    <button className={`copy-btn${isVerified ? ' phone-verified-toggle' : ''}`} onClick={() => toggleVerifiedPhone(p)}
+                            title={isVerified ? 'Unmark — no longer verified' : 'Mark as verified'}>
+                      <Check size={13} />
+                    </button>
                     <button className="copy-btn" onClick={() => { navigator.clipboard.writeText(p); showToast('Copied!'); }} title="Copy"><Copy size={13} /></button>
                     <button className="copy-btn" onClick={() => setEditingPhone(i)} title="Edit"><Pencil size={13} /></button>
                     <button className={`copy-btn${isBad ? ' phone-bad-toggle' : ''}`} onClick={() => toggleBadPhone(p)}
