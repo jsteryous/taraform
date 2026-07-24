@@ -126,6 +126,20 @@ describe('applyContactFilters', () => {
     expect(callsOf(short)[0].args[0]).not.toContain('phones_digits');
   });
 
+  it('treats a bare 3-digit area code as a phone search', () => {
+    for (const term of ['919', '(919)', '919-']) {
+      const q = mockQuery();
+      applyContactFilters(q, { search: term });
+      expect(callsOf(q)[0].args[0]).toContain('phones_digits.ilike.%919%');
+    }
+  });
+
+  it('keeps the 4-digit threshold when 3 digits are mixed with text', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { search: '104 Main St' });
+    expect(callsOf(q)[0].args[0]).not.toContain('phones_digits');
+  });
+
   it('finds a phone even when typed with spaces (multi-word path)', () => {
     const q = mockQuery();
     applyContactFilters(q, { search: '864 555 1234' });

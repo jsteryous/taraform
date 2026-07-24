@@ -105,11 +105,14 @@ export function applyContactFilters(q, filters = {}) {
     const arrayMatch = `tax_map_ids.cs.["${raw}"],property_addresses.cs.["${raw}"]`;
     // Phones are stored formatted ("(864) 555-1234"); match against the digit-only
     // generated column (db/20260622_phone_search.sql) so any format the user types —
-    // or just the last 4 digits — finds the number. >=4 digits keeps short address/
-    // parcel numbers from flooding name searches. Digits are 0-9 only, so safe to
+    // or just the last 4 digits — finds the number. Threshold: 4 digits normally
+    // (keeps street/parcel numbers inside mixed queries from flooding name searches),
+    // but 3 when the query is nothing but digits/phone punctuation — a bare area code
+    // ("919") is unambiguously a phone search. Digits are 0-9 only, so safe to
     // interpolate verbatim. See src/lib/CLAUDE.md.
     const digits = filters.search.replace(/\D/g, '');
-    const phoneMatch = digits.length >= 4 ? `,phones_digits.ilike.%${digits}%` : '';
+    const phoneLike = /^[\d\s().+-]+$/.test(filters.search.trim());
+    const phoneMatch = digits.length >= (phoneLike ? 3 : 4) ? `,phones_digits.ilike.%${digits}%` : '';
     if (words.length === 1) {
       q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,county.ilike.%${s}%,owner_address.ilike.%${s}%,email.ilike.%${s}%,${arrayMatch}${phoneMatch}`);
     } else if (words.length > 1) {
