@@ -93,6 +93,18 @@ describe('mapDbContact / mapContactToDb', () => {
     expect(c.customFields).toEqual({});
   });
 
+  it('round-trips follow_up_on, and nulls it when unset (never undefined/empty string)', () => {
+    const withDate = mapDbContact({ ...dbRow, follow_up_on: '2026-08-15' });
+    expect(withDate.followUpOn).toBe('2026-08-15');
+    expect(mapContactToDb(withDate, 'user-1', 'client-uuid').follow_up_on).toBe('2026-08-15');
+
+    const without = mapDbContact(dbRow);
+    expect(without.followUpOn).toBe(null);
+    expect(mapContactToDb(without, 'user-1', 'client-uuid').follow_up_on).toBe(null);
+    // An empty string from a cleared date input must persist as NULL, not '' (invalid date).
+    expect(mapContactToDb({ ...without, followUpOn: '' }, 'user-1', 'client-uuid').follow_up_on).toBe(null);
+  });
+
   it('round-trips the camelCase shape back to DB columns', () => {
     const c = mapDbContact(dbRow);
     const back = mapContactToDb(c, 'user-1', 'client-uuid');

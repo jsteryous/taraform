@@ -25,6 +25,9 @@ export const LAND_CONFIG = {
     { label: 'under contract', status: 'UC',         color: '#34d399' },
     { label: 'closed',         status: 'Closed',     color: '#10b981' },
   ],
+  // Follow-up queue: contacts in `statuses` with no note in `days` days are auto-due
+  // (a manual follow_up_on date on the contact overrides). See contactFilters.isFollowUpDue.
+  followUp: { days: 90, statuses: ['Contacted'] },
   tabs: ['notes', 'offers'],
   visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],
@@ -48,6 +51,8 @@ export const RESTAURANT_CONFIG = {
     { label: 'vip',      status: 'VIP',     color: '#fbbf24' },
     { label: 'inactive', status: 'Inactive',color: '#f87171' },
   ],
+  // No auto-due statuses for this vertical — manual follow-up dates still work.
+  followUp: { days: 90, statuses: [] },
   tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
@@ -71,6 +76,7 @@ export const GENERIC_CONFIG = {
     { label: 'interested',status: 'Interested', color: '#fbbf24' },
     { label: 'converted', status: 'Converted',  color: '#34d399' },
   ],
+  followUp: { days: 90, statuses: ['Contacted'] },
   tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
@@ -101,6 +107,7 @@ export function resolveConfig(client) {
     leadSourceOptions:    client.config.leadSourceOptions    ?? base.leadSourceOptions,
     contactMethodOptions: client.config.contactMethodOptions ?? base.contactMethodOptions,
     quickNotes:           client.config.quickNotes           ?? base.quickNotes,
+    followUp:             client.config.followUp             ?? base.followUp,
   };
 }
 

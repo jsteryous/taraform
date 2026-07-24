@@ -14,7 +14,7 @@ import ErrorBoundary from './components/shared/ErrorBoundary';
 
 function hasActiveFilters(f) {
   if (!f) return false;
-  return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity);
+  return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity || f.followUp);
 }
 
 // Notes live in two places: the freeform `notes` text column (written at create / CSV import,

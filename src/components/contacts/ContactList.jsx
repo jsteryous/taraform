@@ -29,7 +29,8 @@ export default function ContactList({ onView, onExport }) {
   } = useApp();
 
   const { search: filterSearch, statuses: filterStatuses, counties: filterCounties,
-          phone: filterPhone, activity: filterActivity, email: filterEmail } = filters;
+          phone: filterPhone, activity: filterActivity, email: filterEmail,
+          followUp: filterFollowUp } = filters;
 
   const setFilterSearch    = useCallback((val) => setFilters(f => ({ ...f, search: val })),   [setFilters]);
   const setFilterStatuses  = useCallback((val) => setFilters(f => ({ ...f, statuses: val })), [setFilters]);
@@ -37,6 +38,7 @@ export default function ContactList({ onView, onExport }) {
   const setFilterPhone     = useCallback((val) => setFilters(f => ({ ...f, phone: val })),    [setFilters]);
   const setFilterActivity  = useCallback((val) => setFilters(f => ({ ...f, activity: val })), [setFilters]);
   const setFilterEmail     = useCallback((val) => setFilters(f => ({ ...f, email: val })),    [setFilters]);
+  const setFilterFollowUp  = useCallback((val) => setFilters(f => ({ ...f, followUp: val })), [setFilters]);
 
   const cfg          = resolveConfig(currentClient);
   const ALL_STATUSES = useMemo(() => cfg.statuses.map(s => s.value), [cfg]);
@@ -91,6 +93,7 @@ export default function ContactList({ onView, onExport }) {
       email:    emailFilter || null,
       search:   search || null,
       activity: activityFilter || null,
+      followUp: filterFollowUp || null,
     };
     clearTimeout(searchTimer.current);
     if (search) {
@@ -136,6 +139,7 @@ export default function ContactList({ onView, onExport }) {
     phoneFilter !== '' ||
     emailFilter !== '' ||
     activityFilter !== '' ||
+    !!filterFollowUp ||
     search !== '';
 
   function clearAllFilters() {
@@ -214,7 +218,7 @@ export default function ContactList({ onView, onExport }) {
   // active, so the bar never reflows as the selection changes.
   const statusActive = selectedStatuses.size < ALL_STATUSES.length;
   const countyActive = selectedCounties.size > 0;
-  const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0);
+  const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0) + (filterFollowUp ? 1 : 0);
 
   // Current filter snapshot — used for load-more to continue with same query params
   const serverFilters = {
@@ -224,6 +228,7 @@ export default function ContactList({ onView, onExport }) {
     email:    emailFilter || null,
     search:   search || null,
     activity: activityFilter || null,
+    followUp: filterFollowUp || null,
   };
 
   const filterBtnClass = (active) => `filter-btn${active ? ' active' : ''}`;
@@ -354,6 +359,13 @@ export default function ContactList({ onView, onExport }) {
               <label className="filter-dropdown-item">
                 <input type="radio" name="activity_filter" checked={activityFilter === 'note_never'} onChange={() => setFilterActivity('note_never')} style={{ width: '14px', height: '14px' }} />
                 No notes ever
+              </label>
+              <div className="filter-dropdown-section">Follow-up</div>
+              {/* The filter value carries the resolved config so applyContactFilters
+                  stays pure — see EMPTY_FILTERS in AppContext. */}
+              <label className="filter-dropdown-item">
+                <input type="checkbox" checked={!!filterFollowUp} onChange={() => setFilterFollowUp(filterFollowUp ? null : cfg.followUp)} style={{ width: '14px', height: '14px' }} />
+                Due for follow-up
               </label>
             </div>
           )}

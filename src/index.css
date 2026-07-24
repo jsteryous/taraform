@@ -444,6 +444,21 @@ textarea {
     letter-spacing: 0.5px;
 }
 
+/* "Due" pill next to the Follow-up field label (ContactDetail) */
+.followup-due-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--mono);
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning) 27%, transparent);
+}
+
 .status-new-lead { background: var(--border); color: var(--text-muted); }
 .status-contacted { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 .status-hot-lead { background: rgba(249, 115, 22, 0.15); color: #fb923c; }

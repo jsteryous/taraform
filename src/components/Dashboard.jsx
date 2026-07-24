@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, EMPTY_FILTERS } from '../context/AppContext';
 import { resolveConfig, getOfferStatusColors } from '../lib/clientConfig';
 import { summarizeNoteActivity } from '../lib/activityStats';
+import { applyContactFilters } from '../lib/contactFilters';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, CalendarClock } from 'lucide-react';
 
 const PERIODS = [
   { value: 'today',   label: 'Today' },
@@ -40,7 +41,7 @@ function downloadOffersReport(recent, period) {
 }
 
 export default function Dashboard({ onClose, onViewContact }) {
-  const { currentClientId, currentClient, theme } = useApp();
+  const { currentClientId, currentClient, theme, setFilters } = useApp();
   const cfg = resolveConfig(currentClient);
   const offerColors = getOfferStatusColors(theme);
   const [period, setPeriod]         = useState('week');
@@ -50,6 +51,44 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [noteStats, setNoteStats]     = useState(null);
   const [noteLoading, setNoteLoading] = useState(true);
   const [noteError, setNoteError]     = useState(null);
+  const [fuStats, setFuStats]         = useState(null);
+  const [fuLoading, setFuLoading]     = useState(true);
+  const [fuError, setFuError]         = useState(null);
+
+  // Follow-ups due — the same filter pipeline as the list view (applyContactFilters
+  // with the followUp facet), so this count always equals what "Work the queue" shows.
+  // Ordered most-neglected first: never-noted, then oldest last note.
+  const loadFollowUps = useCallback(async () => {
+    setFuLoading(true);
+    setFuError(null);
+    if (!currentClientId) { setFuLoading(false); return; }
+    try {
+      const followUp = resolveConfig(currentClient).followUp;
+      let q = supabase.from('property_crm_contacts')
+        .select('id,first_name,last_name,county,status,follow_up_on,last_note_at', { count: 'exact' })
+        .eq('client_id', currentClientId)
+        .order('last_note_at', { ascending: true, nullsFirst: true })
+        .limit(7);
+      q = applyContactFilters(q, { followUp });
+      const { data, count, error } = await q;
+      if (error) throw error;
+      setFuStats({ count: count || 0, rows: data || [] });
+    } catch (e) {
+      console.error('loadFollowUps error:', e);
+      setFuError(e.message);
+    } finally {
+      setFuLoading(false);
+    }
+  }, [currentClientId, currentClient]);
+
+  useEffect(() => {
+    loadFollowUps();
+  }, [loadFollowUps]);
+
+  function workTheQueue() {
+    setFilters({ ...EMPTY_FILTERS, followUp: cfg.followUp });
+    onClose();
+  }
 
   // Notes logged across the client's contacts, bucketed today/7d/30d. One fetch per
   // client (the card shows all three windows at once, so the period toggle doesn't apply).
@@ -180,6 +219,75 @@ export default function Dashboard({ onClose, onViewContact }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+        {/* ── Follow-ups due ── */}
+        <div style={card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+            <div style={{ ...sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <CalendarClock size={13} /> Follow-ups Due
+            </div>
+            {!fuLoading && fuStats?.count > 0 && (
+              <button
+                onClick={workTheQueue}
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                Work the queue →
+              </button>
+            )}
+          </div>
+
+          {fuLoading && (
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading…</div>
+          )}
+
+          {fuError && (
+            <div style={{ color: '#f87171', fontSize: '0.875rem' }}>Failed to load follow-ups: {fuError}</div>
+          )}
+
+          {!fuLoading && fuStats && (
+            fuStats.count === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Nobody is due for follow-up. Nice work.
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ ...bigNum, color: 'var(--warning)' }}>{fuStats.count}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    contact{fuStats.count !== 1 ? 's' : ''} due — most neglected first
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+                  <span>Contact</span><span>County</span><span>Status</span><span style={{ textAlign: 'right' }}>Last Note</span>
+                </div>
+                {fuStats.rows.map(r => {
+                  const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || '—';
+                  const lastNote = r.last_note_at
+                    ? `${Math.floor((Date.now() - new Date(r.last_note_at)) / 86400000)}d ago`
+                    : 'Never';
+                  return (
+                    <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                      <span
+                        onClick={() => { if (onViewContact) onViewContact({ id: r.id }); }}
+                        style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
+                      >{name}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.county || '—'}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.status || '—'}</span>
+                      <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
+                        {r.follow_up_on ? `due ${new Date(r.follow_up_on + 'T00:00:00').toLocaleDateString()}` : lastNote}
+                      </span>
+                    </div>
+                  );
+                })}
+                {fuStats.count > fuStats.rows.length && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '0.5rem' }}>
+                    + {fuStats.count - fuStats.rows.length} more in the queue
+                  </div>
+                )}
+              </>
+            )
+          )}
+        </div>
 
         {/* ── Activity (notes logged) ── */}
         <div style={card}>

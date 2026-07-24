@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
+import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
@@ -159,6 +160,30 @@ export default function ContactDetail({ onClose }) {
   const smsStatus = draft.smsStatus || 'eligible';
   const smsColor = SMS_STATUS_COLORS[smsStatus] || 'var(--text-muted)';
 
+  // Due via the manual date or the auto rule (eligible status + stale notes) — same
+  // predicate the queue filter uses, so the badge agrees with the list.
+  const followUpDue = isFollowUpDue(draft, cfg.followUp);
+
+  function followUpPreset(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return todayStr(d);
+  }
+
+  // Logging a note while the manual follow-up date is due counts as doing the follow-up,
+  // so clear the date in the same save (a single updateMultiple — sequential saves race
+  // through draftRef, see components/CLAUDE.md). A future date survives interim notes,
+  // and note deletion (shorter log) never clears.
+  function handleNotesChange(field, value) {
+    if (field === 'activityLog'
+        && value.length > (draft.activityLog || []).length
+        && draft.followUpOn && draft.followUpOn <= todayStr()) {
+      updateMultiple({ activityLog: value, followUpOn: null });
+      return;
+    }
+    update(field, value);
+  }
+
 
   return (
     <div id="contactDetailPage" className="active">
@@ -209,6 +234,28 @@ export default function ContactDetail({ onClose }) {
           <div style={{ marginBottom: '1rem' }}>
             <div className="field-label">Status</div>
             <Select value={draft.status || 'New Lead'} onChange={v => update('status', v)} options={STATUSES} emptyLabel={null} />
+          </div>
+
+          {/* Follow-up — manual date; the auto rule (Contacted + stale notes) can
+              mark Due without a date. Presets save immediately, like quick notes. */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              Follow-up
+              {followUpDue && <span className="followup-due-badge">Due</span>}
+            </div>
+            <input type="date" className="inline-input" value={draft.followUpOn || ''}
+              onChange={e => setDraft(d => ({ ...d, followUpOn: e.target.value || null }))}
+              onBlur={e => update('followUpOn', e.target.value || null)}
+            />
+            <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+              {[['1w', 7], ['2w', 14], ['1m', 30], ['3m', 90]].map(([label, days]) => (
+                <button key={label} type="button" className="btn-small"
+                  onClick={() => update('followUpOn', followUpPreset(days))}>{label}</button>
+              ))}
+              {draft.followUpOn && (
+                <button type="button" className="btn-small" onClick={() => update('followUpOn', null)}>Clear</button>
+              )}
+            </div>
           </div>
 
           {/* Lead Source */}
@@ -427,7 +474,7 @@ export default function ContactDetail({ onClose }) {
             </button>
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
-            {tab === 'notes' && <NotesTab contact={draft} onChange={update} quickNotes={cfg.quickNotes} />}
+            {tab === 'notes' && <NotesTab contact={draft} onChange={handleNotesChange} quickNotes={cfg.quickNotes} />}
           </div>
         </div>
 

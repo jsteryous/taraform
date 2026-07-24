@@ -13,6 +13,36 @@ export function hasGoodPhone(contact) {
   });
 }
 
+// Local calendar date as YYYY-MM-DD — the comparison unit for follow_up_on (a DATE
+// column): "due" means the user's local today or earlier, no timezone midnight skew.
+export function todayStr(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// Most recent note timestamp from the activity log (type 'note', or legacy untyped-
+// with-text) — the JS counterpart of the last_note_at generated column.
+export function lastNoteDate(contact) {
+  return (contact.activityLog || [])
+    .filter((e) => e.type === 'note' || (!e.type && e.text))
+    .map((e) => new Date(e.timestamp || e.createdAt))
+    .filter((d) => !isNaN(d))
+    .sort((a, b) => b - a)[0] || null;
+}
+
+// Per-contact "due for follow-up" predicate. `followUp` is the resolved client config
+// ({ days, statuses } from resolveConfig().followUp). A manual follow_up_on date always
+// wins — set, it alone decides (arrived = due, future = not due, even outside the auto
+// statuses); unset, the auto rule applies: an eligible status with no note in the last
+// `days` days (never-noted counts as due — last_note_at null is the most overdue).
+// Also used directly for the ContactDetail "Due" badge.
+export function isFollowUpDue(contact, followUp) {
+  if (!followUp?.days) return false;
+  if (contact.followUpOn) return contact.followUpOn <= todayStr();
+  if (!(followUp.statuses || []).includes(contact.status)) return false;
+  const last = lastNoteDate(contact);
+  return !last || last < new Date(Date.now() - followUp.days * 86400000);
+}
+
 // Pure query-shaping for property_crm_contacts list/export.
 // Takes a PostgREST query builder `q` and the current `filters` object, applies
 // the active filters, and returns the builder. No supabase/component state here so
@@ -47,6 +77,21 @@ export function applyContactFilters(q, filters = {}) {
         }
       }
     }
+  }
+
+  // Follow-up queue — filters.followUp carries the resolved config ({ days, statuses })
+  // so this stays a pure function of its inputs. Due = manual follow_up_on has arrived,
+  // OR no manual date + auto-eligible status + last note older than `days` (or never).
+  // Mirrors isFollowUpDue above; keep the two in sync.
+  if (filters.followUp?.days) {
+    const { days, statuses = [] } = filters.followUp;
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    // Status values may contain spaces/slashes ("Offer Rejected/NFS") — quote them for
+    // the in.() list. None contain commas or quotes (they come from client config).
+    const auto = statuses.length
+      ? `,and(follow_up_on.is.null,status.in.(${statuses.map((s) => `"${s}"`).join(',')}),or(last_note_at.is.null,last_note_at.lt.${cutoff}))`
+      : '';
+    q = q.or(`follow_up_on.lte.${todayStr()}${auto}`);
   }
 
   if (filters.search) {
@@ -89,11 +134,7 @@ export function matchesNoteActivity(contact, activity) {
   const [type, op, days] = activity.split('_');
   if (type !== 'note') return true;
 
-  const notes = (contact.activityLog || []).filter((e) => e.type === 'note' || (!e.type && e.text));
-  const lastNote = notes
-    .map((e) => new Date(e.timestamp || e.createdAt))
-    .filter((d) => !isNaN(d))
-    .sort((a, b) => b - a)[0];
+  const lastNote = lastNoteDate(contact);
   if (op === 'never') return !lastNote;
 
   const n = parseInt(days, 10);
@@ -111,9 +152,12 @@ export function matchesNoteActivity(contact, activity) {
 // refetch, so the follow-up work queue shrinks as you clear contacts. `search` is
 // intentionally omitted — it's server-only (ilike / jsonb containment) and rarely drifts.
 export function contactMatchesFilters(contact, filters = {}) {
-  const { statuses, counties, phone, email, activity } = filters;
+  const { statuses, counties, phone, email, activity, followUp } = filters;
   if (statuses && !statuses.includes(contact.status)) return false;
   if (counties?.length && !counties.includes(contact.county)) return false;
+  // Follow-up queue drift: logging a note or pushing the date forward on a due contact
+  // drops it from the queue in real time, without a refetch.
+  if (followUp && !isFollowUpDue(contact, followUp)) return false;
 
   const goodPhone = hasGoodPhone(contact);
   if (phone === 'has' && !goodPhone) return false;

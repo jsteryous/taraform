@@ -10,6 +10,8 @@
 
 **Dormant tables** (`sms_settings`, `sms_messages`, `sms_templates`, `email_messages`, `email_templates`, `email_tokens`, `*_followup_queue`) hold historical SMS/email data from the retired Railway server. No UI reads them; don't delete without asking. If `sms_settings` is ever touched again: no uniqueness constraint on `(key, client_id)` — never `.upsert()` without `onConflict`, and use `.maybeSingle()`.
 
+**`follow_up_on` is a `date` (not timestamptz)** — the user picks a day; "due" means local-today or earlier, compared as `YYYY-MM-DD` strings client-side (`isFollowUpDue`/`todayStr` in `contactFilters.js`). Persist `null` when unset, never `''`. The "due for follow-up" predicate is derived at read time (manual date arrived, OR eligible status + `last_note_at` older than the config window) — there is no queue table or job to sync. Clearing rule lives in `ContactDetail.handleNotesChange`: logging a note while the date is due clears it in the same save; future dates survive interim notes.
+
 **`contact_offers.client_id` is unreliable** (null on older rows). Always join through `property_crm_contacts` when filtering by client.
 
 **Tax map IDs are unique within a county, not globally.** Same parcel ID can exist in different counties — duplicate detection (`AddContactModal.findDuplicates`, `ImportModal.findDuplicate`/`buildLookupMaps`) must key by `county|taxMapId`, not `taxMapId` alone.

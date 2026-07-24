@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone } from './contactFilters';
+import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone, isFollowUpDue, todayStr } from './contactFilters';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
 // exactly which query operators applyContactFilters emits without a live DB.
@@ -132,6 +132,34 @@ describe('applyContactFilters', () => {
     expect(callsOf(q)[0].args[0]).toContain('phones_digits.ilike.%8645551234%');
   });
 
+  it('builds the follow-up queue clause: manual date OR (eligible status + stale/no notes)', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { followUp: { days: 90, statuses: ['Contacted', 'Offer Rejected/NFS'] } });
+    const [call] = callsOf(q);
+    expect(call.method).toBe('or');
+    const expr = call.args[0];
+    expect(expr).toContain(`follow_up_on.lte.${todayStr()}`);
+    // Values with spaces/slashes must be quoted inside in.()
+    expect(expr).toContain('status.in.("Contacted","Offer Rejected/NFS")');
+    expect(expr).toContain('and(follow_up_on.is.null,');
+    expect(expr).toContain('or(last_note_at.is.null,last_note_at.lt.');
+    // Auto cutoff ~90 days ago
+    const cutoff = new Date(expr.match(/last_note_at\.lt\.([^)]+)\)/)[1]).getTime();
+    expect(Math.abs(cutoff - (Date.now() - 90 * 86400000))).toBeLessThan(5000);
+  });
+
+  it('follow-up with no eligible statuses is manual-date-only', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { followUp: { days: 90, statuses: [] } });
+    expect(callsOf(q)).toEqual([{ method: 'or', args: [`follow_up_on.lte.${todayStr()}`] }]);
+  });
+
+  it('emits no follow-up clause when the facet is off', () => {
+    const off = mockQuery();
+    applyContactFilters(off, { followUp: null });
+    expect(callsOf(off)).toHaveLength(0);
+  });
+
   it('strips PostgREST/JSON control chars from search input (injection guard)', () => {
     const q = mockQuery();
     applyContactFilters(q, { search: 'a,b)c(d"e]' });
@@ -244,6 +272,61 @@ describe('contactMatchesFilters', () => {
   it('requires every active facet to pass (AND semantics)', () => {
     expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'has' })).toBe(true);
     expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'missing' })).toBe(false);
+  });
+});
+
+// The client-side mirror of the server followUp clause — used for the drift re-check
+// (queue shrinks live as contacts are touched) and the ContactDetail "Due" badge.
+describe('isFollowUpDue', () => {
+  const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const dateStr = (offsetDays) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return todayStr(d);
+  };
+  const cfg = { days: 90, statuses: ['Contacted'] };
+  const noted = (days) => ({ status: 'Contacted', activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }] });
+
+  it('is never due without config (auto rule unset)', () => {
+    expect(isFollowUpDue(noted(200), null)).toBe(false);
+    expect(isFollowUpDue(noted(200), undefined)).toBe(false);
+  });
+
+  it('manual date: due when today or past, not when future', () => {
+    expect(isFollowUpDue({ status: 'Contacted', followUpOn: dateStr(0) }, cfg)).toBe(true);
+    expect(isFollowUpDue({ status: 'Contacted', followUpOn: dateStr(-10) }, cfg)).toBe(true);
+    expect(isFollowUpDue({ status: 'Contacted', followUpOn: dateStr(10) }, cfg)).toBe(false);
+  });
+
+  it('manual date works on any status, and overrides the auto rule both ways', () => {
+    // Hot Lead isn't auto-eligible, but a manual date makes it due.
+    expect(isFollowUpDue({ status: 'Hot Lead', followUpOn: dateStr(-1) }, cfg)).toBe(true);
+    // A future date suppresses the auto rule even for a stale Contacted contact.
+    expect(isFollowUpDue({ ...noted(200), followUpOn: dateStr(30) }, cfg)).toBe(false);
+  });
+
+  it('auto rule: due when the last note is older than the window, or never noted', () => {
+    expect(isFollowUpDue(noted(100), cfg)).toBe(true);
+    expect(isFollowUpDue(noted(10), cfg)).toBe(false);
+    expect(isFollowUpDue({ status: 'Contacted', activityLog: [] }, cfg)).toBe(true);
+    expect(isFollowUpDue({ status: 'Contacted' }, cfg)).toBe(true);
+  });
+
+  it('auto rule only applies to eligible statuses', () => {
+    expect(isFollowUpDue({ ...noted(200), status: 'Hot Lead' }, cfg)).toBe(false);
+    expect(isFollowUpDue({ ...noted(200), status: 'Dead/Pass' }, cfg)).toBe(false);
+    expect(isFollowUpDue({ status: 'Contacted', activityLog: [] }, { days: 90, statuses: [] })).toBe(false);
+  });
+
+  it('drift re-check: contactMatchesFilters drops a touched contact from the queue', () => {
+    const filters = { followUp: cfg };
+    expect(contactMatchesFilters(noted(100), filters)).toBe(true);
+    // Logging a note today (what happens after a call) drops the row live.
+    expect(contactMatchesFilters(noted(0), filters)).toBe(false);
+    // So does pushing the manual date into the future ("snooze").
+    expect(contactMatchesFilters({ ...noted(100), followUpOn: dateStr(14) }, filters)).toBe(false);
+    // Facet off → pass-through.
+    expect(contactMatchesFilters(noted(100), { followUp: null })).toBe(true);
   });
 });
 
