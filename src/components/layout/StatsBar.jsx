@@ -4,28 +4,26 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function StatsBar({ onFilterStatus }) {
-  const { currentClient, currentClientId, contacts } = useApp();
+  const { currentClient, currentClientId } = useApp();
   const cfg = resolveConfig(currentClient);
   const [counts, setCounts] = useState({});
 
   useEffect(() => {
     if (!currentClientId) return;
-    // Run count queries for each status pill in parallel
+    // Run count queries for each status pill in parallel.
+    // Every pill counts CONTACTS in its status — the same set its click filters to.
+    // (The 'offers' pill used to count contact_offers rows instead, which drifted:
+    // an offer row stays forever, but the contact moves on to Offer Rejected/NFS,
+    // UC, Dead/Pass … so the pill read 7 and the filtered list showed 3.)
     const pills = cfg.statsPills.filter(p => p.status !== null);
     Promise.all(
-      pills.map(({ status, label }) => {
-        if (label === 'offers') {
-          return supabase.from('contact_offers')
-            .select('id, property_crm_contacts!inner(client_id)', { count: 'exact', head: true })
-            .eq('property_crm_contacts.client_id', currentClientId)
-            .then(({ count }) => ({ status, label, count: count || 0 }));
-        }
-        return supabase.from('property_crm_contacts')
+      pills.map(({ status, label }) =>
+        supabase.from('property_crm_contacts')
           .select('id', { count: 'exact', head: true })
           .eq('client_id', currentClientId)
           .eq('status', status)
-          .then(({ count }) => ({ status, label, count: count || 0 }));
-      })
+          .then(({ count }) => ({ status, label, count: count || 0 }))
+      )
     ).then(results => {
       const map = {};
       results.forEach(r => { map[r.label] = r.count; });
