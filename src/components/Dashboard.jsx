@@ -54,6 +54,7 @@ export default function Dashboard({ onClose, onViewContact }) {
   const [fuStats, setFuStats]         = useState(null);
   const [fuLoading, setFuLoading]     = useState(true);
   const [fuError, setFuError]         = useState(null);
+  const [lifetimeOffers, setLifetimeOffers] = useState(null);
 
   // Follow-ups due — the same filter pipeline as the list view (applyContactFilters
   // with the followUp facet), so this count always equals what "Work the queue" shows.
@@ -115,6 +116,23 @@ export default function Dashboard({ onClose, onViewContact }) {
   useEffect(() => {
     loadNoteStats();
   }, [loadNoteStats]);
+
+  // Lifetime offers written — deliberately NOT period-scoped, so the volume number
+  // stays put while the toggle moves everything else. This is the count the "offers"
+  // stat pill used to show before it went back to counting contacts (see StatsBar).
+  useEffect(() => {
+    if (!currentClientId) return;
+    let cancelled = false;
+    setLifetimeOffers(null); // hide rather than flash the previous client's number
+    supabase.from('contact_offers')
+      .select('id, property_crm_contacts!inner(client_id)', { count: 'exact', head: true })
+      .eq('property_crm_contacts.client_id', currentClientId)
+      .then(({ count, error }) => {
+        if (cancelled || error) return;
+        setLifetimeOffers(count || 0);
+      });
+    return () => { cancelled = true; };
+  }, [currentClientId]);
 
   const loadOfferStats = useCallback(async (p) => {
     setOfferLoading(true);
@@ -323,15 +341,22 @@ export default function Dashboard({ onClose, onViewContact }) {
         {/* ── Offers ── */}
         <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-            <div style={sectionTitle}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
-            {offerStats && (
-              <button
-                onClick={() => downloadOffersReport(offerStats.recent || [], period)}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                <Download size={12} /> Download Report
-              </button>
-            )}
+            <div style={{ ...sectionTitle, marginBottom: 0 }}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {lifetimeOffers !== null && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  <strong style={{ color: 'var(--text)', fontWeight: 700, fontFamily: 'var(--mono)' }}>{lifetimeOffers.toLocaleString()}</strong> written all time
+                </span>
+              )}
+              {offerStats && (
+                <button
+                  onClick={() => downloadOffersReport(offerStats.recent || [], period)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  <Download size={12} /> Download Report
+                </button>
+              )}
+            </div>
           </div>
 
           {offerLoading && (
