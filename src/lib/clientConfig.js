@@ -26,8 +26,10 @@ export const LAND_CONFIG = {
     { label: 'closed',         status: 'Closed',     color: '#10b981' },
   ],
   // Follow-up queue: contacts in `statuses` with no note in `days` days are auto-due
-  // (a manual follow_up_on date on the contact overrides). See contactFilters.isFollowUpDue.
-  followUp: { days: 90, statuses: ['Contacted'] },
+  // (a manual follow_up_on date on the contact overrides). `statusDays` overrides the
+  // window per status — a Hot Lead resurfaces weekly, not quarterly. See
+  // contactFilters.isFollowUpDue / followUpWindow.
+  followUp: { days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 } },
   tabs: ['notes', 'offers'],
   visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],

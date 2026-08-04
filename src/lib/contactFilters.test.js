@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone, isFollowUpDue, todayStr } from './contactFilters';
+import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone, isFollowUpDue, followUpWindow, todayStr } from './contactFilters';
+import { LAND_CONFIG } from './clientConfig';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
 // exactly which query operators applyContactFilters emits without a live DB.
@@ -162,6 +163,19 @@ describe('applyContactFilters', () => {
     expect(Math.abs(cutoff - (Date.now() - 90 * 86400000))).toBeLessThan(5000);
   });
 
+  it('emits one and(...) branch per distinct window so cadences do not share a cutoff', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { followUp: { days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 } } });
+    const expr = callsOf(q)[0].args[0];
+    expect(expr).toContain('status.in.("Contacted")');
+    expect(expr).toContain('status.in.("Hot Lead")');
+    const cutoffs = [...expr.matchAll(/status\.in\.\("([^"]+)"\),or\(last_note_at\.is\.null,last_note_at\.lt\.([^)]+)\)/g)];
+    expect(cutoffs).toHaveLength(2);
+    const byStatus = Object.fromEntries(cutoffs.map(([, s, t]) => [s, new Date(t).getTime()]));
+    expect(Math.abs(byStatus['Contacted'] - (Date.now() - 90 * 86400000))).toBeLessThan(5000);
+    expect(Math.abs(byStatus['Hot Lead']  - (Date.now() -  7 * 86400000))).toBeLessThan(5000);
+  });
+
   it('follow-up with no eligible statuses is manual-date-only', () => {
     const q = mockQuery();
     applyContactFilters(q, { followUp: { days: 90, statuses: [] } });
@@ -313,8 +327,8 @@ describe('isFollowUpDue', () => {
   });
 
   it('manual date works on any status, and overrides the auto rule both ways', () => {
-    // Hot Lead isn't auto-eligible, but a manual date makes it due.
-    expect(isFollowUpDue({ status: 'Hot Lead', followUpOn: dateStr(-1) }, cfg)).toBe(true);
+    // Dead/Pass isn't auto-eligible, but a manual date makes it due.
+    expect(isFollowUpDue({ status: 'Dead/Pass', followUpOn: dateStr(-1) }, cfg)).toBe(true);
     // A future date suppresses the auto rule even for a stale Contacted contact.
     expect(isFollowUpDue({ ...noted(200), followUpOn: dateStr(30) }, cfg)).toBe(false);
   });
@@ -327,9 +341,29 @@ describe('isFollowUpDue', () => {
   });
 
   it('auto rule only applies to eligible statuses', () => {
-    expect(isFollowUpDue({ ...noted(200), status: 'Hot Lead' }, cfg)).toBe(false);
+    expect(isFollowUpDue({ ...noted(200), status: 'New Lead' }, cfg)).toBe(false);
     expect(isFollowUpDue({ ...noted(200), status: 'Dead/Pass' }, cfg)).toBe(false);
     expect(isFollowUpDue({ status: 'Contacted', activityLog: [] }, { days: 90, statuses: [] })).toBe(false);
+  });
+
+  // Hot Leads go stale in a week; everything else on the default 90-day window.
+  it('statusDays gives a status its own window', () => {
+    const hot = { days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 } };
+    expect(isFollowUpDue({ ...noted(8), status: 'Hot Lead' }, hot)).toBe(true);
+    expect(isFollowUpDue({ ...noted(6), status: 'Hot Lead' }, hot)).toBe(false);
+    // The override is per-status: Contacted still waits the full 90.
+    expect(isFollowUpDue(noted(8), hot)).toBe(false);
+    expect(isFollowUpDue(noted(100), hot)).toBe(true);
+    // Eligible but no override → falls back to `days`.
+    expect(followUpWindow('Contacted', hot)).toBe(90);
+    expect(followUpWindow('Hot Lead', hot)).toBe(7);
+    expect(followUpWindow('Dead/Pass', hot)).toBe(null);
+  });
+
+  it('the LAND preset puts Hot Leads on a weekly cycle', () => {
+    const { followUp } = LAND_CONFIG;
+    expect(isFollowUpDue({ ...noted(8), status: 'Hot Lead' }, followUp)).toBe(true);
+    expect(isFollowUpDue({ ...noted(6), status: 'Hot Lead' }, followUp)).toBe(false);
   });
 
   it('drift re-check: contactMatchesFilters drops a touched contact from the queue', () => {

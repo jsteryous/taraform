@@ -29,18 +29,29 @@ export function lastNoteDate(contact) {
     .sort((a, b) => b - a)[0] || null;
 }
 
+// How stale a contact's notes may get before its status resurfaces it, in days.
+// `statusDays` holds per-status overrides on top of the default `days` — a Hot Lead
+// resurfaces weekly while a merely Contacted one waits the full 90. Returns null when
+// the status isn't auto-eligible at all (only a manual date can queue it).
+export function followUpWindow(status, followUp) {
+  if (!followUp?.days) return null;
+  if (!(followUp.statuses || []).includes(status)) return null;
+  return followUp.statusDays?.[status] ?? followUp.days;
+}
+
 // Per-contact "due for follow-up" predicate. `followUp` is the resolved client config
-// ({ days, statuses } from resolveConfig().followUp). A manual follow_up_on date always
-// wins — set, it alone decides (arrived = due, future = not due, even outside the auto
-// statuses); unset, the auto rule applies: an eligible status with no note in the last
-// `days` days (never-noted counts as due — last_note_at null is the most overdue).
+// ({ days, statuses, statusDays } from resolveConfig().followUp). A manual follow_up_on
+// date always wins — set, it alone decides (arrived = due, future = not due, even outside
+// the auto statuses); unset, the auto rule applies: an eligible status with no note within
+// that status's window (never-noted counts as due — last_note_at null is the most overdue).
 // Also used directly for the ContactDetail "Due" badge.
 export function isFollowUpDue(contact, followUp) {
   if (!followUp?.days) return false;
   if (contact.followUpOn) return contact.followUpOn <= todayStr();
-  if (!(followUp.statuses || []).includes(contact.status)) return false;
+  const window = followUpWindow(contact.status, followUp);
+  if (!window) return false;
   const last = lastNoteDate(contact);
-  return !last || last < new Date(Date.now() - followUp.days * 86400000);
+  return !last || last < new Date(Date.now() - window * 86400000);
 }
 
 // Pure query-shaping for property_crm_contacts list/export.
@@ -79,19 +90,28 @@ export function applyContactFilters(q, filters = {}) {
     }
   }
 
-  // Follow-up queue — filters.followUp carries the resolved config ({ days, statuses })
-  // so this stays a pure function of its inputs. Due = manual follow_up_on has arrived,
-  // OR no manual date + auto-eligible status + last note older than `days` (or never).
-  // Mirrors isFollowUpDue above; keep the two in sync.
+  // Follow-up queue — filters.followUp carries the resolved config ({ days, statuses,
+  // statusDays }) so this stays a pure function of its inputs. Due = manual follow_up_on
+  // has arrived, OR no manual date + auto-eligible status + last note older than that
+  // status's window (or never). Mirrors isFollowUpDue above; keep the two in sync.
   if (filters.followUp?.days) {
-    const { days, statuses = [] } = filters.followUp;
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    // Statuses are grouped by window, one and(...) branch per distinct cadence: Hot Lead
+    // (7d) and Contacted (90d) need different cutoffs, so they can't share an in.() list.
+    const byWindow = new Map();
+    for (const s of filters.followUp.statuses || []) {
+      const w = followUpWindow(s, filters.followUp);
+      if (!w) continue;
+      if (!byWindow.has(w)) byWindow.set(w, []);
+      byWindow.get(w).push(s);
+    }
     // Status values may contain spaces/slashes ("Offer Rejected/NFS") — quote them for
     // the in.() list. None contain commas or quotes (they come from client config).
-    const auto = statuses.length
-      ? `,and(follow_up_on.is.null,status.in.(${statuses.map((s) => `"${s}"`).join(',')}),or(last_note_at.is.null,last_note_at.lt.${cutoff}))`
-      : '';
-    q = q.or(`follow_up_on.lte.${todayStr()}${auto}`);
+    const auto = [...byWindow].map(([w, group]) => {
+      const cutoff = new Date(Date.now() - w * 86400000).toISOString();
+      const list = group.map((s) => `"${s}"`).join(',');
+      return `and(follow_up_on.is.null,status.in.(${list}),or(last_note_at.is.null,last_note_at.lt.${cutoff}))`;
+    });
+    q = q.or([`follow_up_on.lte.${todayStr()}`, ...auto].join(','));
   }
 
   if (filters.search) {
