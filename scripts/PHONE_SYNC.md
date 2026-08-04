@@ -48,9 +48,28 @@ phone but doesn't fix them in the CRM.
 
 **Safety rule:** every contact this job creates is stamped with a `taraform_id` in the
 People API `userDefined` field. Anything in that Google account *without* the stamp was
-added by hand and is never modified or deleted. Even so, use a dedicated Google account —
-not your personal one — so 1,500 land-owner contacts stay out of your real address book and
-removing them is one toggle.
+added by hand and is **never modified or deleted** — which is what makes it safe to point at
+a personal Google account. Synced contacts also all join a **`Taraform` label**, so they're
+one filterable group rather than scattered through your address book.
+
+A **dedicated** Google account is still the tidier option (nothing personal in reach at
+all), but it isn't required. If you use your personal account, don't run Google Contacts'
+**"Merge & fix"** on it: merging a synced contact into a personal one would give the
+personal one a `taraform_id` and bring it under the sync's control.
+
+### Undoing it
+
+```bash
+node scripts/phone-sync.mjs --purge         # reports how many would be deleted
+node scripts/phone-sync.mjs --purge --yes   # actually deletes them
+```
+
+Deletes every contact carrying a `taraform_id` and nothing else — your own contacts are
+counted and reported, never touched. Needs only the Google credentials, not Supabase.
+
+Note this **removes** them from your phone (that's the point — it's the uninstall). To keep
+caller ID working while hiding them from the Contacts *app*, don't purge; use the Contacts
+app's **Groups** filter to untick `Taraform` instead.
 
 ## One-time setup
 
@@ -117,13 +136,15 @@ again unchecked.
 
 ### 6. Add the account to your iPhone
 
-**Settings → Apps → Contacts → Accounts → Add Account → Google**, sign in as the dedicated
-account, and turn **Contacts** on.
+If you synced into your personal Google account and it's already on your phone, there's
+nothing to do here — the contacts just appear.
+
+Otherwise: **Settings → Apps → Contacts → Accounts → Add Account → Google**, sign in as the
+dedicated account, and turn **Contacts** on.
 
 - Leave your personal account as the **default** account (Contacts → Default Account), so
-  new contacts you create by hand don't land in the synced account — the reconcile would
-  delete them, since they'd have no `taraform_id`.
-- First sync can take a few minutes for ~1,500 contacts.
+  new contacts you create by hand don't land in the synced account.
+- First sync can take a few minutes for ~1,300 contacts.
 
 ## Privacy note — this repo is public
 
@@ -154,11 +175,14 @@ something changed, and nothing here is worth paying for.
 ## Running it by hand
 
 ```bash
-node scripts/phone-sync.mjs --dry-run   # plan only
-node scripts/phone-sync.mjs             # apply
+node scripts/phone-sync.mjs --dry-run       # plan only
+node scripts/phone-sync.mjs                 # apply
+node scripts/phone-sync.mjs --purge         # count what an undo would remove
+node scripts/phone-sync.mjs --purge --yes   # undo
 ```
 
-Needs the same env vars as CI.
+Needs the same env vars as CI (`--purge` needs only the Google three). In PowerShell set
+them with `$env:NAME="value"` first — there's no inline `VAR=value cmd` prefix.
 
 ## Troubleshooting
 

@@ -17,8 +17,14 @@ import { normalizePhone } from './utils.js';
 // Anything in the account WITHOUT this key was added by hand and is never touched.
 export const SYNC_KEY = 'taraform_id';
 
-export const PERSON_FIELDS = 'names,phoneNumbers,organizations,biographies,userDefined';
+export const PERSON_FIELDS = 'names,phoneNumbers,organizations,biographies,userDefined,memberships';
+// memberships is deliberately NOT in the update mask: group membership is set once at
+// creation, and an update carrying an empty memberships list would strip the label.
 export const UPDATE_MASK = 'names,phoneNumbers,organizations,biographies,userDefined';
+
+// Every synced contact joins this label, so they're one filterable group in Google Contacts
+// instead of scattered through a personal address book.
+export const GROUP_NAME = 'Taraform';
 
 // Google caps: 200 per batch create/update, 500 per batch delete.
 export const CREATE_CHUNK = 200;
@@ -136,6 +142,25 @@ export function buildPerson(contact, clientName, alsoLines = []) {
     biographies: [{ value: biography, contentType: 'TEXT_PLAIN' }],
     userDefined: [{ key: SYNC_KEY, value: String(contact.id) }],
   };
+}
+
+export function groupMembership(groupResourceName) {
+  return groupResourceName
+    ? [{ contactGroupMembership: { contactGroupResourceName: groupResourceName } }]
+    : [];
+}
+
+export function isInGroup(person, groupResourceName) {
+  return (person?.memberships || [])
+    .some((m) => m?.contactGroupMembership?.contactGroupResourceName === groupResourceName);
+}
+
+// Everything this sync owns — the exact set --purge removes, and the set that gets
+// back-filled into the label if it was created before the label existed.
+export function taraformResourceNames(people) {
+  return (people || [])
+    .filter((p) => taraformIdOf(p) && p.resourceName)
+    .map((p) => p.resourceName);
 }
 
 export function taraformIdOf(person) {

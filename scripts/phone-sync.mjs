@@ -15,10 +15,17 @@
 import { createClient } from '@supabase/supabase-js';
 import {
   buildPerson, dedupeByPhone, diffContacts, chunk,
-  PERSON_FIELDS, UPDATE_MASK, CREATE_CHUNK, UPDATE_CHUNK, DELETE_CHUNK,
+  groupMembership, isInGroup, taraformResourceNames, taraformIdOf,
+  PERSON_FIELDS, UPDATE_MASK, GROUP_NAME, CREATE_CHUNK, UPDATE_CHUNK, DELETE_CHUNK,
 } from '../src/lib/phoneSync.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
+// Undo: remove every contact this sync created. Safe to point at a personal Google account
+// because it only ever touches contacts carrying a taraform_id. Requires --yes to bite.
+const PURGE = process.argv.includes('--purge');
+const CONFIRMED = process.argv.includes('--yes');
+// members:modify caps at 1000 resource names per call.
+const MEMBER_CHUNK = 1000;
 
 // Which lists sync — and, because ORDER IS PRIORITY, which copy wins when the same owner
 // appears in more than one. Personal List is first: it's the list actually worked out of,
@@ -113,6 +120,26 @@ function googleFetch(token) {
   };
 }
 
+// Find the "Taraform" label, creating it the first time. Returns null on failure — a
+// missing label must never abort the sync, since caller ID is the point and the label is
+// only tidiness.
+async function resolveGroup(api) {
+  try {
+    const json = await withRetry('contactGroups.list', () => api('contactGroups?pageSize=200'));
+    const found = (json.contactGroups || []).find((g) => g.name === GROUP_NAME);
+    if (found) return found.resourceName;
+    const created = await withRetry('contactGroups.create', () => api('contactGroups', {
+      method: 'POST',
+      body: JSON.stringify({ contactGroup: { name: GROUP_NAME } }),
+    }));
+    log(`  Created "${GROUP_NAME}" label`);
+    return created.resourceName || null;
+  } catch (err) {
+    log(`  ! Could not resolve the "${GROUP_NAME}" label (${err.message}); continuing without it`);
+    return null;
+  }
+}
+
 async function listGoogleContacts(api) {
   const people = [];
   let pageToken = '';
@@ -161,7 +188,34 @@ async function loadContacts() {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+// Undo the whole sync: delete every contact stamped with a taraform_id, leave everything
+// else alone. Doesn't touch Supabase, so it needs only the Google credentials.
+async function purge() {
+  log('Taraform → Google Contacts PURGE');
+  const api = googleFetch(await googleAccessToken());
+  const existing = await listGoogleContacts(api);
+  const ours = taraformResourceNames(existing);
+  const theirs = existing.length - ours.length;
+
+  log(`  ${existing.length} contacts in the account: ${ours.length} synced by Taraform, ${theirs} yours (untouched)`);
+  if (!ours.length) { log('Nothing to purge.'); return; }
+  if (!CONFIRMED) {
+    log(`\n  This would DELETE ${ours.length} contacts. Re-run with --yes to proceed.`);
+    return;
+  }
+
+  for (const batch of chunk(ours, DELETE_CHUNK)) {
+    await withRetry('batchDeleteContacts', () => api('people:batchDeleteContacts', {
+      method: 'POST',
+      body: JSON.stringify({ resourceNames: batch }),
+    }));
+    log(`  deleted ${batch.length}`);
+  }
+  log(`✓ Purged ${ours.length} contacts. Your own ${theirs} are untouched.`);
+}
+
 async function main() {
+  if (PURGE) return purge();
   log(`Taraform → Google Contacts sync${DRY_RUN ? ' (DRY RUN — nothing will be written)' : ''}`);
 
   const { rows, clientNames } = await loadContacts();
@@ -185,8 +239,10 @@ async function main() {
   if (undialable) log(`  Skipped ${undialable} contact(s) with no dialable 10-digit number`);
 
   const api = googleFetch(await googleAccessToken());
+  const groupResourceName = DRY_RUN ? null : await resolveGroup(api);
   const existing = await listGoogleContacts(api);
-  log(`  Google: ${existing.length} contacts in the account`);
+  const foreign = existing.length - taraformResourceNames(existing).length;
+  log(`  Google: ${existing.length} contacts in the account (${foreign} not ours — never modified)`);
 
   const { toCreate, toUpdate, toDelete } = diffContacts(desired, existing);
   log(`  Plan: ${toCreate.length} create, ${toUpdate.length} update, ${toDelete.length} delete`);
@@ -203,10 +259,14 @@ async function main() {
     return;
   }
 
+  const memberships = groupMembership(groupResourceName);
   for (const batch of chunk(toCreate, CREATE_CHUNK)) {
     await withRetry('batchCreateContacts', () => api('people:batchCreateContacts', {
       method: 'POST',
-      body: JSON.stringify({ contacts: batch.map((contactPerson) => ({ contactPerson })), readMask: 'names' }),
+      body: JSON.stringify({
+        contacts: batch.map((person) => ({ contactPerson: { ...person, memberships } })),
+        readMask: 'names',
+      }),
     }));
     log(`  created ${batch.length}`);
   }
@@ -229,7 +289,22 @@ async function main() {
     log(`  deleted ${batch.length}`);
   }
 
-  log(`✓ Sync complete — ${desired.size} contacts on your phone.`);
+  // Back-fill the label onto contacts created before it existed. Adding an existing member
+  // is a no-op, so this is idempotent and quietly self-heals.
+  if (groupResourceName) {
+    const missing = existing.filter((p) => taraformIdOf(p) && !isInGroup(p, groupResourceName))
+      .map((p) => p.resourceName)
+      .filter((rn) => !toDelete.includes(rn));
+    for (const batch of chunk(missing, MEMBER_CHUNK)) {
+      await withRetry('contactGroups.members.modify', () => api(`${groupResourceName}/members:modify`, {
+        method: 'POST',
+        body: JSON.stringify({ resourceNamesToAdd: batch }),
+      }));
+      log(`  labelled ${batch.length} existing contact(s)`);
+    }
+  }
+
+  log(`✓ Sync complete — ${desired.size} contacts on your phone, all under the "${GROUP_NAME}" label.`);
 }
 
 main().catch((err) => fail(err.stack || err.message));

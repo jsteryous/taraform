@@ -6,6 +6,9 @@ import {
   buildPerson,
   phoneKey,
   dedupeByPhone,
+  groupMembership,
+  isInGroup,
+  taraformResourceNames,
   taraformIdOf,
   personSignature,
   diffContacts,
@@ -222,6 +225,40 @@ describe('diffContacts', () => {
     const { toDelete, toUpdate } = diffContacts(new Map([['1', person(1)]]), [onGoogle(1), onGoogle(1)]);
     expect(toDelete).toEqual(['people/c1']);
     expect(toUpdate).toEqual([]);
+  });
+});
+
+describe('label + purge helpers', () => {
+  const GROUP = 'contactGroups/abc123';
+
+  it('builds a membership, and nothing when there is no group', () => {
+    expect(groupMembership(GROUP)).toEqual([
+      { contactGroupMembership: { contactGroupResourceName: GROUP } },
+    ]);
+    expect(groupMembership(null)).toEqual([]);
+  });
+
+  it('detects whether a contact already carries the label', () => {
+    expect(isInGroup({ memberships: [{ contactGroupMembership: { contactGroupResourceName: GROUP } }] }, GROUP)).toBe(true);
+    expect(isInGroup({ memberships: [{ contactGroupMembership: { contactGroupResourceName: 'contactGroups/other' } }] }, GROUP)).toBe(false);
+    expect(isInGroup({}, GROUP)).toBe(false);
+  });
+
+  // What --purge deletes. The guarantee that makes a personal Google account safe: a
+  // contact without the stamp is never in this set.
+  it('selects only contacts the sync owns', () => {
+    const people = [
+      { resourceName: 'people/c1', userDefined: [{ key: SYNC_KEY, value: '1' }] },
+      { resourceName: 'people/mom', userDefined: [] },
+      { resourceName: 'people/dentist' },
+      { resourceName: 'people/c2', userDefined: [{ key: SYNC_KEY, value: '2' }] },
+    ];
+    expect(taraformResourceNames(people)).toEqual(['people/c1', 'people/c2']);
+  });
+
+  it('is empty for an address book the sync has never written to', () => {
+    expect(taraformResourceNames([{ resourceName: 'people/mom' }])).toEqual([]);
+    expect(taraformResourceNames(null)).toEqual([]);
   });
 });
 
