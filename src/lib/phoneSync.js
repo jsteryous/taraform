@@ -17,10 +17,21 @@ import { normalizePhone } from './utils.js';
 // Anything in the account WITHOUT this key was added by hand and is never touched.
 export const SYNC_KEY = 'taraform_id';
 
-export const PERSON_FIELDS = 'names,phoneNumbers,organizations,biographies,userDefined,memberships';
+export const PERSON_FIELDS = 'names,phoneNumbers,organizations,biographies,userDefined,urls,memberships';
 // memberships is deliberately NOT in the update mask: group membership is set once at
 // creation, and an update carrying an empty memberships list would strip the label.
-export const UPDATE_MASK = 'names,phoneNumbers,organizations,biographies,userDefined';
+export const UPDATE_MASK = 'names,phoneNumbers,organizations,biographies,userDefined,urls';
+
+// Deep link back into the app, carried on the contact card as a tappable URL. The phone
+// can't pop a Taraform window when a call comes in — no browser has access to call state —
+// so this is the tap-through: call screen shows the name, the contact card links to the
+// record. HashRouter, matching the /#/contact/:id overlay App.jsx syncs to.
+export const APP_URL = 'https://taraform.org';
+export const URL_LABEL = 'Taraform';
+
+export function contactUrl(id) {
+  return `${APP_URL}/#/contact/${id}`;
+}
 
 // Every synced contact joins this label, so they're one filterable group in Google Contacts
 // instead of scattered through a personal address book.
@@ -141,6 +152,8 @@ export function buildPerson(contact, clientName, alsoLines = []) {
     organizations: clientName ? [{ name: clientName }] : [],
     biographies: [{ value: biography, contentType: 'TEXT_PLAIN' }],
     userDefined: [{ key: SYNC_KEY, value: String(contact.id) }],
+    // Points at the surviving row after dedupe, which is the one whose status is current.
+    urls: [{ value: contactUrl(contact.id), type: URL_LABEL }],
   };
 }
 
@@ -183,6 +196,9 @@ export function personSignature(person) {
       .sort(),
     org: ((person?.organizations || [])[0]?.name || '').trim(),
     bio: ((person?.biographies || [])[0]?.value || '').trim(),
+    // Must be here or the diff can't see the field, and contacts created before the deep
+    // link existed would never gain one. Costs a one-time update of every synced contact.
+    url: ((person?.urls || [])[0]?.value || '').trim(),
   });
 }
 
