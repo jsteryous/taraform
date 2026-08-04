@@ -1,0 +1,40 @@
+name: Sync contacts to Google
+
+# Nightly one-way push of Taraform contacts into a dedicated Google account, which the
+# phone syncs natively so callbacks show a name instead of an unknown number.
+# Setup + secrets: scripts/PHONE_SYNC.md
+on:
+  schedule:
+    # 08:00 UTC = 4am ET. GitHub delays scheduled runs under load; exact time is not important.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Plan only — report what would change without writing to Google'
+        type: boolean
+        default: false
+
+# Two overlapping runs would both see the same "missing" contacts and double-create them.
+concurrency:
+  group: sync-contacts
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Sync
+        run: node scripts/phone-sync.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SYNC_USER_EMAIL: ${{ secrets.SYNC_USER_EMAIL }}
+          SYNC_USER_PASSWORD: ${{ secrets.SYNC_USER_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
