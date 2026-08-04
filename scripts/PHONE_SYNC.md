@@ -69,13 +69,26 @@ removing them is one toggle.
 
 ### 2. Mint the refresh token
 
-Run locally, signing in as the Google account that will hold the contacts:
+Run locally, signing in as the Google account that will hold the contacts.
+
+PowerShell (no inline `VAR=value` prefix — set them first):
+
+```powershell
+$env:GOOGLE_CLIENT_ID="xxx"
+$env:GOOGLE_CLIENT_SECRET="yyy"
+node scripts/phone-sync-authorize.mjs
+```
+
+bash:
 
 ```bash
 GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy node scripts/phone-sync-authorize.mjs
 ```
 
 It opens a browser, catches the redirect, and prints the refresh token.
+
+Because the app is published but unverified, Google shows **"Google hasn't verified this
+app."** Click **Advanced → Go to … (unsafe)**. That's expected — you're the only user.
 
 ### 3. Supabase sync user
 
