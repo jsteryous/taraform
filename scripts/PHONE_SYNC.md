@@ -174,15 +174,33 @@ something changed, and nothing here is worth paying for.
 
 ## Running it by hand
 
+Easiest locally: add the five sync vars to `.env.local` (gitignored, and it already holds
+the two Supabase ones), then let Node load the file — no shell variables to juggle:
+
 ```bash
-node scripts/phone-sync.mjs --dry-run       # plan only
-node scripts/phone-sync.mjs                 # apply
-node scripts/phone-sync.mjs --purge         # count what an undo would remove
-node scripts/phone-sync.mjs --purge --yes   # undo
+node --env-file=.env.local scripts/phone-sync.mjs --dry-run       # plan only
+node --env-file=.env.local scripts/phone-sync.mjs                 # apply
+node --env-file=.env.local scripts/phone-sync.mjs --purge         # count what an undo would remove
+node --env-file=.env.local scripts/phone-sync.mjs --purge --yes   # undo
 ```
 
-Needs the same env vars as CI (`--purge` needs only the Google three). In PowerShell set
-them with `$env:NAME="value"` first — there's no inline `VAR=value cmd` prefix.
+`.env.local` needs:
+
+```
+SYNC_USER_EMAIL=phone-sync@taraform.org
+SYNC_USER_PASSWORD=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+```
+
+**Run a local `--dry-run` before wiring up CI.** It exercises the same path — Supabase
+sign-in, RLS-scoped read, Google token refresh, People API — and prints real error messages,
+where a failing Action just gives you a red X. Local runs also show contact names in the
+preview; CI withholds them.
+
+Without `--env-file`, set variables the PowerShell way first (`$env:NAME="value"`) — there's
+no inline `VAR=value cmd` prefix. `--purge` needs only the three Google vars.
 
 ## Troubleshooting
 
@@ -193,6 +211,15 @@ them with `$env:NAME="value"` first — there's no inline `VAR=value cmd` prefix
 | A contact rings unidentified | Check it has `has_good_phone = true` and its number is a 10-digit NANP number. Non-NANP numbers are reported as skipped in the run log. |
 | Duplicate contacts on the phone | Usually the same person in both client lists — they're separate Taraform rows, so they sync as separate contacts by design. |
 | A hand-added contact vanished | It was created in the *synced* account, so it had no `taraform_id`. Set your personal account as the Contacts default. |
+
+## Limitation: this serves one operator
+
+Not a Taraform feature — a single-operator integration. The Google refresh token and the
+Supabase login live in **repo** secrets, so a new user signing into the app gets nothing
+from it. Making it self-serve needs a per-user token store, a browser-side PKCE connect
+flow, and the nightly job looping over users instead of reading env. That's tracked in the
+Tier 4 backlog in the root `CLAUDE.md` — including the open question of protecting other
+people's refresh tokens at rest.
 
 ## Code layout
 
