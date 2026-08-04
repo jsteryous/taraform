@@ -1,207 +1,200 @@
-# Plan: caller ID for every user, unattended, still $0
+# Caller ID for every user — self-serve, automatic, $0
 
-> Status: **design only, nothing built.** Written 2026-08-04. Supersedes the Tier 4 backlog
-> sketch in the root `CLAUDE.md`, which assumed a browser-side PKCE flow with no server
-> component — that turns out not to work for an *unattended* sync (see "Why the browser
-> can't do this alone").
+> **Status: built, not yet deployed.** Code is in the repo and passes tests; the deploy
+> runbook below has not been run, so no user can connect yet. Written 2026-08-04.
 >
-> Today's sync (`scripts/phone-sync.mjs` + `.github/workflows/sync-contacts.yml`) serves one
-> operator: one Google refresh token and one Supabase login in **repo** secrets. A new user
-> signing into Taraform gets nothing. This plan makes it self-serve.
+> This is the multi-user version of `PHONE_SYNC.md`. That one serves a single operator —
+> one Google refresh token and one Supabase login in **repo** secrets. This one lets any
+> user click **Connect Google Contacts** in Settings and get nightly caller ID for the
+> contacts *they* can see.
 
-## Goal
+An incoming call shows `John Parker (Offer Made)` on the native call screen, and the synced
+contact card links back to the record in Taraform.
 
-A new user signs in, clicks **Connect Google Contacts** once, and from then on their phone
-shows `John Parker (Offer Made)` on incoming calls — forever, with no further action. Each
-user's contacts go into **their own** Google account, scoped by RLS to the lists they can
-actually see.
-
-## Why the browser can't do this alone
-
-The obvious cheap design is "do the whole sync client-side with Google Identity Services'
-token model" — the browser gets a contacts-scoped access token with no client secret and no
-refresh token, so there is nothing to store and nothing to leak.
-
-It was rejected because **`requestAccessToken()` must be driven by a user gesture**. There
-is no silent background renewal in the token model, so that design can only ever produce a
-"Sync to phone" button the user has to remember to click. Unattended is the requirement, so
-it's out.
-
-Unattended means acting while the user is asleep, which means holding a delegated
-credential, which means a refresh token at rest and a scheduler. There is no way around
-that. The design work is entirely in *where* the token lives and *how narrowly* it's
-reachable.
-
-## Architecture
+## How it works
 
 ```
 Browser (GitHub Pages, no secrets)
   "Connect Google Contacts"
-  → GIS initCodeClient: PKCE + access_type=offline + prompt=consent
+  → GIS initCodeClient: access_type=offline + prompt=consent
   → auth code  ──POST──►  Edge Function  google-contacts-connect
-                            ├ exchanges code + client_secret + verifier
+                            ├ exchanges code + client_secret (server-side only)
                             └ vault.create_secret(refresh_token) → google_contact_sync row
 
-pg_cron  (nightly, 08:00 UTC)
-  → for each connected user: net.http_post → Edge Function  phone-sync-run?user=<uuid>
+pg_cron  (nightly 08:00 UTC)  → phone_sync_dispatch()
+  → one net.http_post per connected user → Edge Function  phone-sync-run
        ├ vault → refresh token → Google access token
-       ├ phone_sync_contacts_for(uid)   ← membership-scoped SQL, not a service_role table read
-       ├ src/lib/phoneSync.js  (unchanged — buildPerson / dedupeByPhone / diffContacts)
+       ├ phone_sync_contacts_for(uid)   ← membership join in SQL, not TypeScript
+       ├ _shared/phoneSync.js           ← same logic as the single-operator runner
        └ People API batchCreate / batchUpdate / batchDelete
 ```
 
-Everything already in `src/lib/phoneSync.js` is reused verbatim: it's pure, has no Node
-imports, and runs as-is on Deno. Only the I/O shell is new.
+### Why the browser can't do it alone
 
-### The client secret stays server-side
-
-Google's code exchange requires `client_secret` for a Web application client, so it can
-never ship in the bundle. The browser does only the *authorization* half (PKCE challenge →
-auth code) and posts the code to the Edge Function, which holds the secret as a Supabase
-secret and completes the exchange. Standard BFF split.
-
-Two quirks to remember when implementing:
-- With `ux_mode: 'popup'`, Google requires `redirect_uri=postmessage` on the token exchange.
-- `access_type: 'offline'` **and** `prompt: 'consent'` are both needed to reliably get a
-  refresh token back — without `prompt: 'consent'`, a returning user who already granted the
-  scope gets an access token and no refresh token, and the nightly job silently has nothing
-  to use.
+The tempting design is a pure client-side sync using GIS's *token model* — no client
+secret, no refresh token, nothing stored. It was rejected because
+`requestAccessToken()` must be driven by a user gesture: there is no silent background
+renewal, so that design can only ever produce a "Sync now" button someone has to remember
+to press. Unattended means acting while the user is asleep, which means a refresh token at
+rest and a scheduler. The design work is entirely in *where* the token lives.
 
 ### Token custody
 
-This is the part that was flagged as unsettled in the backlog. The design:
-
 | Decision | Rationale |
 | --- | --- |
-| Refresh token in **Supabase Vault**, not a column | Encrypted at rest, so it isn't plaintext in a backup or a `pg_dump`. The `google_contact_sync` row holds only the vault secret's uuid, the Google account email, and sync status. |
-| `google_contact_sync` has **RLS on and no SELECT policy** for `authenticated` | Users never need to read their own token back. Grant `SELECT` to nobody; the user-facing UI reads a view exposing only `google_email`, `last_synced_at`, `last_error`. |
-| **Disconnect** hits Google's `/revoke` endpoint *before* deleting the row | Deleting our copy alone would leave a live grant dangling on Google's side. |
-| Scheduler lives **inside Supabase** (pg_cron), not GitHub Actions | The alternative is a CI job holding a `service_role` key that can read every user's token — a new trust boundary outside the database. pg_cron + Edge Functions keep the credential and the data in the same system that already holds them. |
+| Refresh token in **Supabase Vault**, never a column | Encrypted at rest, so it isn't plaintext in a backup or `pg_dump`. The `google_contact_sync` row holds only the vault secret's uuid. |
+| `google_contact_sync` has RLS on and **zero policies** | Users never need their token back. The UI reads `get_my_contact_sync()`, which returns five safe columns and cannot return `token_secret_id`. |
+| **Disconnect** revokes at Google *before* deleting the row | Dropping our copy alone would leave a live grant dangling on the user's Google account. |
+| Scheduler inside Supabase (pg_cron), not GitHub Actions | The alternative is CI holding a `service_role` key that can read every user's token — a new trust boundary outside the database. |
+| The client secret lives only in the Edge Function | The browser gets an authorization *code*, never a token. An intercepted code is useless without the secret. |
 
-### The multi-tenancy trap
+### The multi-tenancy boundary
 
-Edge Functions run as `service_role`, which **bypasses RLS**. A naive port of
-`loadContacts()` would read every tenant's contacts. Do not re-implement the membership
-check in TypeScript.
+Edge Functions run as `service_role`, which **bypasses RLS**. So the scoping rule is not in
+TypeScript — `phone-sync-run` never touches `property_crm_contacts` directly. It calls
+`phone_sync_contacts_for(uid)`, which does the `client_users` join itself, mirroring the
+policies in `db/20260610_clients_rls.sql`.
 
-Instead add a `SECURITY DEFINER` function `phone_sync_contacts_for(uid uuid)` that does the
-`client_users` join itself and returns only that user's rows. The scoping rule then lives in
-one place in SQL, next to the existing policies in `db/20260610_clients_rls.sql`, and the
-function is the only thing the sync is allowed to call. This is the single highest-risk line
-of the whole feature and deserves a test in `src/lib/rls.proof.test.js`.
+Every `phone_sync_*` function is `revoke`d from `authenticated` and granted only to
+`service_role`. They take a user id as a *parameter* rather than reading `auth.uid()`, so
+granting any of them to `authenticated` would let any signed-in user read any tenant's
+contacts — or lift another user's refresh token out of Vault. `src/lib/rls.proof.test.js`
+probes exactly that.
 
 ### Fan out, don't loop
 
-Edge Functions have a wall-clock cap. A first-run sync for ~1,300 contacts is a dozen
-sequential People API round-trips; doing that for N users inside one invocation will
-eventually time out and leave a partial sync. So **pg_cron enqueues one invocation per
-connected user**, not one invocation that loops. Each is independently retryable, and one
-user's expired token can't abort everyone else's run.
+`phone_sync_dispatch()` fires one Edge Function invocation **per user**. Functions have a
+wall-clock cap and a first run of ~1,300 contacts is a dozen sequential People API
+round-trips, so one invocation covering everybody would time out mid-run. Per user, each is
+independently retryable and one expired token can't abort everyone else's sync.
 
-### Which lists sync
+Interrupted runs are safe regardless: the sync is a reconcile, not an append, so a run that
+dies halfway is simply finished by the next one.
 
-Today `SYNC_CLIENT_IDS` is an env var whose **order is priority** for cross-list dedupe.
-Per-user, the default should be "every client you're a member of," and priority needs a
-stable per-user order. Simplest: a `client_priority uuid[]` column on `google_contact_sync`,
-defaulted from the user's memberships, reorderable later in the UI if anyone cares. It must
-be stable between runs or the dedupe winner flips and churns create/delete pairs every night.
+## Deploying it
 
-## Part 2 — the "Call from: Name" popup
+Nothing below has been run yet. Steps 1–3 are enough to test with your own account; 4 turns
+on the nightly schedule; 5 exposes it to everyone else.
 
-Worth being direct: **Taraform cannot show a popup when your phone rings.** A web app —
-desktop or mobile — has no API for incoming cellular call state. There's no permission to
-request; the capability doesn't exist in a browser. Only two things can produce that popup:
+### 1. Google Cloud
 
-1. **A native app.** iOS's CallKit `CXCallDirectoryProvider` is *exactly* the feature you're
-   describing — you supply a number→label map and iOS renders the name on the native call
-   screen for numbers not in Contacts. Android allows a true floating overlay (how Truecaller
-   works). Both need a shipped app; iOS also needs the Apple Developer Program at $99/yr and
-   App Store review. Not free, and a different product.
-2. **Routing calls through Taraform.** If calls arrived over VoIP (Twilio et al.), a webhook
-   → Supabase Realtime → open browser tab would pop a card. The infrastructure is $0, but the
-   phone number isn't (~$1.15/mo + per-minute), it changes the number you hand out, and it
-   only works with the tab open.
+The existing project from `PHONE_SYNC.md` works — add a second OAuth client to it.
 
-Here's the thing though: the Google Contacts sync **already produces the outcome the popup
-was for**, and arguably a better one. The name is on the native lock/call screen before you
-answer, with no app open, no tab open, and no ongoing cost. What it's missing is only the
-second half of your ask — tapping through to the contact card.
+1. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.**
+2. **Authorized JavaScript origins:** `https://taraform.org` and `http://localhost:5173`.
+   No redirect URI is needed — the GIS popup uses `postmessage`.
+3. Save the client ID and secret.
+4. The consent screen must be **In production** (not Testing) or refresh tokens expire
+   after 7 days and every user's sync dies silently the following week.
 
-### That half is nearly free
+### 2. Database
 
-Google People API contacts carry a `urls` field, which iOS and Android both sync as a
-tappable link on the contact card. So put the deep link the app already has on it:
+Apply in order:
 
-```js
-urls: [{ value: `https://taraform.org/#/contact/${contact.id}`, type: 'work' }]
+```
+db/20260804_google_contact_sync.sql     # table, Vault wiring, RPCs, grants
 ```
 
-`John Parker (Offer Made)` calls → you see the name on the call screen → tap his name → his
-contact card has a **taraform.org** link → tap it, and the app opens straight to his contact
-overlay. The routing for this already exists (`/#/contact/:id`, the full-screen overlay
-synced to the URL in `App.jsx`).
+### 3. Edge Functions
 
-Implementation is small and lands in `src/lib/phoneSync.js`:
-- add `urls` to `PERSON_FIELDS` and `UPDATE_MASK`
-- emit it from `buildPerson`
-- add it to `personSignature`, or the diff won't notice it and the field will never update
+```bash
+supabase secrets set GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy
+npm run sync:edge                        # regenerate _shared/ from src/lib
+supabase functions deploy google-contacts-connect
+supabase functions deploy phone-sync-run --no-verify-jwt
+```
 
-One-time cost: adding it to the signature makes the next run update all ~1,318 existing
-contacts. That's expected, idempotent, and harmless.
+`--no-verify-jwt` on the runner is deliberate: it is called by pg_cron with the
+service_role key, not a user JWT, and it does its own check that the bearer token *is* the
+service role key. `google-contacts-connect` keeps JWT verification — it's browser-facing.
 
-**This is worth doing on its own, before any of the multi-user work** — it's an hour, it
-benefits the current single-operator sync immediately, and it's independent of everything
-above.
+Then set `VITE_GOOGLE_CLIENT_ID` locally in `.env.local` and as a GitHub Actions secret
+(already wired into `deploy.yml`). It is **not** a secret — it ships in the public bundle by
+design. Leaving it unset simply hides the feature.
+
+At this point you can connect your own account from the app and hit **Sync now**.
+
+### 4. Nightly schedule
+
+Store the two config values in Vault, then apply the cron migration:
+
+```sql
+select vault.create_secret('https://ykuenmwfxecmmqichwit.supabase.co', 'phone_sync_project_url');
+select vault.create_secret('<service_role_key>', 'phone_sync_service_key');
+```
+
+```
+db/20260804_phone_sync_cron.sql
+```
+
+Check it:
+
+```sql
+select * from cron.job;
+select * from cron.job_run_details order by start_time desc limit 5;
+select user_id, last_synced_at, last_error from google_contact_sync;
+```
+
+### 5. Google verification — the actual gate on "everyone"
+
+`https://www.googleapis.com/auth/contacts` is a **sensitive** scope. Until the OAuth app is
+verified:
+
+- it is capped at **100 users for the lifetime of the project** — cumulative, permanent,
+  cannot be reset (the single-operator setup already spent one), and
+- every user sees a **"Google hasn't verified this app"** warning before consenting.
+
+100 users is far beyond where Taraform is, so this blocks nothing today. Verification is
+free to submit and needs a privacy policy URL plus a verified domain (taraform.org
+qualifies on both), but it is a real review that takes weeks. Start it before you'd onboard
+outside users, not after.
 
 ## Cost
 
 | Component | Usage | Free allowance |
 | --- | --- | --- |
 | Supabase Edge Functions | ~30 invocations/month per user | 500,000/month |
-| pg_cron + pg_net + Vault | nightly | unmetered features, not plan-gated |
+| pg_cron + pg_net + Vault | nightly | unmetered, not plan-gated |
 | Supabase egress | ~205 kB per user per run | 5 GB/month |
 | Google People API | ~3 calls/night steady state per user | quota-based, not billed |
 
-Still $0. One caveat: **free-tier Supabase projects pause after 7 days of inactivity**, and a
-paused project's cron doesn't run. Not a concern while the app is in daily use, but it's the
-failure mode if usage ever goes quiet.
+Still $0. One caveat: **free-tier Supabase projects pause after 7 days of inactivity**, and
+a paused project's cron doesn't run. Not a concern while the app is in daily use, but it's
+the failure mode if things go quiet.
 
-## The actual gating item: Google verification
+## Relationship to the single-operator sync
 
-`https://www.googleapis.com/auth/contacts` is a **sensitive** scope. An unverified app is
-capped at **100 users for the lifetime of the project** — the cap can't be reset — and every
-user sees the "Google hasn't verified this app" warning before consenting.
+`scripts/phone-sync.mjs` and `.github/workflows/sync-contacts.yml` are unchanged and still
+work. Keep them until the hosted path has run clean for a while — they're the fallback, and
+they exercise the same `src/lib/phoneSync.js`. Once you've connected your own account
+through the app, running both would sync the same contacts into the same Google account
+twice via two different `taraform_id` stampings; **pick one**. The tidy switch is
+`node scripts/phone-sync.mjs --purge --yes`, then connect in the app.
 
-100 users is far beyond where Taraform is, so this doesn't block building it. But note two
-things: the cap is *cumulative and permanent*, and it applies to the OAuth project as a
-whole. The current single-operator setup already burned one slot against it.
+## Code layout
 
-Verification is free to submit and needs a privacy policy URL plus a verified domain —
-taraform.org qualifies on both — but it's a real review that takes weeks. Start it well
-before you'd actually onboard outside users, not after.
+| File | Role |
+| --- | --- |
+| `db/20260804_google_contact_sync.sql` | Table, Vault wiring, RPCs, grants. The tenancy boundary. |
+| `db/20260804_phone_sync_cron.sql` | Nightly `pg_cron` job + per-user fan-out. |
+| `supabase/functions/google-contacts-connect/` | Browser-facing: connect / disconnect / sync-now / status. |
+| `supabase/functions/phone-sync-run/` | One user's sync. service_role only. |
+| `supabase/functions/_shared/google.ts` | OAuth + People API I/O. |
+| `supabase/functions/_shared/phoneSync.js` | **Generated** from `src/lib/` by `npm run sync:edge`. |
+| `src/lib/googleContacts.js` | Browser: GIS popup + Edge Function calls. |
+| `src/components/modals/PhoneSyncModal.jsx` | The Settings UI (phone icon in the header). |
+| `src/lib/edgeShared.test.js` | Fails if the generated copy drifts from `src/lib/`. |
+| `src/lib/rls.proof.test.js` | Probes the grants and the scoping function. |
 
-## Work breakdown
+The shared code is a **generated copy**, not an import: the Supabase CLI bundles a function
+from its own directory, and reaching outside `supabase/functions` isn't a contract worth
+betting a nightly job on. `npm test` fails the moment the copy and the source disagree.
 
-| Phase | Scope | Rough size |
-| --- | --- | --- |
-| 0 | ~~Deep link in the synced contact (`urls`)~~ — **done 2026-08-04**, see `phoneSync.js` | ~1 hour |
-| 1 | `db/`: `google_contact_sync` table + Vault wiring + `phone_sync_contacts_for()` + the RLS proof test | half day |
-| 2 | Edge Function `google-contacts-connect` (code exchange, store) | half day |
-| 3 | Edge Function `phone-sync-run` (port the runner's I/O shell to Deno; `phoneSync.js` unchanged) | half day |
-| 4 | pg_cron schedule + per-user fan-out + failure surfacing (`last_error` in the UI) | half day |
-| 5 | Settings UI: Connect / status / Disconnect. Use `<Select>` and `useConfirm()`, per `components/CLAUDE.md` | half day |
-| 6 | Google Cloud: add a Web application client + JS origins; submit for verification | ~1 hour + weeks of waiting |
+## Still open
 
-Roughly 2½ days of work. `scripts/phone-sync.mjs` and its workflow stay as-is throughout —
-they keep working for the owner, and they're a useful fallback while the hosted path is
-unproven.
-
-## Open questions
-
-- **Does anyone actually want this yet?** The current users (`alex@rebbadvisors.com`,
-  `devankashi3@gmail.com`) haven't asked. Phase 0 is worth doing regardless; phases 1–6 are
-  speculative until a second user asks.
-- **Who owns the Google Cloud project** once it's serving other people's contacts, and what
-  privacy policy do we publish for it? Verification requires a real answer, not a placeholder.
-- **Failure visibility.** A user whose token gets revoked needs to find out. A `last_error`
-  badge in Settings is the minimum; email would need a service we no longer run.
+- **Google verification** (step 5) — start it before onboarding anyone outside.
+- **Failure visibility.** A user whose token gets revoked sees `last_error` in the Settings
+  modal, but only if they open it. Email would need a service we no longer run.
+- **Per-user list priority.** `set_my_contact_sync_priority()` exists and defaults to oldest
+  membership first; nothing in the UI calls it yet. Only matters for users in 2+ lists with
+  the same owner in both.
