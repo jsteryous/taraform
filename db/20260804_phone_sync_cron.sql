@@ -13,12 +13,13 @@ create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
 -- ── Config ─────────────────────────────────────────────────────────────────────
--- The service_role key lives in Vault, not in the function body — cron job definitions are
--- readable by anyone with DB access, and a key pasted inline would leak into cron.job.
+-- The service_role key lives in Vault, not inline — cron job definitions are readable by
+-- anyone with DB access, and a key pasted into the function body would sit in plain text
+-- in pg_proc. The project URL is NOT a secret (it ships in the public bundle), so it's
+-- just a constant here — that keeps setup to a single statement.
 --
--- RUN THESE TWO ONCE, by hand, with your real values:
+-- RUN THIS ONCE, by hand, with your real key:
 --
---   select vault.create_secret('https://ykuenmwfxecmmqichwit.supabase.co', 'phone_sync_project_url');
 --   select vault.create_secret('<service_role_key>', 'phone_sync_service_key');
 
 create or replace function public.phone_sync_dispatch()
@@ -26,15 +27,15 @@ returns int
 language plpgsql security definer set search_path = public
 as $$
 declare
-  v_url  text;
+  v_url  text := 'https://ykuenmwfxecmmqichwit.supabase.co';
   v_key  text;
   v_user record;
   v_n    int := 0;
 begin
-  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'phone_sync_project_url';
   select decrypted_secret into v_key from vault.decrypted_secrets where name = 'phone_sync_service_key';
-  if v_url is null or v_key is null then
-    raise exception 'phone_sync_project_url / phone_sync_service_key missing from vault';
+  if v_key is null then
+    -- Loud on purpose: a silent no-op here would look exactly like "nobody is connected".
+    raise exception 'phone_sync_service_key missing from vault — see db/20260804_phone_sync_cron.sql';
   end if;
 
   for v_user in select user_id from public.phone_sync_pending_users() loop

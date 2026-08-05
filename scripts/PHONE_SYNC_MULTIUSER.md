@@ -1,7 +1,9 @@
 # Caller ID for every user — self-serve, automatic, $0
 
-> **Status: built, not yet deployed.** Code is in the repo and passes tests; the deploy
-> runbook below has not been run, so no user can connect yet. Written 2026-08-04.
+> **Status: deployed 2026-08-05, awaiting two secrets.** Schema, RPCs, both Edge Functions
+> and the nightly cron job are live on project `ykuenmwfxecmmqichwit`. Connecting still
+> fails until the two secrets in step 3 and step 4 are set — those hold real credentials,
+> so they have to be set by a human.
 >
 > This is the multi-user version of `PHONE_SYNC.md`. That one serves a single operator —
 > one Google refresh token and one Supabase login in **repo** secrets. This one lets any
@@ -98,34 +100,46 @@ db/20260804_google_contact_sync.sql     # table, Vault wiring, RPCs, grants
 ### 3. Edge Functions
 
 ```bash
-supabase secrets set GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy
 npm run sync:edge                        # regenerate _shared/ from src/lib
-supabase functions deploy google-contacts-connect
-supabase functions deploy phone-sync-run --no-verify-jwt
+supabase functions deploy google-contacts-connect --project-ref ykuenmwfxecmmqichwit
+supabase functions deploy phone-sync-run        --project-ref ykuenmwfxecmmqichwit
 ```
 
-`--no-verify-jwt` on the runner is deliberate: it is called by pg_cron with the
-service_role key, not a user JWT, and it does its own check that the bearer token *is* the
-service role key. `google-contacts-connect` keeps JWT verification — it's browser-facing.
+**Deploy with the CLI, not by pasting file contents into an API call.** The CLI uploads the
+real `_shared/` files, so what runs is byte-identical to what's committed. Hand-transcribing
+them re-introduces exactly the drift `edgeShared.test.js` exists to catch — and that drift
+is invisible, because the repo test still passes while production differs.
 
-Then set `VITE_GOOGLE_CLIENT_ID` locally in `.env.local` and as a GitHub Actions secret
-(already wired into `deploy.yml`). It is **not** a secret — it ships in the public bundle by
-design. Leaving it unset simply hides the feature.
+Both functions keep `verify_jwt` **on**. The runner is called by pg_cron with the
+service_role key, which is itself a valid project JWT, so it passes platform verification
+and *then* hits the function's own check that the bearer token equals the service role key.
+Two gates instead of one; there's no reason to deploy it with `--no-verify-jwt`.
+
+Then the client secret, which never leaves Google and this function:
+
+```bash
+supabase secrets set GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy --project-ref ykuenmwfxecmmqichwit
+```
+
+Finally set `VITE_GOOGLE_CLIENT_ID` in `.env.local` and as a GitHub Actions secret (already
+wired into `deploy.yml`). It is **not** a secret — it ships in the public bundle by design.
+Leaving it unset simply hides the feature.
 
 At this point you can connect your own account from the app and hit **Sync now**.
 
 ### 4. Nightly schedule
 
-Store the two config values in Vault, then apply the cron migration:
+`db/20260804_phone_sync_cron.sql` is applied and the job is scheduled, but it raises until
+the service_role key is in Vault. One statement, run by hand in the SQL editor:
 
 ```sql
-select vault.create_secret('https://ykuenmwfxecmmqichwit.supabase.co', 'phone_sync_project_url');
 select vault.create_secret('<service_role_key>', 'phone_sync_service_key');
 ```
 
-```
-db/20260804_phone_sync_cron.sql
-```
+The project URL is a constant in `phone_sync_dispatch()` rather than a second Vault entry —
+it already ships in the public bundle, so treating it as a secret buys nothing and doubles
+the setup. The key is in Vault because cron job definitions and `pg_proc` bodies are
+readable by anyone with DB access.
 
 Check it:
 

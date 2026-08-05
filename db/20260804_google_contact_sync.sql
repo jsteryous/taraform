@@ -170,10 +170,12 @@ $$;
 -- in db/20260610_clients_rls.sql. Any change here is a potential cross-tenant leak;
 -- src/lib/rls.proof.test.js covers it.
 create or replace function public.phone_sync_contacts_for(p_user uuid)
+-- acreage is TEXT on property_crm_contacts, not numeric — buildPerson only interpolates
+-- it into the notes, so the column type is what matters here, not the shape you'd expect.
 returns table (
   id bigint, client_id uuid, first_name text, last_name text,
   phones jsonb, bad_phones jsonb, county text, status text,
-  tax_map_ids jsonb, acreage numeric
+  tax_map_ids jsonb, acreage text
 )
 language sql security definer set search_path = public
 as $$
