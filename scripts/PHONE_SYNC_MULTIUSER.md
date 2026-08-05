@@ -243,6 +243,21 @@ betting a nightly job on. `npm test` fails the moment the copy and the source di
 - **Google verification** (step 5) — start it before onboarding anyone outside.
 - **Failure visibility.** A user whose token gets revoked sees `last_error` in the Settings
   modal, but only if they open it. Email would need a service we no longer run.
-- **Per-user list priority.** `set_my_contact_sync_priority()` exists and defaults to oldest
-  membership first; nothing in the UI calls it yet. Only matters for users in 2+ lists with
-  the same owner in both.
+- **Per-user list priority — bit us once already.** `phone_sync_store_token` seeds
+  `client_priority` with oldest membership first, and nothing in the UI calls
+  `set_my_contact_sync_priority()` to change it. For the first real user that produced
+  `[Table Rock, Personal List]` — the exact inverse of the deliberate order hardcoded in
+  `scripts/phone-sync.mjs`, whose comment explains why: Personal List is the one actually
+  worked out of, so its status is the current one. The first hosted run therefore flipped
+  the 7 owners who appear in both lists onto their Table Rock copy (`created 7 / deleted 7`
+  in `last_stats`), moving both the caller-ID status and the deep link to the record the
+  user *doesn't* work in. Fixed by hand for that user on 2026-08-05:
+
+  ```sql
+  update google_contact_sync set client_priority = array['<personal>','<table rock>']::uuid[]
+  where user_id = '<uid>';
+  ```
+
+  Reconnecting is safe — the `on conflict` clause deliberately leaves `client_priority`
+  alone. Still open for the *next* multi-list user: either surface the order in
+  `PhoneSyncModal` or pick a better default than membership age.

@@ -1,12 +1,16 @@
 name: Sync contacts to Google
 
-# Nightly one-way push of Taraform contacts into a dedicated Google account, which the
-# phone syncs natively so callbacks show a name instead of an unknown number.
+# One-way push of Taraform contacts into a dedicated Google account, which the phone syncs
+# natively so callbacks show a name instead of an unknown number.
 # Setup + secrets: scripts/PHONE_SYNC.md
+#
+# MANUAL ONLY since 2026-08-05. The nightly schedule moved to pg_cron -> the phone-sync-run
+# Edge Function (scripts/PHONE_SYNC_MULTIUSER.md), which syncs every connected user. Running
+# both against the same Google account churns: they compute their own client priority, so
+# they can disagree on which duplicate wins and swap create/delete pairs every night.
+# This workflow survives as the fallback if the hosted path breaks -- pause the cron job
+# (`select cron.unschedule('phone-sync-nightly')`) before dispatching it.
 on:
-  schedule:
-    # 08:00 UTC = 4am ET. GitHub delays scheduled runs under load; exact time is not important.
-    - cron: '0 8 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
