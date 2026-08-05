@@ -1,9 +1,10 @@
 # Caller ID for every user — self-serve, automatic, $0
 
-> **Status: deployed 2026-08-05, awaiting two secrets.** Schema, RPCs, both Edge Functions
-> and the nightly cron job are live on project `ykuenmwfxecmmqichwit`. Connecting still
-> fails until the two secrets in step 3 and step 4 are set — those hold real credentials,
-> so they have to be set by a human.
+> **Status: deployed and verified 2026-08-05.** Schema, RPCs, both Edge Functions, the
+> nightly cron job and both secrets are live on project `ykuenmwfxecmmqichwit`. The
+> cron→function auth path was proved end to end (service_role key → 500 "No Google
+> connection"; anon key → 403). Nobody has connected a Google account yet, so the nightly
+> run currently has zero users to process.
 >
 > This is the multi-user version of `PHONE_SYNC.md`. That one serves a single operator —
 > one Google refresh token and one Supabase login in **repo** secrets. This one lets any
@@ -110,10 +111,20 @@ real `_shared/` files, so what runs is byte-identical to what's committed. Hand-
 them re-introduces exactly the drift `edgeShared.test.js` exists to catch — and that drift
 is invisible, because the repo test still passes while production differs.
 
-Both functions keep `verify_jwt` **on**. The runner is called by pg_cron with the
-service_role key, which is itself a valid project JWT, so it passes platform verification
-and *then* hits the function's own check that the bearer token equals the service role key.
-Two gates instead of one; there's no reason to deploy it with `--no-verify-jwt`.
+Both functions keep `verify_jwt` **on**, and that is load-bearing for the runner's own auth
+check rather than just belt-and-braces. `phone-sync-run` accepts a caller if the bearer
+either equals `SUPABASE_SERVICE_ROLE_KEY` *or* is a JWT whose `role` claim is
+`service_role`. The second branch is safe only because the platform has already verified
+the signature before the function runs — so a forged token never reaches the code and the
+function only has to judge claims. Deploying this one with `--no-verify-jwt` would turn
+that branch into a hole. Don't.
+
+The two branches exist because a plain string comparison against
+`SUPABASE_SERVICE_ROLE_KEY` **does not work**: the value the platform injects is not
+guaranteed to be the legacy JWT that pg_cron presents from Vault, and when they differ
+every nightly run 403s *before* the function can write `last_error` — so it looks exactly
+like "nobody is connected" rather than like a failure. Found by testing this in advance;
+verify it after any change with the `net.http_post` probe in the deploy notes below.
 
 Then the client secret, which never leaves Google and this function:
 
@@ -148,6 +159,29 @@ select * from cron.job;
 select * from cron.job_run_details order by start_time desc limit 5;
 select user_id, last_synced_at, last_error from google_contact_sync;
 ```
+
+**Prove the auth path without waiting for 4am.** `phone_sync_dispatch()` is a no-op when
+nobody is connected, so it can't tell you whether the key works. Fire one request at a
+user id that cannot exist and read the response:
+
+```sql
+select net.http_post(
+  url     := 'https://ykuenmwfxecmmqichwit.supabase.co/functions/v1/phone-sync-run',
+  headers := jsonb_build_object(
+               'Content-Type', 'application/json',
+               'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets
+                                              where name = 'phone_sync_service_key')),
+  body    := jsonb_build_object('user_id', '00000000-0000-0000-0000-000000000000')
+) as request_id;
+
+-- then, in a second statement (pg_net is async):
+select status_code, content from net._http_response order by id desc limit 1;
+```
+
+- `500 {"error":"No Google connection for this user"}` → the key authenticates. Correct.
+- `403 {"error":"Forbidden"}` → wrong key, or the auth check regressed.
+
+Repeat it with the anon key substituted; that one **must** come back 403.
 
 ### 5. Google verification — the actual gate on "everyone"
 

@@ -25,9 +25,38 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // would then DELETE the rest from their phone as "no longer qualifying".
 const PAGE = 1000;
 
+// Only the scheduler (and the connect function's "sync-now") may call this — it takes a
+// user_id in the body, so a user-authenticated caller could sync, and thereby read, another
+// tenant's contacts.
+//
+// Two accepted shapes, because the platform's injected SUPABASE_SERVICE_ROLE_KEY is not
+// guaranteed to be the legacy JWT that pg_cron presents from Vault — string equality alone
+// silently 403s every nightly run:
+//
+//   1. the bearer equals SUPABASE_SERVICE_ROLE_KEY exactly (covers new-format secret keys)
+//   2. the bearer is a JWT whose role claim is service_role
+//
+// (2) is safe *because* this function is deployed with verify_jwt on: the platform has
+// already validated the signature before we run, so an unsigned forgery never reaches this
+// code and we only have to judge the claims. A user's token carries role=authenticated and
+// the anon key carries role=anon, so neither passes.
+function roleOf(jwt: string): string {
+  try {
+    const payload = jwt.split('.')[1];
+    if (!payload) return '';
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    return JSON.parse(json)?.role ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function authorized(req: Request) {
-  const header = req.headers.get('Authorization') ?? '';
-  return header === `Bearer ${SERVICE_KEY}`;
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (!token) return false;
+  if (SERVICE_KEY && token === SERVICE_KEY) return true;
+  return roleOf(token) === 'service_role';
 }
 
 async function loadContacts(db: any, userId: string) {
