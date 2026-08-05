@@ -1,6 +1,9 @@
-#!/usr/bin/env node
 // Copies the pure sync logic into supabase/functions/_shared/ so the Edge Functions can
 // import it.
+//
+// No `#!` line: src/lib/edgeShared.test.js imports this module, and vite's parser rejects a
+// shebang in an imported file — which made the whole suite fail to collect rather than run
+// the drift check. It's invoked as `node scripts/sync-edge-shared.mjs`, so nothing needs it.
 //
 // Why a copy instead of importing ../../../src/lib directly: the Supabase CLI bundles a
 // function from its own directory, and reaching outside supabase/functions is not a
@@ -28,9 +31,15 @@ export const sourcePath = (name) => join(ROOT, 'src', 'lib', name);
 export const sharedPath = (name) => join(SHARED_DIR, name);
 export const expectedContent = (name) => HEADER + readFileSync(sourcePath(name), 'utf8');
 
+// Line endings are a checkout artifact, never real drift, and comparing them raw made this
+// check unfixably red on Windows: git's autocrlf hands us CRLF working files, but a template
+// literal normalizes CRLF to LF per spec, so HEADER above is LF while the file it generated
+// is CRLF. Identical content, permanent failure. Compare what actually matters.
+const sameContent = (a, b) => a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+
 export function isInSync(name) {
   const dest = sharedPath(name);
-  return existsSync(dest) && readFileSync(dest, 'utf8') === expectedContent(name);
+  return existsSync(dest) && sameContent(readFileSync(dest, 'utf8'), expectedContent(name));
 }
 
 function main() {

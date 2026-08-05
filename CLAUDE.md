@@ -37,6 +37,7 @@ Scoped guidance lives next to the code:
 
 ### Tier 3 — Safety nets (highest long-term leverage)
 - [x] **Add a test harness** — done 2026-06-13 (`f9b9cce`). Vitest + `npm test`; 41 passing tests over the pure data-layer fns (`applyContactFilters`, `mapDbContact`/`mapContactToDb`, `normalizePhone`/`normalizeCounty`, `parseCSV`, import dedup). `applyContactFilters` and the dedup fns were extracted to `src/lib/contactFilters.js` + `src/lib/dedup.js` to make them importable. **Next:** backfill a regression test per "bitten" bug in the subdir CLAUDE.md files (TDZ ordering, Export-All filter drift, offers/status race).
+- [ ] **Run the tests in CI.** `deploy.yml` is `npm install` + `npm run build` — nothing runs `npm test`, so a red suite ships silently. Proven 2026-08-05: `npm test` had been failing since `4e82311` (the shebang in `sync-edge-shared.mjs` broke collection of `edgeShared.test.js`) and nobody noticed for a day, because the only thing that would have said so is a command you have to type. Add `- run: npm test` before the build step.
 - [ ] **Adopt TypeScript incrementally**, starting in `src/lib/` (the snake_case↔camelCase mapping + bigint/jsonb shapes are where untyped bugs hide).
 
 ### Tier 4 — Maintainability & hygiene
