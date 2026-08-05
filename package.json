@@ -8,6 +8,7 @@
         "build": "vite build",
         "preview": "vite preview",
         "check-css": "node scripts/check-css.mjs",
+        "sync:edge": "node scripts/sync-edge-shared.mjs",
         "test": "vitest run",
         "test:watch": "vitest"
     },

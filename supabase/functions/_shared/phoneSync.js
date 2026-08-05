@@ -1,3 +1,6 @@
+// GENERATED FILE — DO NOT EDIT.
+// Copied from src/lib/ by scripts/sync-edge-shared.mjs. Edit the original and run
+// `npm run sync:edge`. src/lib/edgeShared.test.js fails if these drift apart.
 // Pure logic for the Google Contacts phone sync (scripts/phone-sync.mjs).
 //
 // Lives in src/lib (not scripts/) for the same reason contactFilters.js and dedup.js do:

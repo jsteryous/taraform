@@ -14,7 +14,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  buildPerson, dedupeByPhone, diffContacts, chunk,
+  buildPerson, dedupeByPhone, phoneKey, diffContacts, chunk,
   groupMembership, isInGroup, taraformResourceNames, taraformIdOf,
   PERSON_FIELDS, UPDATE_MASK, GROUP_NAME, CREATE_CHUNK, UPDATE_CHUNK, DELETE_CHUNK,
 } from '../src/lib/phoneSync.js';
@@ -221,22 +221,34 @@ async function main() {
   const { rows, clientNames } = await loadContacts();
   log(`  Supabase: ${rows.length} contacts with a good phone across ${CLIENT_IDS.length} list(s)`);
 
-  // Collapse the same owner appearing in more than one list into a single phone contact.
+  // Count these BEFORE dedupe: a contact that clears has_good_phone but has no clean
+  // 10-digit NANP number has no phone key, so dedupeByPhone drops it and it would
+  // otherwise disappear from the accounting entirely.
+  const undialable = rows.filter((r) => !phoneKey(r)).length;
+  if (undialable) log(`  Skipped ${undialable} contact(s) with no dialable 10-digit number`);
+
+  // Collapse rows sharing an identical number set into a single phone contact.
   const deduped = dedupeByPhone(rows, CLIENT_IDS);
-  const merged = deduped.reduce((n, d) => n + d.mergedFrom.length, 0);
-  if (merged) log(`  Merged ${merged} cross-list duplicate(s) into ${deduped.filter(d => d.mergedFrom.length).length} contact(s)`);
+  const mergedRows = deduped.reduce((n, d) => n + d.mergedFrom.length, 0);
+  if (mergedRows) {
+    // Most duplicates are two rows in the SAME list, not the same owner in both — so
+    // report the split rather than calling them all cross-list.
+    const cross = deduped.reduce(
+      (n, d) => n + d.mergedFrom.filter((m) => m.client_id !== d.contact.client_id).length, 0);
+    const groups = deduped.filter((d) => d.mergedFrom.length).length;
+    log(`  Merged ${mergedRows} duplicate row(s) into ${groups} contact(s)`
+      + ` — ${cross} cross-list, ${mergedRows - cross} within-list`);
+  }
 
   const label = (c) => `${[c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown'}`
     + `${c.status ? ` (${c.status})` : ''} — ${clientNames.get(c.client_id) || 'unknown list'}`;
 
   const desired = new Map();
-  let undialable = 0;
   for (const { contact, mergedFrom } of deduped) {
     const person = buildPerson(contact, clientNames.get(contact.client_id) || '', mergedFrom.map(label));
-    if (!person) { undialable++; continue; }
+    if (!person) continue; // already counted in `undialable` above
     desired.set(String(contact.id), person);
   }
-  if (undialable) log(`  Skipped ${undialable} contact(s) with no dialable 10-digit number`);
 
   const api = googleFetch(await googleAccessToken());
   const groupResourceName = DRY_RUN ? null : await resolveGroup(api);

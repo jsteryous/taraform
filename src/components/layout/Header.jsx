@@ -3,8 +3,9 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { getClients } from '../../lib/api';
 import ManageClientsModal from '../modals/ManageClientsModal';
+import PhoneSyncModal from '../modals/PhoneSyncModal';
 import {
-  Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut,
+  Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut, Smartphone,
 } from 'lucide-react';
 
 function hasActiveFilters(f) {
@@ -18,6 +19,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
   const [showClients, setShowClients]     = useState(false);
+  const [showPhoneSync, setShowPhoneSync] = useState(false);
   const themeRef = useRef(null);
   const clientDropRef = useRef(null);
 
@@ -92,6 +94,9 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           </div>
           <div className="user-info">
             <span>{user?.email}</span>
+            <button className="logout-btn" onClick={() => setShowPhoneSync(true)} title="Caller ID on your phone">
+              <Smartphone size={14} />
+            </button>
             <div ref={themeRef} style={{ position: 'relative' }}>
               <button className="theme-toggle-btn" onClick={() => setThemeOpen(o => !o)}>
                 <ThemeIcon size={14} />
@@ -140,6 +145,8 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           }
         }}
       />
+
+      <PhoneSyncModal open={showPhoneSync} onClose={() => setShowPhoneSync(false)} />
     </>
   );
 }

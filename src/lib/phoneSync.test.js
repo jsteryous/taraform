@@ -13,7 +13,9 @@ import {
   personSignature,
   diffContacts,
   chunk,
+  contactUrl,
   SYNC_KEY,
+  URL_LABEL,
 } from './phoneSync.js';
 
 const contact = (over = {}) => ({
@@ -92,6 +94,23 @@ describe('buildPerson', () => {
   it('returns null when nothing is dialable', () => {
     expect(buildPerson(contact({ phones: ['491-0532'] }), 'Personal List')).toBeNull();
     expect(buildPerson(contact({ phones: ['(864) 491-0532'], bad_phones: ['8644910532'] }), 'x')).toBeNull();
+  });
+
+  // The tap-through half of caller ID: the call screen gives the name, the contact card
+  // gives a link straight to the record. Must be the HashRouter form App.jsx syncs to.
+  it('carries a deep link back to the contact overlay', () => {
+    const p = buildPerson(contact(), 'Personal List');
+    expect(p.urls).toEqual([{ value: 'https://taraform.org/#/contact/42', type: URL_LABEL }]);
+    expect(contactUrl(42)).toBe('https://taraform.org/#/contact/42');
+  });
+
+  // After dedupe the survivor is the row whose status is current, so its id is the one
+  // worth opening — not whichever duplicate happened to be merged away.
+  it('links to the surviving row after a merge', () => {
+    const winner = contact({ id: 2, client_id: 'personal' });
+    const loser = contact({ id: 1, client_id: 'trp' });
+    const [{ contact: survivor }] = dedupeByPhone([loser, winner], ['personal', 'trp']);
+    expect(buildPerson(survivor, 'Personal List').urls[0].value).toContain('/#/contact/2');
   });
 });
 
@@ -173,6 +192,13 @@ describe('personSignature', () => {
     const before = { names: [{ givenName: 'John', familyName: 'Parker (Hot Lead)' }] };
     const after = { names: [{ givenName: 'John', familyName: 'Parker (Offer Made)' }] };
     expect(personSignature(before)).not.toBe(personSignature(after));
+  });
+
+  // Without this, contacts synced before the deep link existed would never be updated to
+  // gain one — the diff would consider them already correct.
+  it('notices a missing deep link, so old contacts get back-filled', () => {
+    const withUrl = { urls: [{ value: 'https://taraform.org/#/contact/42' }] };
+    expect(personSignature(withUrl)).not.toBe(personSignature({}));
   });
 });
 

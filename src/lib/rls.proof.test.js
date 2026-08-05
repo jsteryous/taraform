@@ -118,4 +118,63 @@ describe.skipIf(!READY)('RLS tenant isolation (live Supabase)', () => {
     expect(error).toBeNull();
     expect(data).toEqual([]);
   });
+
+  // ── Phone sync (db/20260804_google_contact_sync.sql) ────────────────────────
+  //
+  // The sync's Edge Function runs as service_role and BYPASSES RLS, so the tenancy
+  // boundary is the grant list on these functions plus the membership join inside
+  // phone_sync_contacts_for(). If any of them ever became callable by `authenticated`,
+  // any signed-in user could read every tenant's contacts — or lift another user's
+  // Google refresh token straight out of Vault. That is the worst failure this codebase
+  // has available, so it gets a direct probe.
+  describe('phone sync token + contact scoping', () => {
+    it('a signed-in user cannot read the google_contact_sync table', async () => {
+      const { data, error } = await clientA.from('google_contact_sync').select('*');
+      // RLS is on with zero policies, so this is either an error or an empty set —
+      // what must never happen is a row coming back with a token_secret_id in it.
+      expect(data ?? []).toEqual([]);
+      if (error) expect(error.message).toBeTruthy();
+    });
+
+    it("a signed-in user cannot call phone_sync_contacts_for on another user", async () => {
+      const { data: { user: userB } } = await clientB.auth.getUser();
+      const { data, error } = await clientA.rpc('phone_sync_contacts_for', { p_user: userB.id });
+      expect(error).not.toBeNull();               // permission denied for function
+      expect(error.message).toMatch(/permission denied|not exist|not find/i);
+      expect(data).toBeNull();
+    });
+
+    it('a signed-in user cannot call phone_sync_contacts_for even on themselves', async () => {
+      const { data: { user: userA } } = await clientA.auth.getUser();
+      const { error } = await clientA.rpc('phone_sync_contacts_for', { p_user: userA.id });
+      expect(error).not.toBeNull(); // service_role only — no exceptions
+    });
+
+    it("a signed-in user cannot read anyone's Google refresh token", async () => {
+      const { data: { user: userB } } = await clientB.auth.getUser();
+      for (const uid of [userB.id, (await clientA.auth.getUser()).data.user.id]) {
+        const { data, error } = await clientA.rpc('phone_sync_read_token', { p_user: uid });
+        expect(error).not.toBeNull();
+        expect(data).toBeNull();
+      }
+    });
+
+    it('the user-facing status RPC leaks nothing beyond the safe columns', async () => {
+      const { data, error } = await clientA.rpc('get_my_contact_sync');
+      expect(error).toBeNull(); // this one IS granted to authenticated
+      for (const row of data ?? []) {
+        expect(Object.keys(row).sort()).toEqual(
+          ['enabled', 'google_email', 'last_error', 'last_stats', 'last_synced_at'],
+        );
+      }
+    });
+
+    it('anon cannot reach any of the sync RPCs', async () => {
+      const anon = makeClient();
+      for (const fn of ['phone_sync_pending_users', 'get_my_contact_sync']) {
+        const { data } = await anon.rpc(fn);
+        expect(data ?? []).toEqual([]);
+      }
+    });
+  });
 });

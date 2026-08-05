@@ -15,6 +15,11 @@ Actions, the same CI that already deploys the site.
 An incoming call shows **`John Parker (Offer Made)`**, with county, parcel, acreage and the
 Taraform contact number in the notes.
 
+The contact card also carries a **tappable `taraform.org` link** straight to that contact's
+overlay in the app. No browser can see incoming call state, so Taraform itself can't pop a
+"call from…" window — the OS call screen gives you the name, and the link is the tap-through
+to the record.
+
 ## What syncs
 
 - Contacts in **Personal List + Table Rock Partners** with `has_good_phone = true`
@@ -41,8 +46,8 @@ arbitrarily. So rows with an **identical set of dialable numbers** collapse into
 - Matching is on the **whole** number set, not any shared number — relatives and spouses
   share a landline, and collapsing those would hide a genuinely different owner.
 
-As of 2026-08-04 this takes **1,416 dialable contacts down to 1,318 entries**: 7 cross-list
-pairs, and 91 rows across 70 duplicate groups *within* a single list. That second number is
+As of 2026-08-04 this takes **1,416 dialable contacts down to 1,318 entries**: 98 duplicate
+rows collapsed into 77 survivors — 7 cross-list, 91 *within* a single list. That last number is
 a data-quality signal worth a look in the app — the sync hides those duplicates from your
 phone but doesn't fix them in the CRM.
 
@@ -216,17 +221,21 @@ no inline `VAR=value cmd` prefix. `--purge` needs only the three Google vars.
 
 Not a Taraform feature — a single-operator integration. The Google refresh token and the
 Supabase login live in **repo** secrets, so a new user signing into the app gets nothing
-from it. Making it self-serve needs a per-user token store, a browser-side PKCE connect
-flow, and the nightly job looping over users instead of reading env. That's tracked in the
-Tier 4 backlog in the root `CLAUDE.md` — including the open question of protecting other
-people's refresh tokens at rest.
+from it.
+
+**`PHONE_SYNC_MULTIUSER.md` (next to this file) is the full design for making it
+self-serve** — per-user Google connect, refresh tokens in Supabase Vault, and a nightly
+`pg_cron` + Edge Function run instead of the GitHub Action. Still $0, roughly 2½ days,
+nothing built yet. It also covers why a purely browser-side flow can't do it unattended,
+and the Google verification constraint (`auth/contacts` is a sensitive scope: 100 users
+lifetime until verified).
 
 ## Code layout
 
 | File | Role |
 | --- | --- |
 | `src/lib/phoneSync.js` | Pure logic — phone selection, name building, the diff. Unit-tested. |
-| `src/lib/phoneSync.test.js` | 22 tests (`npm test`). |
+| `src/lib/phoneSync.test.js` | 37 tests (`npm test`). |
 | `scripts/phone-sync.mjs` | The runner: Supabase, OAuth, People API batching. |
 | `scripts/phone-sync-authorize.mjs` | One-time refresh-token helper. |
 | `.github/workflows/sync-contacts.yml` | Nightly schedule + manual dry-run trigger. |

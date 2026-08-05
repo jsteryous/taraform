@@ -12,3 +12,5 @@ dist
 
 # Throwaway scratch scripts (e.g. .tmp-mint-session.mjs)
 .tmp-*
+
+supabase/.temp/
