@@ -22,6 +22,10 @@ This replaced `contactMatchesFilters`, a per-contact JS copy of every filter pre
 
 **Tab focus auto-refreshes page 1** with current filters (throttled 2s, skipped during in-flight load). Picks up external writes — LandID extension, CSV imports in another tab, etc.
 
+**Saves are version-checked and serialized.** `upsertContact` is an `UPDATE` guarded by `.eq('updated_at', expected)` — the write only lands if the row still carries the version we last read. If it doesn't, it throws `ContactConflictError` and the edit is rejected rather than silently overwriting whoever wrote first (`activity_log` is rewritten wholesale, so a concurrently-logged note used to just vanish). The expected version lives in `versionsRef` inside AppContext, **not** on the contact object — `useDraftSave` stamps an optimistic local `updatedAt` on the draft, so the object's own value is not a server version. `rememberVersions` refreshes the map on every server read; `writeContact` advances it on every successful write.
+
+Saves for one contact are queued (`saveQueueRef`) so blur-to-save writes can't overlap and make you conflict with yourself. It is never an `upsert` — falling back to an insert would resurrect a row someone else deleted. A contact with no known version writes unguarded, which is the old behaviour, not a spurious conflict.
+
 **`saveContact` is async and throws.** Always `await` it. The optimistic-save pattern (apply locally → revert + `showToast` on catch) lives in `useDraftSave` — use that hook rather than reimplementing.
 
 **`showToast(msg, variant?)`** — second arg is `'success' | 'error' | 'warning'` (default: neutral, no icon). Pass the right variant on catch/success so the toast renders a colored border and icon.

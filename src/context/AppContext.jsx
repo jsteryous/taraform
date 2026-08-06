@@ -43,6 +43,21 @@ export function AppProvider({ children }) {
   const filtersRef  = useRef(filters);
   filtersRef.current = filters;
 
+  // id -> the updated_at the server last confirmed for that contact. This is the version
+  // saveContact writes against (see upsertContact), and it lives here rather than on the
+  // contact object because useDraftSave stamps an optimistic local updatedAt on the draft.
+  const versionsRef = useRef(new Map());
+  // Per-contact save queue. Blur-to-save fires several writes in quick succession and each
+  // one's precondition is the version the previous produced, so overlapping them would
+  // make a user conflict with themselves.
+  const saveQueueRef = useRef(new Map());
+
+  const rememberVersions = useCallback((list) => {
+    for (const c of list) {
+      if (c?.id != null && c.updatedAt) versionsRef.current.set(c.id, c.updatedAt);
+    }
+  }, []);
+
   // Stable setter — callbacks depend on it with stable dep arrays.
   const setLoading = useCallback((val) => {
     loadingRef.current = val;
@@ -83,6 +98,7 @@ export function AppProvider({ children }) {
     setLoading(true);
     try {
       const { contacts: page, count } = await fetchContactsPage(clientId, filters);
+      rememberVersions(page);
       _setContacts(page);
       setTotalCount(count);
     } catch (e) {
@@ -91,7 +107,7 @@ export function AppProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, _setContacts, showToast]);
+  }, [setLoading, _setContacts, showToast, rememberVersions]);
 
   // Refresh page 1 when the tab regains focus — picks up contacts added externally
   // (LandID extension, CSV imports in another tab, etc.) without a manual reload.
@@ -121,6 +137,7 @@ export function AppProvider({ children }) {
     setLoading(true);
     try {
       const { contacts: page } = await fetchContactsPage(clientId, filters, contactsRef.current.length);
+      rememberVersions(page);
       _setContacts(prev => [...prev, ...page]);
     } catch (e) {
       console.error('loadMoreContacts error:', e);
@@ -128,7 +145,7 @@ export function AppProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, _setContacts, showToast]);
+  }, [setLoading, _setContacts, showToast, rememberVersions]);
 
   // ── Load full contact (with JSONB) for detail view ────────
   const loadFullContact = useCallback(async (contactId) => {
@@ -138,6 +155,7 @@ export function AppProvider({ children }) {
         showToast('Record not found.', 'error');
         return null;
       }
+      rememberVersions([full]);
       _setContacts(prev => prev.map(c => c.id === full.id ? full : c));
       setCurrentContact(prev => prev?.id === full.id ? full : prev);
       return full;
@@ -146,7 +164,7 @@ export function AppProvider({ children }) {
       showToast(classifyError(e), 'error');
       return null;
     }
-  }, [_setContacts, showToast]);
+  }, [_setContacts, showToast, rememberVersions]);
 
   // A row edited in the detail overlay can drift out of the active filter — status moved
   // to Dead/Pass, a note logged while the follow-up queue is showing, a number struck.
@@ -168,28 +186,53 @@ export function AppProvider({ children }) {
       .catch(e => console.error('drift re-check failed:', e));
   }, [_setContacts]);
 
+  const writeContact = useCallback(async (contact) => {
+    // Write against the version the server last confirmed. No entry means we never read
+    // this row from the server, so there's no version to assert and the write is unguarded
+    // — same as the old behaviour, rather than a spurious conflict.
+    const expected = versionsRef.current.get(contact.id) ?? null;
+    const updatedAt = await upsertContact(contact, user.id, currentClientId, expected);
+    versionsRef.current.set(contact.id, updatedAt);
+
+    const saved = { ...contact, updatedAt };
+    _setContacts(prev => {
+      const idx = prev.findIndex(c => c.id === saved.id);
+      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
+      return [saved, ...prev];
+    });
+    setCurrentContact(prev => prev?.id === saved.id ? saved : prev);
+    dropIfDrifted(saved.id, currentClientId, filtersRef.current);
+    return saved;
+  }, [user, currentClientId, _setContacts, dropIfDrifted]);
+
   const saveContact = useCallback(async (contact) => {
     if (!user || !currentClientId) return;
 
     if (contact.id == null) {
       const saved = await insertContact(contact, user.id, currentClientId);
+      rememberVersions([saved]);
       _setContacts(prev => [saved, ...prev]);
       dropIfDrifted(saved.id, currentClientId, filtersRef.current);
       return saved;
     }
 
-    await upsertContact(contact, user.id, currentClientId);
-    _setContacts(prev => {
-      const idx = prev.findIndex(c => c.id === contact.id);
-      if (idx >= 0) { const next = [...prev]; next[idx] = contact; return next; }
-      return [contact, ...prev];
+    // Queue behind any save already in flight for this contact, so each write asserts the
+    // version its predecessor produced. `.catch(() => {})` on the link, not the result:
+    // a failed save must not poison the queue, but the caller still sees its own error.
+    const queue = saveQueueRef.current;
+    const run = (queue.get(contact.id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => writeContact(contact));
+    queue.set(contact.id, run);
+    run.catch(() => {}).finally(() => {
+      if (queue.get(contact.id) === run) queue.delete(contact.id);
     });
-    setCurrentContact(prev => prev?.id === contact.id ? contact : prev);
-    dropIfDrifted(contact.id, currentClientId, filtersRef.current);
-  }, [user, currentClientId, _setContacts, dropIfDrifted]);
+    return run;
+  }, [user, currentClientId, _setContacts, dropIfDrifted, rememberVersions, writeContact]);
 
   const deleteContact = useCallback(async (id) => {
     await deleteContactById(id);
+    versionsRef.current.delete(id);
     _setContacts(prev => prev.filter(c => c.id !== id));
     setTotalCount(prev => prev - 1);
     setCurrentContact(prev => prev?.id === id ? null : prev);

@@ -177,11 +177,41 @@ export async function insertContact(contact, userId, clientId) {
   return mapDbContact(data);
 }
 
-export async function upsertContact(contact, userId, clientId) {
+// Raised when a save's optimistic-concurrency precondition fails: the row moved since we
+// last read it, so writing would silently overwrite whatever the other editor did.
+export class ContactConflictError extends Error {
+  constructor(message = 'This contact changed somewhere else — your edit was not saved. Reopen it to see the current version.') {
+    super(message);
+    this.name = 'ContactConflictError';
+  }
+}
+
+// Existing contact. `expectedUpdatedAt` is the version the caller last saw; the write only
+// lands if the row still carries it.
+//
+// Without this the save was a full-row upsert with no precondition, so two people editing
+// one contact was last-write-wins with no error — and because activity_log is rewritten
+// wholesale rather than appended, a note logged concurrently just disappeared. Silent data
+// loss, invisible at one user and live at two. Passing null keeps the old unguarded
+// behaviour for callers that have no version to offer.
+//
+// Returns the new server updated_at so the caller can advance its version.
+export async function upsertContact(contact, userId, clientId, expectedUpdatedAt = null) {
   const record = mapContactToDb(contact, userId, clientId);
-  const { error } = await supabase.from('property_crm_contacts')
-    .upsert({ ...record, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  const stamp = new Date().toISOString();
+  let q = supabase.from('property_crm_contacts')
+    .update({ ...record, updated_at: stamp })
+    .eq('id', contact.id);
+  if (expectedUpdatedAt) q = q.eq('updated_at', expectedUpdatedAt);
+  const { data, error } = await q.select('updated_at');
   if (error) throw error;
+  // Zero rows means the id+version pair matched nothing: either someone else wrote first,
+  // or the row is gone. Never fall back to an insert — that would resurrect a deleted row.
+  if (!data?.length) {
+    if (expectedUpdatedAt) throw new ContactConflictError();
+    throw new Error('Contact not found — it may have been deleted.');
+  }
+  return data[0].updated_at;
 }
 
 export async function deleteContactById(id) {

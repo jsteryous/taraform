@@ -21,7 +21,8 @@ vi.mock('./supabase', () => {
   };
 });
 
-const { contactStillMatches, fetchDedupIndex, fetchDuplicateCandidates } = await import('./contacts');
+const { contactStillMatches, fetchDedupIndex, fetchDuplicateCandidates, upsertContact, ContactConflictError } =
+  await import('./contacts');
 
 const reset = (rows = [], error = null) => { h.state.rows = rows; h.state.error = error; h.state.calls = []; };
 const methodArgs = (name) => h.state.calls.filter(c => c.method === name).map(c => c.args);
@@ -120,5 +121,50 @@ describe('dedup corpus', () => {
     // The injected punctuation is gone; what's left can't break out of or()/cs.[].
     expect(expr).toContain('last_name.ilike.Lovelace');
     expect(expr).toContain('property_addresses.cs.["12 Oak St"]');
+  });
+});
+
+// The save was a full-row upsert with no precondition: two people editing one contact was
+// last-write-wins with no error, and since activity_log is rewritten wholesale rather than
+// appended, a concurrently-logged note just vanished. Silent data loss.
+describe('upsertContact optimistic concurrency', () => {
+  const contact = { id: 42, firstName: 'Ada', lastName: 'Lovelace' };
+
+  it('asserts the expected version and returns the new one', async () => {
+    reset([{ updated_at: '2026-08-06T10:00:00.000Z' }]);
+    const next = await upsertContact(contact, 'user-1', 'client-1', '2026-08-05T09:00:00.000Z');
+
+    expect(methodArgs('eq')).toEqual([
+      ['id', 42],
+      ['updated_at', '2026-08-05T09:00:00.000Z'],
+    ]);
+    // An UPDATE, never an upsert — falling back to an insert would resurrect a deleted row.
+    expect(methodArgs('update')).toHaveLength(1);
+    expect(h.state.calls.some(c => c.method === 'upsert')).toBe(false);
+    expect(next).toBe('2026-08-06T10:00:00.000Z');
+  });
+
+  it('stamps a fresh updated_at on the row it writes', async () => {
+    reset([{ updated_at: '2026-08-06T10:00:00.000Z' }]);
+    await upsertContact(contact, 'user-1', 'client-1', '2026-08-05T09:00:00.000Z');
+    const written = methodArgs('update')[0][0];
+    expect(written.updated_at).not.toBe('2026-08-05T09:00:00.000Z');
+    expect(Number.isNaN(Date.parse(written.updated_at))).toBe(false);
+  });
+
+  it('throws ContactConflictError when the version no longer matches', async () => {
+    reset([]); // zero rows updated — someone else wrote first
+    await expect(upsertContact(contact, 'user-1', 'client-1', '2026-08-05T09:00:00.000Z'))
+      .rejects.toBeInstanceOf(ContactConflictError);
+  });
+
+  it('writes unguarded when no version is known, but still fails on a missing row', async () => {
+    reset([{ updated_at: '2026-08-06T10:00:00.000Z' }]);
+    await upsertContact(contact, 'user-1', 'client-1', null);
+    expect(methodArgs('eq')).toEqual([['id', 42]]); // no updated_at precondition
+
+    reset([]);
+    await expect(upsertContact(contact, 'user-1', 'client-1', null))
+      .rejects.not.toBeInstanceOf(ContactConflictError);
   });
 });

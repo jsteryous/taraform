@@ -31,8 +31,10 @@ export function useDraftSave(draft, setDraft, setCurrentContact, saveContact, sh
     try {
       await saveContact(updated);
       markSaved();
-    } catch {
-      showToast('Save failed — try again', 'error');
+    } catch (e) {
+      // A concurrency conflict is not a transient failure — retrying would overwrite
+      // whoever wrote first, so say what happened instead of "try again".
+      showToast(e?.name === 'ContactConflictError' ? e.message : 'Save failed — try again', 'error');
       setSaveStatus('');
       setDraft(prev);
       setCurrentContact(prev);
