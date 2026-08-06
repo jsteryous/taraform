@@ -36,9 +36,17 @@ jobs:
 
       # Until RLS_TEST_REQUIRED is on, at least make the gap visible on the run summary
       # instead of invisible in a skipped test.
+      # Checked in the shell rather than a step-level `if:` — the `secrets` context is not
+      # reliably available in `if`, and an unparseable workflow would block every deploy.
       - name: Warn if the RLS proof is not configured
-        if: ${{ secrets.RLS_TEST_USER_A_EMAIL == '' }}
-        run: echo "::warning title=RLS proof skipped::RLS_TEST_* secrets are not set, so the tenant-isolation proof did not run. RLS is this app's only authorization boundary. See src/lib/rls.proof.test.js."
+        env:
+          RLS_TEST_USER_A_EMAIL: ${{ secrets.RLS_TEST_USER_A_EMAIL }}
+        run: |
+          if [ -z "$RLS_TEST_USER_A_EMAIL" ]; then
+            echo "::warning title=RLS proof skipped::RLS_TEST_* secrets are not set, so the tenant-isolation proof did not run. RLS is this app's only authorization boundary. See src/lib/rls.proof.test.js."
+          else
+            echo "RLS proof credentials are configured."
+          fi
 
       - run: npm run build
         env:
