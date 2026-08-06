@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { AppProvider, useApp, fetchAllFilteredContacts, fetchContactsByIds } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
+import { fetchAllFilteredContacts, fetchContactsByIds } from './lib/contacts';
+import { hasActiveFilters } from './lib/contactFilters';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
@@ -11,11 +13,6 @@ import ImportModal from './components/modals/ImportModal';
 import Dashboard from './components/Dashboard';
 import Toast from './components/shared/Toast';
 import ErrorBoundary from './components/shared/ErrorBoundary';
-
-function hasActiveFilters(f) {
-  if (!f) return false;
-  return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity || f.followUp);
-}
 
 // Notes live in two places: the freeform `notes` text column (written at create / CSV import,
 // but never re-shown in the UI) and `activity_log` note entries (what the Notes tab reads).

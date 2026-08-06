@@ -1,86 +1,18 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
-import { mapDbContact, mapContactToDb } from '../lib/utils';
-import { applyContactFilters } from '../lib/contactFilters';
+import {
+  fetchContactsPage, fetchFullContact, contactStillMatches,
+  insertContact, upsertContact, deleteContactById,
+} from '../lib/contacts';
+import { hasActiveFilters } from '../lib/contactFilters';
+import { classifyError } from '../lib/errors';
+
+// State + orchestration only. Every query lives in src/lib/contacts.js (contacts) or
+// src/lib/api.js (clients, members, offers) — don't build supabase queries in here.
 
 // Two contexts so UI-only state changes (toast, theme) don't re-render data consumers
 // and data changes don't re-render UI-only consumers (Toast).
 const AppDataContext = createContext(null);
 const AppUIContext   = createContext(null);
-
-// Filtering is server-side (applyContactFilters, incl. has_good_phone + last_note_at).
-// activity_log + bad_phones are still carried so the client drift re-check
-// (contactMatchesFilters) can drop a contact edited in the detail overlay — a logged note
-// or a struck-through number — without a refetch. Small jsonb at PAGE_SIZE rows.
-const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,follow_up_on,sms_status,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
-const PAGE_SIZE   = 50;
-
-// ── Error classification ──────────────────────────────────────
-function classifyError(e) {
-  if (!navigator.onLine) return 'You appear to be offline.';
-  const status = e?.status ?? e?.code;
-  if (status === 401 || status === 403) return 'Permission denied — check your access.';
-  if (status === 404) return 'Record not found.';
-  if (status >= 500) return 'Server error — try again later.';
-  // PostgREST returns the offending detail in e.message / e.details — surface it so
-  // 400s are debuggable from the toast instead of needing the Network panel.
-  if (e?.message) return e.message;
-  return 'Something went wrong — try again.';
-}
-
-// ── Query builder (no component state — lives outside the provider) ──
-// applyContactFilters lives in src/lib/contactFilters.js so it can be unit-tested.
-function buildQuery(clientId, filters = {}) {
-  let q = supabase.from('property_crm_contacts')
-    .select(LIST_FIELDS, { count: 'exact' })
-    .eq('client_id', clientId)
-    .order('updated_at', { ascending: false });
-  return applyContactFilters(q, filters);
-}
-
-// Pages through every row matching the current filters (past Supabase's 1000-row default).
-// Used by Export — selects `*` because CSV needs fields outside LIST_FIELDS (owner_address,
-// property_addresses, and activity_log for client-side note filtering).
-export async function fetchAllFilteredContacts(clientId, filters = {}) {
-  if (!clientId) return [];
-  const CHUNK = 1000;
-  const all = [];
-  let from = 0;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    let q = supabase.from('property_crm_contacts')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('updated_at', { ascending: false });
-    q = applyContactFilters(q, filters);
-    const { data, error } = await q.range(from, from + CHUNK - 1);
-    if (error) throw error;
-    const rows = data || [];
-    all.push(...rows);
-    if (rows.length < CHUNK) break;
-    from += CHUNK;
-  }
-  return all;
-}
-
-// Refetches full rows (`select('*')`) for a set of ids. Used by Export Selected, whose
-// source objects come from the list view (LIST_FIELDS) and therefore lack owner_address /
-// property_addresses. Chunked to stay under URL-length limits on the `in` filter.
-export async function fetchContactsByIds(ids) {
-  if (!ids?.length) return [];
-  const CHUNK = 200;
-  const all = [];
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { data, error } = await supabase
-      .from('property_crm_contacts')
-      .select('*')
-      .in('id', slice);
-    if (error) throw error;
-    all.push(...(data || []));
-  }
-  return all;
-}
 
 // followUp: null, or the resolved { days, statuses } config while the queue filter is
 // active — carried in the filter itself so applyContactFilters stays config-free.
@@ -106,6 +38,10 @@ export function AppProvider({ children }) {
   // so a ref is the only reliable way to prevent concurrent fetches).
   const loadingRef  = useRef(false);
   const contactsRef = useRef([]);
+  // Live filter snapshot for post-save drift checks, which run outside the render that
+  // owns `filters` and must not force saveContact to change identity on every keystroke.
+  const filtersRef  = useRef(filters);
+  filtersRef.current = filters;
 
   // Stable setter — callbacks depend on it with stable dep arrays.
   const setLoading = useCallback((val) => {
@@ -146,11 +82,9 @@ export function AppProvider({ children }) {
     if (!clientId) return;
     setLoading(true);
     try {
-      const { data, count, error } = await buildQuery(clientId, filters)
-        .range(0, PAGE_SIZE - 1);
-      if (error) throw error;
-      _setContacts((data || []).map(mapDbContact));
-      setTotalCount(count || 0);
+      const { contacts: page, count } = await fetchContactsPage(clientId, filters);
+      _setContacts(page);
+      setTotalCount(count);
     } catch (e) {
       console.error('loadContacts error:', e);
       showToast(classifyError(e), 'error');
@@ -186,11 +120,8 @@ export function AppProvider({ children }) {
     if (!clientId || loadingRef.current) return;
     setLoading(true);
     try {
-      const from = contactsRef.current.length;
-      const { data, error } = await buildQuery(clientId, filters)
-        .range(from, from + PAGE_SIZE - 1);
-      if (error) throw error;
-      _setContacts(prev => [...prev, ...(data || []).map(mapDbContact)]);
+      const { contacts: page } = await fetchContactsPage(clientId, filters, contactsRef.current.length);
+      _setContacts(prev => [...prev, ...page]);
     } catch (e) {
       console.error('loadMoreContacts error:', e);
       showToast(classifyError(e), 'error');
@@ -201,61 +132,64 @@ export function AppProvider({ children }) {
 
   // ── Load full contact (with JSONB) for detail view ────────
   const loadFullContact = useCallback(async (contactId) => {
-    const { data, error } = await supabase
-      .from('property_crm_contacts').select('*').eq('id', contactId).maybeSingle();
-    if (error || !data) {
-      console.error('loadFullContact contact error:', error);
-      showToast(classifyError(error), 'error');
+    try {
+      const full = await fetchFullContact(contactId);
+      if (!full) {
+        showToast('Record not found.', 'error');
+        return null;
+      }
+      _setContacts(prev => prev.map(c => c.id === full.id ? full : c));
+      setCurrentContact(prev => prev?.id === full.id ? full : prev);
+      return full;
+    } catch (e) {
+      console.error('loadFullContact error:', e);
+      showToast(classifyError(e), 'error');
       return null;
     }
-    const full = mapDbContact(data);
-    const { data: offerRows, error: offersError } = await supabase
-      .from('contact_offers')
-      .select('id, amount, status, notes, created_at, property_crm_contacts!inner(client_id)')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: true });
-    if (offersError) console.error('loadFullContact offers error:', offersError);
-    full.offers = offersError
-      ? []
-      : (offerRows || []).map(row => ({ id: row.id, amount: row.amount, status: row.status, notes: row.notes, createdAt: row.created_at }));
-    _setContacts(prev => prev.map(c => c.id === full.id ? full : c));
-    setCurrentContact(prev => prev?.id === full.id ? full : prev);
-    return full;
   }, [_setContacts, showToast]);
+
+  // A row edited in the detail overlay can drift out of the active filter — status moved
+  // to Dead/Pass, a note logged while the follow-up queue is showing, a number struck.
+  // Ask the server, reusing the exact query the list was built from, and drop the row if
+  // it no longer belongs. This replaced contactMatchesFilters, a second copy of every
+  // filter predicate maintained by hand in JS.
+  //
+  // Deliberately NOT awaited by saveContact: the caller's "Saved" indicator shouldn't wait
+  // on a cosmetic re-check, and if it fails the row simply stays put. totalCount is left
+  // alone — like the old client-side filter, drift changes what's listed, not the server's
+  // count for these filters.
+  const dropIfDrifted = useCallback((id, clientId, filters) => {
+    if (!hasActiveFilters(filters)) return; // nothing to drift out of
+    contactStillMatches(id, clientId, filters)
+      .then(stillMatches => {
+        if (stillMatches) return;
+        _setContacts(prev => prev.filter(c => c.id !== id));
+      })
+      .catch(e => console.error('drift re-check failed:', e));
+  }, [_setContacts]);
 
   const saveContact = useCallback(async (contact) => {
     if (!user || !currentClientId) return;
-    const record = mapContactToDb(contact, user.id, currentClientId);
 
-    // New contact (no id): the DB owns the id (property_crm_contacts_id_seq), so
-    // insert without one and read the generated row back — local state then keys
-    // on the real id instead of a client-minted Date.now() that could collide.
     if (contact.id == null) {
-      delete record.id;
-      const { data, error } = await supabase.from('property_crm_contacts')
-        .insert({ ...record, updated_at: new Date().toISOString() })
-        .select().single();
-      if (error) throw error;
-      const saved = mapDbContact(data);
+      const saved = await insertContact(contact, user.id, currentClientId);
       _setContacts(prev => [saved, ...prev]);
+      dropIfDrifted(saved.id, currentClientId, filtersRef.current);
       return saved;
     }
 
-    // Existing contact: upsert on the known id.
-    const { error } = await supabase.from('property_crm_contacts')
-      .upsert({ ...record, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    if (error) throw error;
+    await upsertContact(contact, user.id, currentClientId);
     _setContacts(prev => {
       const idx = prev.findIndex(c => c.id === contact.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = contact; return next; }
       return [contact, ...prev];
     });
     setCurrentContact(prev => prev?.id === contact.id ? contact : prev);
-  }, [user, currentClientId]);
+    dropIfDrifted(contact.id, currentClientId, filtersRef.current);
+  }, [user, currentClientId, _setContacts, dropIfDrifted]);
 
   const deleteContact = useCallback(async (id) => {
-    const { error } = await supabase.from('property_crm_contacts').delete().eq('id', id);
-    if (error) throw error;
+    await deleteContactById(id);
     _setContacts(prev => prev.filter(c => c.id !== id));
     setTotalCount(prev => prev - 1);
     setCurrentContact(prev => prev?.id === id ? null : prev);

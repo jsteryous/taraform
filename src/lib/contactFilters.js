@@ -1,16 +1,11 @@
-import { normalizePhone } from './utils';
-
-// A contact "has a phone" only if at least one number isn't struck through. `bad_phones`
-// stores normalizePhone() digits of flagged numbers; a phone is good when its normalized
-// form isn't in that set. Used by the client-side has/missing refinement below — the
-// server "has" query is only the coarse `phones != []` prefilter (it can't compare the
-// formatted `phones` array against the normalized `bad_phones` array without an RPC).
-export function hasGoodPhone(contact) {
-  const bad = new Set(contact.badPhones || []);
-  return (contact.phones || []).some((p) => {
-    const d = normalizePhone(p);
-    return d && !bad.has(d);
-  });
+// Is any facet of the filter object actually narrowing the result set? Used to skip work
+// that only matters under an active filter (the post-save drift re-check, the "(filtered)"
+// suffix on an export).
+export function hasActiveFilters(f) {
+  if (!f) return false;
+  // `statuses` is null for "all" and an array (possibly empty) for any explicit choice;
+  // ?? null keeps a partial object like {} from reading as filtered.
+  return !!(f.search || (f.statuses ?? null) !== null || f.counties?.length || f.phone || f.email || f.activity || f.followUp);
 }
 
 // Local calendar date as YYYY-MM-DD — the comparison unit for follow_up_on (a DATE
@@ -39,12 +34,16 @@ export function followUpWindow(status, followUp) {
   return followUp.statusDays?.[status] ?? followUp.days;
 }
 
-// Per-contact "due for follow-up" predicate. `followUp` is the resolved client config
-// ({ days, statuses, statusDays } from resolveConfig().followUp). A manual follow_up_on
-// date always wins — set, it alone decides (arrived = due, future = not due, even outside
-// the auto statuses); unset, the auto rule applies: an eligible status with no note within
-// that status's window (never-noted counts as due — last_note_at null is the most overdue).
-// Also used directly for the ContactDetail "Due" badge.
+// Per-contact "due for follow-up" predicate, used *only* to render the ContactDetail
+// "Due" badge — filtering by follow-up happens server-side in applyContactFilters below.
+// It is not a filter mirror: nothing routes rows in or out of the list based on it, so a
+// disagreement with the SQL costs a wrong badge, not a wrong result set.
+//
+// `followUp` is the resolved client config ({ days, statuses, statusDays } from
+// resolveConfig().followUp). A manual follow_up_on date always wins — set, it alone
+// decides (arrived = due, future = not due, even outside the auto statuses); unset, the
+// auto rule applies: an eligible status with no note within that status's window
+// (never-noted counts as due — last_note_at null is the most overdue).
 export function isFollowUpDue(contact, followUp) {
   if (!followUp?.days) return false;
   if (contact.followUpOn) return contact.followUpOn <= todayStr();
@@ -71,8 +70,9 @@ export function applyContactFilters(q, filters = {}) {
   if (filters.email === 'has')     q = q.not('email', 'is', null).neq('email', '');
   if (filters.email === 'missing') q = q.or('email.is.null,email.eq.');
 
-  // Note-activity via the last_note_at generated column (max note timestamp). Mirrors the
-  // JS matchesNoteActivity semantics so the client drift re-check agrees on a fresh load.
+  // Note-activity via the last_note_at generated column (max note timestamp). lt = has a
+  // note within the last N days; gt = last note older than N days, which includes
+  // never-noted contacts ("who haven't we touched in N days"); note_never is exactly-never.
   if (filters.activity) {
     const [type, op, days] = filters.activity.split('_');
     if (type === 'note') {
@@ -93,7 +93,8 @@ export function applyContactFilters(q, filters = {}) {
   // Follow-up queue — filters.followUp carries the resolved config ({ days, statuses,
   // statusDays }) so this stays a pure function of its inputs. Due = manual follow_up_on
   // has arrived, OR no manual date + auto-eligible status + last note older than that
-  // status's window (or never). Mirrors isFollowUpDue above; keep the two in sync.
+  // status's window (or never). isFollowUpDue above expresses the same rule for the
+  // detail badge, but this clause is the only one that decides what's in the list.
   if (filters.followUp?.days) {
     // Statuses are grouped by window, one and(...) branch per distinct cadence: Hot Lead
     // (7d) and Contacted (90d) need different cutoffs, so they can't share an in.() list.
@@ -143,52 +144,4 @@ export function applyContactFilters(q, filters = {}) {
   }
 
   return q;
-}
-
-// Client-side note-activity predicate for a single contact — the counterpart to the
-// server-side last_note_at filter (applyContactFilters), kept in sync so the drift
-// re-check below agrees with what the server returned. `activity` values: "note_never",
-// or "note_lt_N" / "note_gt_N" with a custom day count N from the filter UI. lt = has a
-// note within the last N days; gt = last note is more than N days old — contacts with no
-// notes at all count as gt ("who haven't we touched in N days"; "note_never" is exactly-
-// never). Empty/non-note activity matches everything (pass-through).
-export function matchesNoteActivity(contact, activity) {
-  if (!activity) return true;
-  const [type, op, days] = activity.split('_');
-  if (type !== 'note') return true;
-
-  const lastNote = lastNoteDate(contact);
-  if (op === 'never') return !lastNote;
-
-  const n = parseInt(days, 10);
-  if (isNaN(n)) return true;
-  const cutoff = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-  if (op === 'lt') return !!lastNote && lastNote >= cutoff;
-  if (op === 'gt') return !lastNote || lastNote < cutoff;
-  return true;
-}
-
-// Full client-side filter predicate for a single contact. The list is already
-// server-filtered (applyContactFilters), but a row edited in the detail overlay can
-// drift out of the active filter — a status change to Dead/Pass, a logged note, etc.
-// Re-checking every row against these facets on render drops the drifted row without a
-// refetch, so the follow-up work queue shrinks as you clear contacts. `search` is
-// intentionally omitted — it's server-only (ilike / jsonb containment) and rarely drifts.
-export function contactMatchesFilters(contact, filters = {}) {
-  const { statuses, counties, phone, email, activity, followUp } = filters;
-  if (statuses && !statuses.includes(contact.status)) return false;
-  if (counties?.length && !counties.includes(contact.county)) return false;
-  // Follow-up queue drift: logging a note or pushing the date forward on a due contact
-  // drops it from the queue in real time, without a refetch.
-  if (followUp && !isFollowUpDue(contact, followUp)) return false;
-
-  const goodPhone = hasGoodPhone(contact);
-  if (phone === 'has' && !goodPhone) return false;
-  if (phone === 'missing' && goodPhone) return false;
-
-  const hasEmail = !!(contact.email && contact.email.trim());
-  if (email === 'has' && !hasEmail) return false;
-  if (email === 'missing' && hasEmail) return false;
-
-  return matchesNoteActivity(contact, activity);
 }
