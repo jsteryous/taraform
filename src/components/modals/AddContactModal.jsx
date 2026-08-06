@@ -3,6 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { normalizeCounty, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
+import { fetchDuplicateCandidates } from '../../lib/contacts';
 import { AlertTriangle } from 'lucide-react';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
@@ -25,7 +26,7 @@ function findDuplicates(contact, existing) {
 }
 
 export default function AddContactModal({ open, onClose }) {
-  const { saveContact, currentClientId, contacts, currentClient, showToast } = useApp();
+  const { saveContact, currentClientId, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
@@ -64,7 +65,16 @@ export default function AddContactModal({ open, onClose }) {
       updatedAt: new Date().toISOString(),
     };
 
-    const dupes = findDuplicates(contact, contacts);
+    // Ask the DB for rows that could collide, then apply the precise rules below. The
+    // old code scanned AppContext's `contacts`, which is one page of the list — so the
+    // warning only ever saw ~50 contacts, and never matched on address at all (that
+    // column isn't in LIST_FIELDS). A failed lookup must not block the save.
+    let dupes = [];
+    try {
+      dupes = findDuplicates(contact, await fetchDuplicateCandidates(currentClientId, contact));
+    } catch (err) {
+      console.error('Duplicate check failed:', err);
+    }
     if (dupes.length > 0 && !dupeWarning) {
       setDupeWarning({ contact, dupes });
       return;

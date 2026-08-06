@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { normalizeCounty, mapDbContact, formatPhone, normalizePhone, parseCustomFieldDefs, parseCSVRaw } from '../../lib/utils';
 import { buildLookupMaps, findDuplicate } from '../../lib/dedup';
+import { fetchDedupIndex } from '../../lib/contacts';
 import { FileText } from 'lucide-react';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
@@ -52,7 +53,7 @@ function autoMapCustomFields(headers, fieldDefs) {
 // buildLookupMaps / findDuplicate live in src/lib/dedup.js so they can be unit-tested.
 
 export default function ImportModal({ open, onClose }) {
-  const { contacts, setContacts, currentClientId, currentClient, user, showToast } = useApp();
+  const { setContacts, currentClientId, currentClient, user, showToast } = useApp();
   const [step, setStep]       = useState('upload'); // upload | map | preview | importing
   const [headers, setHeaders] = useState([]);
   const [rows, setRows]       = useState([]);
@@ -61,6 +62,7 @@ export default function ImportModal({ open, onClose }) {
   const [extraMappings, setExtraMappings] = useState([]); // [{ label, colIndex }]
   const [preview, setPreview] = useState(null); // { toAdd, toUpdate, toSkip }
   const [importing, setImporting] = useState(false);
+  const [previewing, setPreviewing] = useState(false); // loading the dedup index
   const fileRef = useRef(null);
 
   const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
@@ -180,9 +182,22 @@ export default function ImportModal({ open, onClose }) {
     }).filter(c => c.firstName || c.lastName);
   }
 
-  function handlePreview() {
+  async function handlePreview() {
     const parsed = buildContacts();
-    const maps = buildLookupMaps(contacts);
+    // Dedup against every contact in the client, fetched fresh — NOT the `contacts` array
+    // from context, which is one page of the list (see fetchDedupIndex). Scanning that
+    // page compared each CSV row against ~50 contacts and imported the rest as new.
+    let maps;
+    setPreviewing(true);
+    try {
+      maps = buildLookupMaps(await fetchDedupIndex(currentClientId));
+    } catch (e) {
+      console.error('Import dedup index error:', e);
+      showToast('Could not load existing contacts to check for duplicates — try again.', 'error');
+      return;
+    } finally {
+      setPreviewing(false);
+    }
     const toAdd = [], toUpdate = [], toSkip = [];
     for (const c of parsed) {
       const existing = findDuplicate(c, maps);
@@ -277,7 +292,7 @@ export default function ImportModal({ open, onClose }) {
       width="620px"
       footer={
         step === 'map' ? (
-          <><button onClick={reset}>← Back</button><button className="btn-primary" onClick={handlePreview}>Preview Import →</button></>
+          <><button onClick={reset}>← Back</button><button className="btn-primary" onClick={handlePreview} disabled={previewing}>{previewing ? 'Checking duplicates…' : 'Preview Import →'}</button></>
         ) : step === 'preview' ? (
           <><button onClick={() => setStep('map')}>← Back</button><button className="btn-primary" onClick={handleImport} disabled={importing}>{importing ? 'Importing…' : `Import ${preview.toAdd.length + preview.toUpdate.length} contacts`}</button></>
         ) : null
