@@ -4,7 +4,6 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
-import { contactMatchesFilters } from '../../lib/contactFilters';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
@@ -77,11 +76,9 @@ export default function ContactList({ onView, onExport }) {
   const selectedStatuses = useMemo(() => new Set(filterStatuses ?? ALL_STATUSES), [filterStatuses, ALL_STATUSES]);
   const selectedCounties = useMemo(() => new Set(filterCounties ?? []), [filterCounties]);
 
-  // Re-apply the active filters client-side. The list is already server-filtered, but a
-  // contact edited in the detail overlay (status → Dead/Pass, a freshly logged note, …)
-  // can drift out of the filter; re-checking here drops it on return without a refetch.
-  // Note activity needs activity_log, which is now in LIST_FIELDS. See contactFilters.js.
-  const filtered = useMemo(() => contacts.filter(c => contactMatchesFilters(c, filters)), [contacts, filters]);
+  // `contacts` is rendered as-is: it is exactly what applyContactFilters returned. A row
+  // edited in the detail overlay is re-checked against the same query by AppContext's
+  // dropIfDrifted and removed there, so there is no second filter implementation here.
 
   // Reload when filters change
   useEffect(() => {
@@ -106,9 +103,9 @@ export default function ContactList({ onView, onExport }) {
   // Indeterminate checkbox state can't be set via JSX — requires a DOM ref.
   useEffect(() => {
     if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < filtered.length;
+      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < contacts.length;
     }
-  }, [selected.size, filtered.length]);
+  }, [selected.size, contacts.length]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -204,7 +201,7 @@ export default function ContactList({ onView, onExport }) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }, []);
   function toggleSelectAll() {
-    setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map(c => c.id)));
+    setSelected(selected.size === contacts.length ? new Set() : new Set(contacts.map(c => c.id)));
   }
   async function deleteSelected() {
     const count = selected.size;
@@ -381,7 +378,7 @@ export default function ContactList({ onView, onExport }) {
             </button>
           )}
           <span className="filter-count-text">
-            {loadingContacts ? 'Loading…' : `${filtered.length} of ${totalCount}`}
+            {loadingContacts ? 'Loading…' : `${contacts.length} of ${totalCount}`}
           </span>
         </div>
       </div>
@@ -390,7 +387,7 @@ export default function ContactList({ onView, onExport }) {
       {selected.size > 0 && (
         <div className="bulk-bar">
           <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 500 }}>{selected.size} selected</span>
-          <button className="btn-small" onClick={() => { onExport(filtered.filter(c => selected.has(c.id))); }}>Export Selected</button>
+          <button className="btn-small" onClick={() => { onExport(contacts.filter(c => selected.has(c.id))); }}>Export Selected</button>
           <button className="btn-small btn-danger" onClick={deleteSelected}>Delete</button>
           <button className="btn-small" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
@@ -399,8 +396,8 @@ export default function ContactList({ onView, onExport }) {
       {/* Select all */}
       <div className="select-all-row">
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-          <input ref={selectAllRef} type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} />
-          Select all {filtered.length}
+          <input ref={selectAllRef} type="checkbox" checked={selected.size === contacts.length && contacts.length > 0} onChange={toggleSelectAll} />
+          Select all {contacts.length}
         </label>
       </div>
 
@@ -419,7 +416,7 @@ export default function ContactList({ onView, onExport }) {
               </div>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : contacts.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon"><Inbox size={40} /></div>
             <p>{totalCount === 0 ? 'Add your first contact or import a CSV' : 'No contacts match your filters'}</p>
@@ -427,7 +424,7 @@ export default function ContactList({ onView, onExport }) {
         ) : (
           <>
             <VirtualList
-              items={filtered}
+              items={contacts}
               renderItem={(c) => (
                 <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView} />
               )}

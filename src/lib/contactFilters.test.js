@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, matchesNoteActivity, contactMatchesFilters, hasGoodPhone, isFollowUpDue, followUpWindow, todayStr } from './contactFilters';
+import { applyContactFilters, hasActiveFilters, isFollowUpDue, followUpWindow, todayStr } from './contactFilters';
 import { LAND_CONFIG } from './clientConfig';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
@@ -199,112 +199,38 @@ describe('applyContactFilters', () => {
   });
 });
 
-// matchesNoteActivity mirrors the server-side last_note_at filter; it's the per-contact
-// predicate used by contactMatchesFilters for the detail-overlay drift re-check.
-describe('matchesNoteActivity', () => {
-  const daysAgoISO = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
-  const withNote = (days) => ({ activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }] });
-  const noNotes = { activityLog: [] };
+// hasActiveFilters decides whether a post-save drift re-check is worth a round trip
+// (AppContext.dropIfDrifted) and whether an export is labelled "(filtered)".
+describe('hasActiveFilters', () => {
+  const EMPTY = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '', followUp: null };
 
-  it('matches everything when there is no activity filter or a non-note value', () => {
-    expect(matchesNoteActivity(withNote(1), '')).toBe(true);
-    expect(matchesNoteActivity(withNote(1), undefined)).toBe(true);
-    expect(matchesNoteActivity(withNote(1), 'sms_7')).toBe(true);
+  it('is false for the empty filter object, null, and a bare {}', () => {
+    expect(hasActiveFilters(EMPTY)).toBe(false);
+    expect(hasActiveFilters(null)).toBe(false);
+    expect(hasActiveFilters(undefined)).toBe(false);
+    // A partial object must not read as filtered just because `statuses` is absent.
+    expect(hasActiveFilters({})).toBe(false);
   });
 
-  it('note_lt_N is true only for a note within the last N days', () => {
-    expect(matchesNoteActivity(withNote(2), 'note_lt_7')).toBe(true);
-    expect(matchesNoteActivity(withNote(10), 'note_lt_7')).toBe(false);
-    expect(matchesNoteActivity(noNotes, 'note_lt_7')).toBe(false);
-    // arbitrary day count
-    expect(matchesNoteActivity(withNote(12), 'note_lt_14')).toBe(true);
-    expect(matchesNoteActivity(withNote(20), 'note_lt_14')).toBe(false);
+  it('is true for any single active facet', () => {
+    expect(hasActiveFilters({ ...EMPTY, search: 'smith' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, counties: ['Greenville'] })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, phone: 'has' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, email: 'missing' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, activity: 'note_never' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, followUp: { days: 90, statuses: ['Contacted'] } })).toBe(true);
   });
 
-  it('note_gt_N is true when the last note is older than N days, incl. never-noted', () => {
-    expect(matchesNoteActivity(withNote(20), 'note_gt_14')).toBe(true);
-    expect(matchesNoteActivity(withNote(5), 'note_gt_14')).toBe(false);
-    expect(matchesNoteActivity(noNotes, 'note_gt_14')).toBe(true);
-    expect(matchesNoteActivity({}, 'note_gt_14')).toBe(true);
-  });
-
-  it('note_never is true only with no notes at all', () => {
-    expect(matchesNoteActivity(noNotes, 'note_never')).toBe(true);
-    expect(matchesNoteActivity({}, 'note_never')).toBe(true);
-    expect(matchesNoteActivity(withNote(1), 'note_never')).toBe(false);
-  });
-
-  it('matches everything on a malformed day count', () => {
-    expect(matchesNoteActivity(withNote(5), 'note_lt_abc')).toBe(true);
-    expect(matchesNoteActivity(noNotes, 'note_gt_abc')).toBe(true);
-  });
-
-  it('uses the most recent note when a contact has several', () => {
-    const contact = { activityLog: [
-      { type: 'note', text: 'old', timestamp: daysAgoISO(40) },
-      { type: 'note', text: 'recent', timestamp: daysAgoISO(3) },
-    ] };
-    expect(matchesNoteActivity(contact, 'note_lt_7')).toBe(true);
-  });
-
-  it('counts untyped log entries with text as notes, ignores non-note types', () => {
-    const untyped = { activityLog: [{ text: 'legacy note', timestamp: daysAgoISO(2) }] };
-    const smsOnly = { activityLog: [{ type: 'sms', text: 'hi', timestamp: daysAgoISO(2) }] };
-    expect(matchesNoteActivity(untyped, 'note_lt_7')).toBe(true);
-    expect(matchesNoteActivity(smsOnly, 'note_lt_7')).toBe(false);
+  it('treats any explicit status selection as active, including "none"', () => {
+    // null means "all statuses" (the default); an array is always an explicit choice.
+    expect(hasActiveFilters({ ...EMPTY, statuses: ['Contacted'] })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY, statuses: [] })).toBe(true);
   });
 });
 
-describe('contactMatchesFilters', () => {
-  const base = { status: 'Contacted', county: 'Greenville', phones: ['(864) 555-1234'], email: 'a@b.com', activityLog: [] };
-
-  it('matches everything under empty filters', () => {
-    expect(contactMatchesFilters(base, {})).toBe(true);
-    expect(contactMatchesFilters(base, { statuses: null, counties: [], phone: '', email: '', activity: '' })).toBe(true);
-  });
-
-  it('drops a contact whose status is not in the selected statuses', () => {
-    expect(contactMatchesFilters(base, { statuses: ['Contacted'] })).toBe(true);
-    expect(contactMatchesFilters({ ...base, status: 'Dead/Pass' }, { statuses: ['Contacted'] })).toBe(false);
-  });
-
-  it('drops a contact whose county is not selected', () => {
-    expect(contactMatchesFilters(base, { counties: ['Greenville'] })).toBe(true);
-    expect(contactMatchesFilters(base, { counties: ['Pickens'] })).toBe(false);
-  });
-
-  it('applies phone has/missing on good (non-struck) phones', () => {
-    expect(contactMatchesFilters(base, { phone: 'has' })).toBe(true);
-    expect(contactMatchesFilters(base, { phone: 'missing' })).toBe(false);
-    expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'missing' })).toBe(true);
-    expect(contactMatchesFilters({ ...base, phones: [] }, { phone: 'has' })).toBe(false);
-    // Every number struck through → not "has phone", counts as "missing".
-    const allStruck = { ...base, phones: ['(864) 555-1234'], badPhones: ['8645551234'] };
-    expect(contactMatchesFilters(allStruck, { phone: 'has' })).toBe(false);
-    expect(contactMatchesFilters(allStruck, { phone: 'missing' })).toBe(true);
-  });
-
-  it('applies email has/missing (whitespace-only counts as missing)', () => {
-    expect(contactMatchesFilters(base, { email: 'has' })).toBe(true);
-    expect(contactMatchesFilters({ ...base, email: '' }, { email: 'missing' })).toBe(true);
-    expect(contactMatchesFilters({ ...base, email: '  ' }, { email: 'has' })).toBe(false);
-  });
-
-  it('applies the note-activity facet — a fresh note drops a "none in last N days" row', () => {
-    const stale = { ...base, activityLog: [{ type: 'note', text: 'x', timestamp: new Date(Date.now() - 20 * 86400000).toISOString() }] };
-    const fresh = { ...base, activityLog: [{ type: 'note', text: 'x', timestamp: new Date().toISOString() }] };
-    expect(contactMatchesFilters(stale, { activity: 'note_gt_15' })).toBe(true);
-    expect(contactMatchesFilters(fresh, { activity: 'note_gt_15' })).toBe(false);
-  });
-
-  it('requires every active facet to pass (AND semantics)', () => {
-    expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'has' })).toBe(true);
-    expect(contactMatchesFilters(base, { statuses: ['Contacted'], phone: 'missing' })).toBe(false);
-  });
-});
-
-// The client-side mirror of the server followUp clause — used for the drift re-check
-// (queue shrinks live as contacts are touched) and the ContactDetail "Due" badge.
+// The follow-up rule exists twice on purpose: this JS version renders the ContactDetail
+// "Due" badge, while applyContactFilters emits the clause that decides the actual queue.
+// Only the badge depends on the code below.
 describe('isFollowUpDue', () => {
   const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString();
   const dateStr = (offsetDays) => {
@@ -366,33 +292,23 @@ describe('isFollowUpDue', () => {
     expect(isFollowUpDue({ ...noted(6), status: 'Hot Lead' }, followUp)).toBe(false);
   });
 
-  it('drift re-check: contactMatchesFilters drops a touched contact from the queue', () => {
-    const filters = { followUp: cfg };
-    expect(contactMatchesFilters(noted(100), filters)).toBe(true);
-    // Logging a note today (what happens after a call) drops the row live.
-    expect(contactMatchesFilters(noted(0), filters)).toBe(false);
-    // So does pushing the manual date into the future ("snooze").
-    expect(contactMatchesFilters({ ...noted(100), followUpOn: dateStr(14) }, filters)).toBe(false);
-    // Facet off → pass-through.
-    expect(contactMatchesFilters(noted(100), { followUp: null })).toBe(true);
-  });
-});
+  // The badge and the queue clause should agree at the window boundary; they're written
+  // separately, so pin the cases where a disagreement would be visible to a user.
+  it('agrees with the server clause about what a fresh note does', () => {
+    expect(isFollowUpDue(noted(100), cfg)).toBe(true);
+    // Logging a note today (what happens after a call) clears the badge...
+    expect(isFollowUpDue(noted(0), cfg)).toBe(false);
+    // ...and so does snoozing via a future manual date.
+    expect(isFollowUpDue({ ...noted(100), followUpOn: dateStr(14) }, cfg)).toBe(false);
 
-describe('hasGoodPhone', () => {
-  it('is true when at least one number is not struck through', () => {
-    expect(hasGoodPhone({ phones: ['(864) 555-1234'], badPhones: [] })).toBe(true);
-    expect(hasGoodPhone({ phones: ['(864) 555-1234', '(803) 111-2222'], badPhones: ['8645551234'] })).toBe(true);
-  });
-
-  it('is false when there are no numbers or all are struck through', () => {
-    expect(hasGoodPhone({ phones: [], badPhones: [] })).toBe(false);
-    expect(hasGoodPhone({ phones: ['(864) 555-1234'], badPhones: ['8645551234'] })).toBe(false);
-    expect(hasGoodPhone({})).toBe(false);
-  });
-
-  it('matches bad_phones regardless of the stored phone format (normalizePhone)', () => {
-    // badPhones holds last-10-digit form; phone can be stored any way.
-    expect(hasGoodPhone({ phones: ['864.555.1234'], badPhones: ['8645551234'] })).toBe(false);
-    expect(hasGoodPhone({ phones: ['1 (864) 555-1234'], badPhones: ['8645551234'] })).toBe(false);
+    // Same two transitions, as the server sees them: the auto branch only matches rows
+    // whose last_note_at is null or older than the cutoff, and a future follow_up_on
+    // fails both the manual lte(today) branch and the follow_up_on.is.null guard.
+    const q = mockQuery();
+    applyContactFilters(q, { followUp: cfg });
+    const expr = callsOf(q).find(c => c.method === 'or').args[0];
+    expect(expr).toContain(`follow_up_on.lte.${todayStr()}`);
+    expect(expr).toContain('and(follow_up_on.is.null,status.in.("Contacted")');
+    expect(expr).toContain('last_note_at.is.null');
   });
 });

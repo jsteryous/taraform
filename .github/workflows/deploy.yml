@@ -11,6 +11,43 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+
+      # Gate the deploy on the suite. Before this existed the only thing that would
+      # report a red suite was a command someone had to remember to type — and the
+      # suite sat broken for a day (4e82311) because nobody did.
+      #
+      # The RLS tenant-isolation proof (src/lib/rls.proof.test.js) talks to live
+      # Supabase and self-skips without the RLS_TEST_* creds below. Since RLS is the
+      # *only* authorization boundary in this app, a silently-skipped proof is the
+      # failure mode worth guarding: set RLS_TEST_REQUIRED=1 (see the check step) to
+      # turn "skipped" into "failed".
+      - run: npm test
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          RLS_TEST_USER_A_EMAIL: ${{ secrets.RLS_TEST_USER_A_EMAIL }}
+          RLS_TEST_USER_A_PASSWORD: ${{ secrets.RLS_TEST_USER_A_PASSWORD }}
+          RLS_TEST_USER_B_EMAIL: ${{ secrets.RLS_TEST_USER_B_EMAIL }}
+          RLS_TEST_USER_B_PASSWORD: ${{ secrets.RLS_TEST_USER_B_PASSWORD }}
+          RLS_TEST_USER_B_CLIENT_ID: ${{ secrets.RLS_TEST_USER_B_CLIENT_ID }}
+          # Flip to '1' once the two throwaway test users are seeded (see
+          # src/lib/rls.proof.test.js header) so the proof can never silently vanish.
+          RLS_TEST_REQUIRED: ''
+
+      # Until RLS_TEST_REQUIRED is on, at least make the gap visible on the run summary
+      # instead of invisible in a skipped test.
+      # Checked in the shell rather than a step-level `if:` — the `secrets` context is not
+      # reliably available in `if`, and an unparseable workflow would block every deploy.
+      - name: Warn if the RLS proof is not configured
+        env:
+          RLS_TEST_USER_A_EMAIL: ${{ secrets.RLS_TEST_USER_A_EMAIL }}
+        run: |
+          if [ -z "$RLS_TEST_USER_A_EMAIL" ]; then
+            echo "::warning title=RLS proof skipped::RLS_TEST_* secrets are not set, so the tenant-isolation proof did not run. RLS is this app's only authorization boundary. See src/lib/rls.proof.test.js."
+          else
+            echo "RLS proof credentials are configured."
+          fi
+
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

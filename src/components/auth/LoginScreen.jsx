@@ -37,7 +37,10 @@ export default function LoginScreen() {
     setLoading(true); setError('');
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://taraform.org' },
+      // Come back to wherever we signed in from. Hardcoding taraform.org meant a local
+      // dev server could never complete a sign-in — the session landed on production.
+      // Requires each origin to be listed under Supabase Auth → URL Configuration.
+      options: { redirectTo: window.location.origin },
     });
     if (error) { setError(error.message); setLoading(false); }
   }

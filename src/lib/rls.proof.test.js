@@ -24,6 +24,12 @@ import { createClient } from '@supabase/supabase-js';
 // Use throwaway test users seeded with a couple of contacts, NOT production
 // accounts — the delete probe targets B's rows (and should be blocked, but
 // don't bet a client's data on it).
+//
+// SKIPPING IS THE DANGEROUS PART. RLS is the only authorization boundary in this
+// app, so a proof that quietly self-skips is indistinguishable from no proof at
+// all. Set RLS_TEST_REQUIRED=1 (CI does, once the creds are configured — see
+// .github/workflows/deploy.yml) and the missing-creds case FAILS instead of
+// skipping, so the guard can never disappear without someone noticing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const env = (k) => process.env[k] || (typeof import.meta !== 'undefined' && import.meta.env?.[k]);
@@ -37,6 +43,26 @@ const B_PASS = env('RLS_TEST_USER_B_PASSWORD');
 const B_CLIENT_ID = env('RLS_TEST_USER_B_CLIENT_ID');
 
 const READY = Boolean(URL && ANON && A_EMAIL && A_PASS && B_EMAIL && B_PASS && B_CLIENT_ID);
+
+// Set by CI. Turns "no creds → silently skip" into "no creds → red build".
+const REQUIRED = ['1', 'true', 'yes'].includes(String(env('RLS_TEST_REQUIRED') ?? '').toLowerCase());
+
+// This block always runs — it is the thing that makes the skip below visible.
+describe('RLS proof configuration', () => {
+  it('is configured whenever the environment requires the proof', () => {
+    if (!REQUIRED) return; // local dev: skipping is fine, nothing is being shipped
+    const missing = [
+      'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY',
+      'RLS_TEST_USER_A_EMAIL', 'RLS_TEST_USER_A_PASSWORD',
+      'RLS_TEST_USER_B_EMAIL', 'RLS_TEST_USER_B_PASSWORD',
+      'RLS_TEST_USER_B_CLIENT_ID',
+    ].filter((k) => !env(k));
+    expect(
+      missing,
+      `RLS_TEST_REQUIRED is set but the tenant-isolation proof cannot run — missing: ${missing.join(', ')}`,
+    ).toEqual([]);
+  });
+});
 
 // Fresh in-memory client per session so the two users' tokens never share storage.
 function makeClient() {

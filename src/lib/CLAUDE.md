@@ -1,6 +1,10 @@
 # DB & API conventions
 
-> All data access is direct-to-Supabase (anon key + RLS) since the 2026-06-10 Railway decommission. `api.js` is a thin wrapper over supabase-js; clients/members go through the RPCs in `db/20260610_clients_rls.sql`.
+> All data access is direct-to-Supabase (anon key + RLS) since the 2026-06-10 Railway decommission.
+
+**The data layer is two files, both here.** `contacts.js` owns every `property_crm_contacts` / `contact_offers` read (list page, full contact, drift re-check, bulk export) plus contact insert/upsert/delete; `api.js` owns clients, members and offer mutations, with clients/members going through the RPCs in `db/20260610_clients_rls.sql`. Neither imports React. `errors.js` turns a thrown PostgREST/network error into a user-facing sentence.
+
+Components and `AppContext` call these — they don't build `supabase.from(...)` queries themselves. The reason is the filter boundary: `buildQuery` in `contacts.js` is the single place a filtered contact query is shaped, which is what keeps the list, the row count, pagination, the drift re-check and the CSV export from disagreeing. (Two callsites still predate this rule and query Supabase directly — `StatsBar.jsx` and `ImportModal.jsx`. Move them when you next touch them.)
 
 **`property_crm_contacts.id` and `contact_offers.id` are DB-owned bigint sequences** (`db/20260613_id_defaults.sql`). Insert new rows **without** an `id` and read the generated one back via `.select()` — `saveContact` does this for contacts, `addOffer` for offers. Do NOT client-mint ids (the old `Date.now()` path collided across members/devices). Never pass a string (e.g. UUID) — bigint column will reject it.
 
