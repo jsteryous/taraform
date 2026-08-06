@@ -1,8 +1,14 @@
 name: Sync contacts to Google
 
-# One-way push of Taraform contacts into a dedicated Google account, which the phone syncs
-# natively so callbacks show a name instead of an unknown number.
+# One-way push of Taraform contacts into the operator's PERSONAL Google account, which the
+# phone syncs natively so callbacks show a name instead of an unknown number.
 # Setup + secrets: scripts/PHONE_SYNC.md
+#
+# It is not a dedicated account -- this comment claimed one for months and it was never true.
+# That matters: lead cards land beside real contacts, and phones unify cards sharing a number
+# (iOS links, Android aggregates), so a lead card can rename your own contact and take over
+# its photo. withoutPersonalNumbers() in src/lib/phoneSync.js is what stops that; don't remove
+# it without moving the sync to a genuinely separate account first.
 #
 # MANUAL ONLY since 2026-08-05. The nightly schedule moved to pg_cron -> the phone-sync-run
 # Edge Function (scripts/PHONE_SYNC_MULTIUSER.md), which syncs every connected user. Running
