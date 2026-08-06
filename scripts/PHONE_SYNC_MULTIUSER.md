@@ -1,15 +1,18 @@
 # Caller ID for every user — self-serve, automatic, $0
 
-> **Status: deployed and verified 2026-08-05.** Schema, RPCs, both Edge Functions, the
-> nightly cron job and both secrets are live on project `ykuenmwfxecmmqichwit`. The
-> cron→function auth path was proved end to end (service_role key → 500 "No Google
-> connection"; anon key → 403). Nobody has connected a Google account yet, so the nightly
-> run currently has zero users to process.
+> **Status: live.** Schema, RPCs, both Edge Functions, the nightly cron job and both
+> secrets are on project `ykuenmwfxecmmqichwit`. The cron→function auth path was proved end
+> to end (service_role key → 500 "No Google connection"; anon key → 403). One user is
+> connected as of 2026-08-06.
 >
-> This is the multi-user version of `PHONE_SYNC.md`. That one serves a single operator —
-> one Google refresh token and one Supabase login in **repo** secrets. This one lets any
-> user click **Connect Google Contacts** in Settings and get nightly caller ID for the
-> contacts *they* can see.
+> **This is the only sync.** The single-operator path it replaced — `scripts/phone-sync.mjs`,
+> `scripts/phone-sync-authorize.mjs`, `.github/workflows/sync-contacts.yml` and
+> `scripts/PHONE_SYNC.md`, driven by one Google refresh token and one Supabase login in
+> **repo** secrets — was retired on 2026-08-06 and is recoverable from git history if ever
+> needed. It was a second writer against the same Google account (the hazard this doc warned
+> about below) and a standing credential for a personal address book. Any user now clicks
+> **Connect Google Contacts** in Settings and gets nightly caller ID for the contacts *they*
+> can see.
 
 An incoming call shows `John Parker (Offer Made)` on the native call screen, and the synced
 contact card links back to the record in Taraform.
@@ -76,12 +79,13 @@ dies halfway is simply finished by the next one.
 
 ## Deploying it
 
-Nothing below has been run yet. Steps 1–3 are enough to test with your own account; 4 turns
-on the nightly schedule; 5 exposes it to everyone else.
+Steps 1–4 have been run. 5 is what exposes it to users outside the project.
 
 ### 1. Google Cloud
 
-The existing project from `PHONE_SYNC.md` works — add a second OAuth client to it.
+Google Cloud project `505495238799`, with the **People API** enabled. The OAuth client the
+app uses is the Web application one (`...-fqsabv0v4ed...`); a second, older Desktop client
+(`...-odokcjbghnq...`) belonged to the retired single-operator script and can be deleted.
 
 1. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.**
 2. **Authorized JavaScript origins:** `https://taraform.org` and `http://localhost:5173`.
@@ -210,14 +214,21 @@ Still $0. One caveat: **free-tier Supabase projects pause after 7 days of inacti
 a paused project's cron doesn't run. Not a concern while the app is in daily use, but it's
 the failure mode if things go quiet.
 
-## Relationship to the single-operator sync
+## Removing synced contacts from an account
 
-`scripts/phone-sync.mjs` and `.github/workflows/sync-contacts.yml` are unchanged and still
-work. Keep them until the hosted path has run clean for a while — they're the fallback, and
-they exercise the same `src/lib/phoneSync.js`. Once you've connected your own account
-through the app, running both would sync the same contacts into the same Google account
-twice via two different `taraform_id` stampings; **pick one**. The tidy switch is
-`node scripts/phone-sync.mjs --purge --yes`, then connect in the app.
+**`disconnect` does not delete the cards.** It revokes the Google token and forgets it, which
+stops future syncs but leaves every previously-synced contact sitting in the address book.
+The retired `scripts/phone-sync.mjs --purge --yes` used to be the bulk undo; nothing in the
+hosted path replaces it.
+
+That is survivable because of the **`Taraform` label**: every synced card joins it at
+creation (`groupMembership`, back-filled by `applyPlan`), so the user can open Google
+Contacts, filter to that label, select all and delete — no credentials, no script. This is
+the main reason the label exists. Disconnect *before* deleting, or the next nightly run
+recreates them.
+
+A hosted purge action on `google-contacts-connect` would be the real fix if this comes up
+often — it already holds the token and can call `applyPlan` with an empty `desired`.
 
 ## Code layout
 
@@ -246,9 +257,9 @@ betting a nightly job on. `npm test` fails the moment the copy and the source di
 - **Per-user list priority — bit us once already.** `phone_sync_store_token` seeds
   `client_priority` with oldest membership first, and nothing in the UI calls
   `set_my_contact_sync_priority()` to change it. For the first real user that produced
-  `[Table Rock, Personal List]` — the exact inverse of the deliberate order hardcoded in
-  `scripts/phone-sync.mjs`, whose comment explains why: Personal List is the one actually
-  worked out of, so its status is the current one. The first hosted run therefore flipped
+  `[Table Rock, Personal List]` — the exact inverse of the order the retired
+  `scripts/phone-sync.mjs` hardcoded, for a reason that still holds: **Personal List is the
+  one actually worked out of, so its status is the current one.** The first hosted run flipped
   the 7 owners who appear in both lists onto their Table Rock copy (`created 7 / deleted 7`
   in `last_stats`), moving both the caller-ID status and the deep link to the record the
   user *doesn't* work in. Fixed by hand for that user on 2026-08-05:

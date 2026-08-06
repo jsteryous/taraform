@@ -1,9 +1,10 @@
-// Pure logic for the Google Contacts phone sync (scripts/phone-sync.mjs).
+// Pure logic for the Google Contacts phone sync (supabase/functions/phone-sync-run/).
 //
-// Lives in src/lib (not scripts/) for the same reason contactFilters.js and dedup.js do:
-// vitest only collects src/**/*.test.js, and this is the part worth testing. The runner
-// keeps all the I/O — Supabase, OAuth, People API — so everything here stays a pure
-// function of its inputs.
+// Lives in src/lib (not supabase/) for the same reason contactFilters.js and dedup.js do:
+// vitest only collects src/**/*.test.js, and this is the part worth testing. It is copied
+// to supabase/functions/_shared/ by `npm run sync:edge`. The Edge Function and _shared/
+// google.ts keep all the I/O — Supabase, OAuth, People API — so everything here stays a
+// pure function of its inputs.
 //
 // Contract with the DB (see db/20260613_bad_phones.sql + db/20260713_filter_columns.sql):
 //   * `phones` is a jsonb array of plain formatted strings.
