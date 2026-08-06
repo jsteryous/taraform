@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser } from '../../lib/api';
+import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser, getClientDataCounts } from '../../lib/api';
+import { useConfirm } from '../shared/ConfirmDialog';
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
 import { parseCustomFieldDefs } from '../../lib/utils';
 
@@ -15,6 +16,7 @@ const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generi
 
 export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   const { clientsList, setClientsList, showToast } = useApp();
+  const [confirm, confirmDialog]  = useConfirm();
   const [newName, setNewName]     = useState('');
   const [activeEditor, setActiveEditor] = useState(null);
   const [editorTab, setEditorTab] = useState('settings');
@@ -34,8 +36,31 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
     showToast('Client created');
   }
 
+  // Deleting a client cascades to every contact and offer under it, and there
+  // are no platform backups to undo it with (Supabase Free plan — see
+  // db/RESTORE.md). So: say what will actually be destroyed, and require the
+  // name typed out. A dialog you can dismiss with a reflexive Enter is not a
+  // guard on an irreversible cascade.
   async function handleDelete(id, name) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    let counts;
+    try {
+      counts = await getClientDataCounts(id);
+    } catch (err) {
+      console.error('Could not count client data:', err);
+      showToast('Could not check what this would delete — aborted');
+      return;
+    }
+
+    const ok = await confirm(
+      `Permanently delete "${name}" and everything under it: ` +
+      `${counts.contacts.toLocaleString()} contact${counts.contacts === 1 ? '' : 's'} and ` +
+      `${counts.offers.toLocaleString()} offer${counts.offers === 1 ? '' : 's'}. ` +
+      `This cannot be undone and there is no backup to restore from. ` +
+      `Type the client's name to confirm.`,
+      { danger: true, requireText: name }
+    );
+    if (!ok) return;
+
     try {
       await deleteClient(id);
       if (activeEditor === id) setActiveEditor(null);
@@ -108,6 +133,7 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
         </div>
         <button className="btn-primary" onClick={handleCreate}>+ Add Client</button>
       </div>
+      {confirmDialog}
     </Modal>
   );
 }
@@ -289,6 +315,7 @@ function Chip({ active, label, color, onChange }) {
 }
 
 function MembersEditor({ client, showToast }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [members, setMembers] = useState([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -317,7 +344,8 @@ function MembersEditor({ client, showToast }) {
   }
 
   async function handleRemove(userId, email) {
-    if (!confirm(`Remove ${email} from this client?`)) return;
+    // Revokes access only — their contacts stay. No type-to-confirm needed.
+    if (!await confirm(`Remove ${email} from this client?`)) return;
     try {
       await removeClientUser(client.id, userId);
       setMembers(m => m.filter(u => u.user_id !== userId));
@@ -331,6 +359,7 @@ function MembersEditor({ client, showToast }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {confirmDialog}
       <div>
         <div style={sL}>Current Members</div>
         {members.length === 0 ? (

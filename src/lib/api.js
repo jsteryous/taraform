@@ -28,6 +28,19 @@ export const updateClient = async (id, body) => {
 export const deleteClient = async (id) =>
   unwrap(await supabase.from('clients').delete().eq('id', id));
 
+// Deleting a client cascades to its contacts and offers (FKs are ON DELETE
+// CASCADE), and the project has no platform backups. Count first so the confirm
+// dialog can say what is actually about to be destroyed.
+export const getClientDataCounts = async (clientId) => {
+  const [contacts, offers] = await Promise.all([
+    supabase.from('property_crm_contacts').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+    supabase.from('contact_offers').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+  ]);
+  if (contacts.error) throw new Error(contacts.error.message);
+  if (offers.error) throw new Error(offers.error.message);
+  return { contacts: contacts.count ?? 0, offers: offers.count ?? 0 };
+};
+
 // Client users (members) — RPCs enforce membership/owner checks and resolve emails
 export const getClientUsers = async (clientId) =>
   unwrap(await supabase.rpc('get_client_members', { p_client_id: clientId }));
