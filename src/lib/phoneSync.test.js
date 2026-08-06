@@ -12,6 +12,8 @@ import {
   taraformIdOf,
   personSignature,
   diffContacts,
+  foreignPhoneDigits,
+  withoutPersonalNumbers,
   chunk,
   contactUrl,
   SYNC_KEY,
@@ -251,6 +253,60 @@ describe('diffContacts', () => {
     const { toDelete, toUpdate } = diffContacts(new Map([['1', person(1)]]), [onGoogle(1), onGoogle(1)]);
     expect(toDelete).toEqual(['people/c1']);
     expect(toUpdate).toEqual([]);
+  });
+});
+
+// Regression: the sync writes into a PERSONAL Google account, and the phone unifies cards
+// sharing a number — so a lead card renamed the user's own contact to "Nicholas Whitaker
+// (Dead/Pass)" and swapped its photo. Five real contacts were shadowed this way.
+describe('withoutPersonalNumbers', () => {
+  const lead = (id, value = '+18644910532') => ({
+    names: [{ givenName: 'Nicholas', familyName: 'Whitaker (Dead/Pass)' }],
+    phoneNumbers: [{ value }],
+    userDefined: [{ key: SYNC_KEY, value: String(id) }],
+  });
+  const own = (value) => ({
+    resourceName: 'people/mine',
+    names: [{ givenName: 'Nick', familyName: 'Whitaker' }],
+    phoneNumbers: value ? [{ value }] : [],
+    userDefined: [],
+  });
+
+  it('drops a lead whose number is already one of the user own contacts', () => {
+    const { desired, skipped } = withoutPersonalNumbers(new Map([['1', lead(1)]]), [own('(864) 491-0532')]);
+    expect(skipped).toEqual(['1']);
+    expect(desired.size).toBe(0);
+  });
+
+  it('keeps leads the user has no card for', () => {
+    const { desired, skipped } = withoutPersonalNumbers(new Map([['1', lead(1)]]), [own('+18645550000')]);
+    expect(skipped).toEqual([]);
+    expect(desired.get('1')).toBeTruthy();
+  });
+
+  // The account is full of the sync's own cards; matching against those would drop every
+  // contact on the second run and empty the phone.
+  it('ignores cards the sync itself owns', () => {
+    const alreadySynced = { ...lead(1), resourceName: 'people/c1' };
+    const { desired, skipped } = withoutPersonalNumbers(new Map([['1', lead(1)]]), [alreadySynced]);
+    expect(skipped).toEqual([]);
+    expect(desired.size).toBe(1);
+  });
+
+  // What makes the fix self-healing: the collision cards a previous run created are no
+  // longer desired, so the reconcile deletes them without any manual cleanup.
+  it('lets the diff delete a colliding card a previous run created', () => {
+    const stale = { ...lead(1), resourceName: 'people/c1', etag: 'e1' };
+    const { desired } = withoutPersonalNumbers(new Map([['1', lead(1)]]), [stale, own('864-491-0532')]);
+    expect(diffContacts(desired, [stale, own('864-491-0532')]).toDelete).toEqual(['people/c1']);
+  });
+
+  it('matches on last-10 digits regardless of formatting', () => {
+    expect(foreignPhoneDigits([own('1 (864) 491-0532')])).toEqual(new Set(['8644910532']));
+  });
+
+  it('ignores personal contacts that have no phone number at all', () => {
+    expect(foreignPhoneDigits([own(null)])).toEqual(new Set());
   });
 });
 

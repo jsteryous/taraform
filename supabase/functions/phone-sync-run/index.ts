@@ -12,7 +12,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
   buildPerson, dedupeByPhone, phoneKey, diffContacts, groupMembership,
-  taraformResourceNames,
+  taraformResourceNames, withoutPersonalNumbers,
 } from '../_shared/phoneSync.js';
 import {
   accessTokenFrom, peopleApi, listContacts, resolveGroup, applyPlan, GoogleError,
@@ -101,15 +101,20 @@ async function syncUser(db: any, userId: string, dryRun: boolean) {
     `${[c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown'}`
     + `${c.status ? ` (${c.status})` : ''} — ${clientNames.get(c.client_id) ?? 'unknown list'}`;
 
-  const desired = new Map<string, any>();
+  const wanted = new Map<string, any>();
   for (const { contact, mergedFrom } of deduped) {
     const person = buildPerson(contact, clientNames.get(contact.client_id) ?? '', mergedFrom.map(label));
     if (!person) continue; // already counted in `undialable`
-    desired.set(String(contact.id), person);
+    wanted.set(String(contact.id), person);
   }
 
   const api = peopleApi(await accessTokenFrom(refreshToken));
   const existing = await listContacts(api);
+
+  // A lead already in the user's own address book is left to their own card — otherwise the
+  // phone unifies the two and the lead card's name and photo win. See withoutPersonalNumbers.
+  const { desired, skipped } = withoutPersonalNumbers(wanted, existing);
+
   const plan = diffContacts(desired, existing);
 
   const stats = {
@@ -117,6 +122,7 @@ async function syncUser(db: any, userId: string, dryRun: boolean) {
     synced: desired.size,
     undialable,
     merged: mergedRows,
+    skipped_personal: skipped.length,
     created: plan.toCreate.length,
     updated: plan.toUpdate.length,
     deleted: plan.toDelete.length,

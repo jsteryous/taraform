@@ -14,7 +14,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  buildPerson, dedupeByPhone, phoneKey, diffContacts, chunk,
+  buildPerson, dedupeByPhone, phoneKey, diffContacts, chunk, withoutPersonalNumbers,
   groupMembership, isInGroup, taraformResourceNames, taraformIdOf,
   PERSON_FIELDS, UPDATE_MASK, GROUP_NAME, CREATE_CHUNK, UPDATE_CHUNK, DELETE_CHUNK,
 } from '../src/lib/phoneSync.js';
@@ -243,11 +243,11 @@ async function main() {
   const label = (c) => `${[c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unknown'}`
     + `${c.status ? ` (${c.status})` : ''} — ${clientNames.get(c.client_id) || 'unknown list'}`;
 
-  const desired = new Map();
+  const wanted = new Map();
   for (const { contact, mergedFrom } of deduped) {
     const person = buildPerson(contact, clientNames.get(contact.client_id) || '', mergedFrom.map(label));
     if (!person) continue; // already counted in `undialable` above
-    desired.set(String(contact.id), person);
+    wanted.set(String(contact.id), person);
   }
 
   const api = googleFetch(await googleAccessToken());
@@ -255,6 +255,14 @@ async function main() {
   const existing = await listGoogleContacts(api);
   const foreign = existing.length - taraformResourceNames(existing).length;
   log(`  Google: ${existing.length} contacts in the account (${foreign} not ours — never modified)`);
+
+  // A lead who is already in your own address book is left to your own card — see
+  // withoutPersonalNumbers. Any card a previous run created for one gets deleted by the diff.
+  const { desired, skipped } = withoutPersonalNumbers(wanted, existing);
+  if (skipped.length) {
+    log(`  Skipped ${skipped.length} lead(s) already in your personal contacts`
+      + ` — your own card keeps its name and photo`);
+  }
 
   const { toCreate, toUpdate, toDelete } = diffContacts(desired, existing);
   log(`  Plan: ${toCreate.length} create, ${toUpdate.length} update, ${toDelete.length} delete`);

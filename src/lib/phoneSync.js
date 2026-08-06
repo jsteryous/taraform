@@ -202,6 +202,45 @@ export function personSignature(person) {
   });
 }
 
+// Every number already in the address book on a card this sync does NOT own, as normalized
+// last-10 digits.
+export function foreignPhoneDigits(existing) {
+  const out = new Set();
+  for (const person of existing || []) {
+    if (taraformIdOf(person)) continue; // ours — not part of the user's own address book
+    for (const phone of person?.phoneNumbers || []) {
+      const digits = normalizePhone(String(phone?.value ?? ''));
+      if (digits) out.add(digits);
+    }
+  }
+  return out;
+}
+
+// Never sync a lead who is already one of the user's own contacts.
+//
+// The sync writes into a PERSONAL Google account, and phones unify cards that share a
+// number: iOS links them, Android's contacts provider aggregates them. The merged contact
+// then displays whichever name the OS picks — so a lead card would rename the user's own
+// contact to "Nicholas Whitaker (Dead/Pass)" and swap the photo. That happened to five real
+// contacts before this rule existed.
+//
+// Skipping them costs nothing: the number is already in the address book, so caller ID
+// already worked. The only thing the lead card added was the collision. And because
+// diffContacts reconciles rather than appends, dropping one here DELETES the card a previous
+// run created — the fix cleans up after itself on the next run.
+export function withoutPersonalNumbers(desired, existing) {
+  const mine = foreignPhoneDigits(existing);
+  const kept = new Map();
+  const skipped = [];
+  for (const [id, person] of desired) {
+    const clashes = (person?.phoneNumbers || [])
+      .some((p) => mine.has(normalizePhone(String(p?.value ?? ''))));
+    if (clashes) skipped.push(id);
+    else kept.set(id, person);
+  }
+  return { desired: kept, skipped };
+}
+
 // Reconcile, not append — this is what keeps nightly runs from piling up duplicates.
 // `desired` is Map<taraformId, person>; `existing` is what people.connections.list returned.
 export function diffContacts(desired, existing) {
