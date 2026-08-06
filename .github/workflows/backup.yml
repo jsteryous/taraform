@@ -1,0 +1,83 @@
+name: Nightly DB backup
+
+# Supabase does NOT back up Free Plan projects (see the backups guide: free-tier
+# users are told to run `db dump` themselves and keep off-site copies). This is
+# that. Without it there is nothing to restore from -- not a stale backup, none.
+#
+# Dumps land in a SEPARATE PRIVATE repo. They must never go to this repo, which
+# is public, and never to Actions artifacts, which on a public repo are
+# downloadable by anyone.
+#
+# Side benefit: the nightly connection counts as activity, which helps keep the
+# free project from being paused for inactivity after 7 quiet days.
+
+on:
+  schedule:
+    - cron: '30 8 * * *'   # 08:30 UTC nightly, after phone-sync-nightly at 08:00
+  workflow_dispatch:        # and on demand, from the Actions tab
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the backup repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.BACKUP_REPO }}
+          token: ${{ secrets.BACKUP_REPO_TOKEN }}
+          path: backups
+
+      # The CLI ships a version-matched pg_dump. Plain pg_dump on the runner is
+      # Postgres 16 and refuses to dump this 17.6 server.
+      - name: Install the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump schema and data
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          cd backups
+          # Schema and data are separate commands: `db dump` is schema-only by
+          # default. Both are needed for a full restore.
+          supabase db dump --db-url "$DB_URL" -f schema.sql
+          supabase db dump --db-url "$DB_URL" --data-only -f data.sql
+          # auth.users is not in the public schema, but client_users.user_id has
+          # an FK to it -- without these UUIDs a restore loses every membership.
+          supabase db dump --db-url "$DB_URL" --data-only --schema auth -f auth.sql
+
+      - name: Sanity-check the dump before committing
+        run: |
+          set -euo pipefail
+          cd backups
+          # A dump that "succeeded" but is tiny or missing the main table means
+          # a broken credential or an empty DB. Never overwrite a good backup
+          # with that -- fail loudly and keep last night's copy.
+          test -s schema.sql && test -s data.sql
+          grep -q 'property_crm_contacts' schema.sql
+          rows=$(grep -c '^1[0-9]\{12\}' data.sql || true)
+          echo "contact-shaped data rows: $rows"
+          if [ "$(stat -c%s data.sql)" -lt 100000 ]; then
+            echo "::error::data.sql is suspiciously small — refusing to commit"
+            exit 1
+          fi
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          cd backups
+          git config user.name  'taraform-backup'
+          git config user.email 'actions@github.com'
+          git add schema.sql data.sql auth.sql
+          if git diff --staged --quiet; then
+            echo "No change since last night."
+          else
+            git commit -m "backup $(date -u +%Y-%m-%d)"
+            git push
+          fi
