@@ -18,6 +18,9 @@ export const LAND_CONFIG = {
     { value: 'UC',                 color: '#10b981' },
     { value: 'Closed',             color: '#059669' },
     { value: 'Dead/Pass',          color: '#ef4444' },
+    // Not a pipeline stage — a buyer, i.e. someone to sell lots to. Sits last so
+    // the seller pipeline above it still reads top-to-bottom.
+    { value: 'Buyer',              color: '#06b6d4' },
   ],
   statsPills: [
     { label: 'total',          status: null,         color: 'var(--text)' },

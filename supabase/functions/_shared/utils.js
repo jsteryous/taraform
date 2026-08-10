@@ -60,6 +60,7 @@ export function getStatusClass(status) {
     'UC': 'status-uc',
     'Closed': 'status-closed',
     'Dead/Pass': 'status-dead-pass',
+    'Buyer': 'status-buyer',
   };
   return map[status] || 'status-new-lead';
 }
