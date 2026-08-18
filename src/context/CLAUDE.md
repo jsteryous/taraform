@@ -14,7 +14,7 @@ This replaced `contactMatchesFilters`, a per-contact JS copy of every filter pre
 
 **Search filter** ORs name/county/owner_address/email (`ilike`, partial) with `tax_map_ids`/`property_addresses`/`phones` (`cs.["value"]`, exact-element). The array columns are jsonb — see `src/lib/CLAUDE.md` for the syntax rule. No partial/case-insensitive across array elements without a Postgres RPC.
 
-**Filter state** is a single `filters` object (`{ search, statuses, counties, phone, activity, email, followUp }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all. `followUp` is null or the resolved `{ days, statuses }` from `resolveConfig().followUp` — the config rides in the filter value so `applyContactFilters` stays a pure function of its inputs.
+**Filter state** is a single `filters` object (`{ search, statuses, counties, phone, activity, email, followUp }`). Use `setFilters(f => ({ ...f, key: val }))` for partial updates. `EMPTY_FILTERS` constant resets all. `followUp` is null or the resolved `{ days, statuses, statusDays, excludeStatuses, cadence }` from `resolveConfig().followUp` — the config rides in the filter value so `applyContactFilters` stays a pure function of its inputs. `excludeStatuses` is read by the query; `cadence` isn't (it's write-time only, see `lib/followUpCadence.js`) but travels with it so the two never disagree about which object is current.
 
 **`setContacts` is ref-syncing.** Always use the one from context (not a local `useState`) so `contactsRef.current` stays in sync with `loadMoreContacts`.
 

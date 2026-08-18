@@ -28,11 +28,25 @@ export const LAND_CONFIG = {
     { label: 'under contract', status: 'UC',         color: '#34d399' },
     { label: 'closed',         status: 'Closed',     color: '#10b981' },
   ],
-  // Follow-up queue: contacts in `statuses` with no note in `days` days are auto-due
-  // (a manual follow_up_on date on the contact overrides). `statusDays` overrides the
-  // window per status — a Hot Lead resurfaces weekly, not quarterly. See
-  // contactFilters.isFollowUpDue / followUpWindow.
-  followUp: { days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 } },
+  // Follow-up queue. Three cooperating rules, in precedence order:
+  //   excludeStatuses — never due, whatever else says. A dead lead is not a call.
+  //   cadence         — logging a note (= a call) schedules the next attempt into
+  //                     follow_up_on. attemptDays are cumulative days from attempt 1, so
+  //                     [0,3,7,14,30,60] means day 0, 3, 7, 14, 30, 60, then repeatEvery
+  //                     forever. See src/lib/followUpCadence.js.
+  //   days/statuses   — the backstop for contacts with no scheduled date at all: in
+  //                     `statuses` with no note in `days` days. `statusDays` overrides the
+  //                     window per status. See contactFilters.isFollowUpDue/followUpWindow.
+  followUp: {
+    days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 },
+    excludeStatuses: ['Dead/Pass', 'Closed'],
+    cadence: {
+      attemptDays: [0, 3, 7, 14, 30, 60],
+      repeatEvery: 60,
+      statuses: ['New Lead', 'Contacted', 'Hot Lead'],
+      minAttempts: 7,
+    },
+  },
   tabs: ['notes', 'offers'],
   visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],
@@ -56,8 +70,8 @@ export const RESTAURANT_CONFIG = {
     { label: 'vip',      status: 'VIP',     color: '#fbbf24' },
     { label: 'inactive', status: 'Inactive',color: '#f87171' },
   ],
-  // No auto-due statuses for this vertical — manual follow-up dates still work.
-  followUp: { days: 90, statuses: [] },
+  // No auto-due statuses and no call cadence for this vertical — manual dates still work.
+  followUp: { days: 90, statuses: [], excludeStatuses: ['Inactive'] },
   tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
@@ -81,7 +95,16 @@ export const GENERIC_CONFIG = {
     { label: 'interested',status: 'Interested', color: '#fbbf24' },
     { label: 'converted', status: 'Converted',  color: '#34d399' },
   ],
-  followUp: { days: 90, statuses: ['Contacted'] },
+  followUp: {
+    days: 90, statuses: ['Contacted'],
+    excludeStatuses: ['Dead', 'Converted'],
+    cadence: {
+      attemptDays: [0, 3, 7, 14, 30, 60],
+      repeatEvery: 60,
+      statuses: ['New Lead', 'Contacted', 'Interested'],
+      minAttempts: 7,
+    },
+  },
   tabs: ['notes'],
   visibleFields: [],
   listColumns: ['name', 'phone', 'status'],
@@ -112,7 +135,10 @@ export function resolveConfig(client) {
     leadSourceOptions:    client.config.leadSourceOptions    ?? base.leadSourceOptions,
     contactMethodOptions: client.config.contactMethodOptions ?? base.contactMethodOptions,
     quickNotes:           client.config.quickNotes           ?? base.quickNotes,
-    followUp:             client.config.followUp             ?? base.followUp,
+    // Shallow-merged, not replaced: followUp now carries `cadence` and `excludeStatuses`
+    // alongside `days`/`statuses`, and a client overriding just one key would otherwise
+    // drop the rest. (No client overrides it today — this is the guard for when one does.)
+    followUp:             { ...base.followUp, ...(client.config.followUp || {}) },
   };
 }
 

@@ -14,11 +14,18 @@ export function todayStr(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-// Most recent note timestamp from the activity log (type 'note', or legacy untyped-
-// with-text) — the JS counterpart of the last_note_at generated column.
+// Is this activity-log entry a note (type 'note', or legacy untyped-with-text) rather
+// than a status/offer audit entry? The single spelling of the predicate — followUpCadence
+// counts call attempts with it, so "what's a note" can't drift between the two.
+export function isNoteEntry(e) {
+  return e?.type === 'note' || (!e?.type && !!e?.text);
+}
+
+// Most recent note timestamp from the activity log — the JS counterpart of the
+// last_note_at generated column.
 export function lastNoteDate(contact) {
   return (contact.activityLog || [])
-    .filter((e) => e.type === 'note' || (!e.type && e.text))
+    .filter(isNoteEntry)
     .map((e) => new Date(e.timestamp || e.createdAt))
     .filter((d) => !isNaN(d))
     .sort((a, b) => b - a)[0] || null;
@@ -40,12 +47,15 @@ export function followUpWindow(status, followUp) {
 // disagreement with the SQL costs a wrong badge, not a wrong result set.
 //
 // `followUp` is the resolved client config ({ days, statuses, statusDays } from
-// resolveConfig().followUp). A manual follow_up_on date always wins — set, it alone
-// decides (arrived = due, future = not due, even outside the auto statuses); unset, the
-// auto rule applies: an eligible status with no note within that status's window
-// (never-noted counts as due — last_note_at null is the most overdue).
+// resolveConfig().followUp). A status in excludeStatuses is never due, full stop. Failing
+// that a manual follow_up_on date wins — set, it alone decides (arrived = due, future =
+// not due, even outside the auto statuses); unset, the auto rule applies: an eligible
+// status with no note within that status's window (never-noted counts as due —
+// last_note_at null is the most overdue).
 export function isFollowUpDue(contact, followUp) {
   if (!followUp?.days) return false;
+  // excludeStatuses outranks even a manual date: a dead lead is never in the call queue.
+  if ((followUp.excludeStatuses || []).includes(contact.status)) return false;
   if (contact.followUpOn) return contact.followUpOn <= todayStr();
   const window = followUpWindow(contact.status, followUp);
   if (!window) return false;
@@ -112,7 +122,17 @@ export function applyContactFilters(q, filters = {}) {
       const list = group.map((s) => `"${s}"`).join(',');
       return `and(follow_up_on.is.null,status.in.(${list}),or(last_note_at.is.null,last_note_at.lt.${cutoff}))`;
     });
-    q = q.or([`follow_up_on.lte.${todayStr()}`, ...auto].join(','));
+    // The manual-date branch is otherwise status-blind, which was harmless while dates
+    // were set by hand and rare. The cadence sets one on every call, so without this a
+    // contact called once and then marked Dead/Pass would resurface every 60 days
+    // forever. Excluding at the filter (not by clearing the date on the status change)
+    // fixes every writer at once and is reversible — revive the lead and its date is
+    // still there. Quoted like the in.() lists above: values can contain '/'.
+    const excluded = filters.followUp.excludeStatuses || [];
+    const manual = excluded.length
+      ? `and(follow_up_on.lte.${todayStr()},status.not.in.(${excluded.map((s) => `"${s}"`).join(',')}))`
+      : `follow_up_on.lte.${todayStr()}`;
+    q = q.or([manual, ...auto].join(','));
   }
 
   if (filters.search) {

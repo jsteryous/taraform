@@ -253,10 +253,29 @@ describe('isFollowUpDue', () => {
   });
 
   it('manual date works on any status, and overrides the auto rule both ways', () => {
-    // Dead/Pass isn't auto-eligible, but a manual date makes it due.
-    expect(isFollowUpDue({ status: 'Dead/Pass', followUpOn: dateStr(-1) }, cfg)).toBe(true);
+    // Offer Made isn't auto-eligible, but a manual date makes it due.
+    expect(isFollowUpDue({ status: 'Offer Made', followUpOn: dateStr(-1) }, cfg)).toBe(true);
     // A future date suppresses the auto rule even for a stale Contacted contact.
     expect(isFollowUpDue({ ...noted(200), followUpOn: dateStr(30) }, cfg)).toBe(false);
+  });
+
+  // Was "a manual date always wins". It no longer beats excludeStatuses, because the
+  // cadence now leaves a date on every contact it has called — including one later marked
+  // Dead/Pass, which without this would resurface every 60 days forever.
+  it('excludeStatuses outrank a manual date', () => {
+    const excl = { ...cfg, excludeStatuses: ['Dead/Pass', 'Closed'] };
+    expect(isFollowUpDue({ status: 'Dead/Pass', followUpOn: dateStr(-1) }, excl)).toBe(false);
+    expect(isFollowUpDue({ status: 'Closed', followUpOn: dateStr(-30) }, excl)).toBe(false);
+    // Everything not excluded is unaffected.
+    expect(isFollowUpDue({ status: 'Offer Made', followUpOn: dateStr(-1) }, excl)).toBe(true);
+    expect(isFollowUpDue({ ...noted(200) }, excl)).toBe(true);
+  });
+
+  it('the LAND preset excludes dead and closed leads from the queue', () => {
+    const { followUp } = LAND_CONFIG;
+    expect(isFollowUpDue({ status: 'Dead/Pass', followUpOn: dateStr(-1) }, followUp)).toBe(false);
+    expect(isFollowUpDue({ status: 'Closed', followUpOn: dateStr(-1) }, followUp)).toBe(false);
+    expect(isFollowUpDue({ status: 'Contacted', followUpOn: dateStr(-1) }, followUp)).toBe(true);
   });
 
   it('auto rule: due when the last note is older than the window, or never noted', () => {
@@ -310,5 +329,37 @@ describe('isFollowUpDue', () => {
     expect(expr).toContain(`follow_up_on.lte.${todayStr()}`);
     expect(expr).toContain('and(follow_up_on.is.null,status.in.("Contacted")');
     expect(expr).toContain('last_note_at.is.null');
+  });
+});
+
+// The queue clause's manual-date branch used to match on date alone, regardless of status.
+describe('applyContactFilters follow-up + excludeStatuses', () => {
+  const exprOf = (followUp) => {
+    const q = mockQuery();
+    applyContactFilters(q, { followUp });
+    return callsOf(q).find((c) => c.method === 'or').args[0];
+  };
+
+  it('gates the manual-date branch on status when excludeStatuses is set', () => {
+    const expr = exprOf(LAND_CONFIG.followUp);
+    expect(expr).toContain(`and(follow_up_on.lte.${todayStr()},status.not.in.("Dead/Pass","Closed"))`);
+    // Quoted, because a status value can contain a slash.
+    expect(expr).not.toContain(`or(follow_up_on.lte.${todayStr()},`);
+  });
+
+  it('leaves the branch bare when no statuses are excluded', () => {
+    const expr = exprOf({ days: 90, statuses: ['Contacted'] });
+    expect(expr).toContain(`follow_up_on.lte.${todayStr()}`);
+    expect(expr).not.toContain('status.not.in.');
+  });
+
+  // The badge and the queue have to agree about a dead lead, or the list shows a contact
+  // the detail view says isn't due.
+  it('agrees with isFollowUpDue about excluded statuses', () => {
+    const { followUp } = LAND_CONFIG;
+    for (const s of followUp.excludeStatuses) {
+      expect(isFollowUpDue({ status: s, followUpOn: todayStr() }, followUp)).toBe(false);
+      expect(exprOf(followUp)).toContain(`"${s}"`);
+    }
   });
 });

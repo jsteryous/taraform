@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
+import { scheduleAfterNote, countAttempts, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
@@ -170,18 +171,25 @@ export default function ContactDetail({ onClose }) {
     return todayStr(d);
   }
 
-  // Logging a note while the manual follow-up date is due counts as doing the follow-up,
-  // so clear the date in the same save (a single updateMultiple — sequential saves race
-  // through draftRef, see components/CLAUDE.md). A future date survives interim notes,
-  // and note deletion (shorter log) never clears.
+  // Attempts made, and the wait the NEXT one will earn (attempts+1, since logging it is
+  // what schedules). Null off-cadence — an Offer Made contact isn't on a call clock.
+  const attempts   = countAttempts(draft.activityLog);
+  const onCadence  = schedulesFor(draft.status, cfg.followUp?.cadence);
+  const nextGap    = onCadence ? attemptGap(attempts + 1, cfg.followUp.cadence) : null;
+
+  // Logging a note is logging a call, so it schedules the next one. scheduleAfterNote
+  // owns that decision (see lib/followUpCadence.js): a date, null to clear, or undefined
+  // to leave the field alone. Whatever it returns goes out in the SAME updateMultiple as
+  // the log — sequential saves race through draftRef, see components/CLAUDE.md. Deleting
+  // a note is not a call and never reschedules.
   function handleNotesChange(field, value) {
-    if (field === 'activityLog'
-        && value.length > (draft.activityLog || []).length
-        && draft.followUpOn && draft.followUpOn <= todayStr()) {
-      updateMultiple({ activityLog: value, followUpOn: null });
+    if (field !== 'activityLog' || value.length <= (draft.activityLog || []).length) {
+      update(field, value);
       return;
     }
-    update(field, value);
+    const next = scheduleAfterNote(value, draft.status, draft.followUpOn, cfg.followUp);
+    if (next === undefined) update('activityLog', value);
+    else updateMultiple({ activityLog: value, followUpOn: next });
   }
 
 
@@ -236,8 +244,10 @@ export default function ContactDetail({ onClose }) {
             <Select value={draft.status || 'New Lead'} onChange={v => update('status', v)} options={STATUSES} emptyLabel={null} />
           </div>
 
-          {/* Follow-up — manual date; the auto rule (Contacted + stale notes) can
-              mark Due without a date. Presets save immediately, like quick notes. */}
+          {/* Follow-up — the date the next call is due. Normally written by the cadence when a
+              note is logged; editable here, and a future date entered by hand outranks the
+              cadence. The auto rule (Contacted + stale notes) can still mark Due without a
+              date. Presets save immediately, like quick notes. */}
           <div style={{ marginBottom: '1rem' }}>
             <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               Follow-up
@@ -256,6 +266,14 @@ export default function ContactDetail({ onClose }) {
                 <button type="button" className="btn-small" onClick={() => update('followUpOn', null)}>Clear</button>
               )}
             </div>
+            {attempts > 0 && (
+              <div className="followup-cadence" title={onCadence
+                ? `Each note counts as a call attempt. Logging the next one schedules the following call ${nextGap} days out.`
+                : `Calls on "${draft.status}" don't auto-schedule — set a date by hand.`}>
+                {attemptLabel(attempts, cfg.followUp?.cadence)}
+                {nextGap != null && ` · next +${nextGap}d`}
+              </div>
+            )}
           </div>
 
           {/* Lead Source */}
