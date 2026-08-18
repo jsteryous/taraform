@@ -21,8 +21,8 @@ vi.mock('./supabase', () => {
   };
 });
 
-const { contactStillMatches, fetchDedupIndex, fetchDuplicateCandidates, upsertContact, ContactConflictError } =
-  await import('./contacts');
+const { contactStillMatches, fetchDedupIndex, fetchDuplicateCandidates, upsertContact, ContactConflictError,
+  isNewerVersion } = await import('./contacts');
 
 const reset = (rows = [], error = null) => { h.state.rows = rows; h.state.error = error; h.state.calls = []; };
 const methodArgs = (name) => h.state.calls.filter(c => c.method === name).map(c => c.args);
@@ -166,5 +166,62 @@ describe('upsertContact optimistic concurrency', () => {
     reset([]);
     await expect(upsertContact(contact, 'user-1', 'client-1', null))
       .rejects.not.toBeInstanceOf(ContactConflictError);
+  });
+});
+
+// Regression: the tracked row version must never move backwards. A list read that starts
+// before one of our writes lands returns the pre-write updated_at, and storing it made
+// every later save assert a version the row no longer had — surfacing as "this contact
+// changed somewhere else" on an edit made seconds after logging a note.
+describe('isNewerVersion', () => {
+  const A = '2026-08-18T13:27:08.473+00:00'; // pre-save, as a stale list read returns it
+  const B = '2026-08-18T13:29:49.875+00:00'; // what the note's write actually produced
+
+  it('accepts a newer version and rejects an older one', () => {
+    expect(isNewerVersion(B, A)).toBe(true);
+    expect(isNewerVersion(A, B)).toBe(false);
+  });
+
+  it('rejects an identical version (nothing to advance)', () => {
+    expect(isNewerVersion(A, A)).toBe(false);
+  });
+
+  it('accepts anything when no version is known yet', () => {
+    expect(isNewerVersion(A, undefined)).toBe(true);
+    expect(isNewerVersion(A, null)).toBe(true);
+  });
+
+  it('never accepts a missing candidate', () => {
+    expect(isNewerVersion(null, A)).toBe(false);
+    expect(isNewerVersion(undefined, undefined)).toBe(false);
+  });
+
+  // Postgres trims trailing zeros in the fraction, so these strings vary in length. '+'
+  // sorts below every digit, which is what makes the shorter form compare as the smaller
+  // instant instead of the larger one.
+  it('orders unequal-length fractional seconds by magnitude', () => {
+    const base = '2026-08-18T13:29:49';
+    expect(isNewerVersion(base + '.875+00:00', base + '.8+00:00')).toBe(true);
+    expect(isNewerVersion(base + '.8+00:00',   base + '.875+00:00')).toBe(false);
+    expect(isNewerVersion(base + '.9+00:00',   base + '.875+00:00')).toBe(true);
+    expect(isNewerVersion(base + '.875+00:00', base + '+00:00')).toBe(true);
+    expect(isNewerVersion(base + '+00:00',     base + '.875+00:00')).toBe(false);
+  });
+
+  // Microsecond-apart writes must stay distinguishable; Date.parse would call these equal.
+  it('distinguishes writes inside the same millisecond', () => {
+    expect(isNewerVersion('2026-08-18T13:29:49.875321+00:00', '2026-08-18T13:29:49.875123+00:00')).toBe(true);
+  });
+
+  // The exact sequence from the incident: write, then the stale read resolves after it.
+  it('keeps the post-write version when a stale read lands afterwards', () => {
+    const versions = new Map();
+    const remember = (updatedAt) => {
+      if (isNewerVersion(updatedAt, versions.get(1))) versions.set(1, updatedAt);
+    };
+    remember(A); // list load issued before the note
+    remember(B); // the note's write confirms a new version
+    remember(A); // the in-flight list read finally resolves, carrying pre-write data
+    expect(versions.get(1)).toBe(B);
   });
 });

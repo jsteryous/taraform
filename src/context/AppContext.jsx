@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   fetchContactsPage, fetchFullContact, contactStillMatches,
-  insertContact, upsertContact, deleteContactById,
+  insertContact, upsertContact, deleteContactById, isNewerVersion,
 } from '../lib/contacts';
 import { hasActiveFilters } from '../lib/contactFilters';
 import { classifyError } from '../lib/errors';
@@ -52,9 +52,19 @@ export function AppProvider({ children }) {
   // make a user conflict with themselves.
   const saveQueueRef = useRef(new Map());
 
+  // Only ever ADVANCES a version, never rolls one back. A list read that started before
+  // one of our own writes landed comes back carrying the pre-write updated_at; storing it
+  // would leave every later save on that contact asserting a version the row no longer
+  // has, and each would fail as a phantom "changed somewhere else" conflict until the
+  // contact was reopened. The focus-refresh below makes that race routine rather than
+  // theoretical — calling a lead means leaving the tab and coming back, which fires a list
+  // load at the same moment the call note is logged. A full page reload drops the ref
+  // entirely, which is the escape hatch if a version ever does get stuck ahead of the row.
   const rememberVersions = useCallback((list) => {
     for (const c of list) {
-      if (c?.id != null && c.updatedAt) versionsRef.current.set(c.id, c.updatedAt);
+      if (c?.id == null || !c.updatedAt) continue;
+      if (!isNewerVersion(c.updatedAt, versionsRef.current.get(c.id))) continue;
+      versionsRef.current.set(c.id, c.updatedAt);
     }
   }, []);
 

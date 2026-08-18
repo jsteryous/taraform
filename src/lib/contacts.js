@@ -214,6 +214,22 @@ export async function upsertContact(contact, userId, clientId, expectedUpdatedAt
   return data[0].updated_at;
 }
 
+// Is `candidate` a strictly newer row version than `known`? updated_at only ever moves
+// forward — every writer stamps now() — so a candidate that isn't newer is stale data from
+// a read that started before a write landed, never a legitimate new version. Callers use
+// this to keep the tracked version monotonic; see rememberVersions in AppContext.
+//
+// Lexicographic compare is exact here rather than lucky: PostgREST renders timestamptz as
+// a fixed-width `YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`, so the fields align, and the fraction
+// orders correctly digit-by-digit because '+' (0x2B) sorts below every digit — '.8+00:00'
+// lands before '.875+00:00', which is right. Date.parse would flatten to milliseconds and
+// call two writes in the same millisecond equal, which Postgres's microseconds do not.
+export function isNewerVersion(candidate, known) {
+  if (!candidate) return false;
+  if (!known) return true;
+  return candidate > known;
+}
+
 export async function deleteContactById(id) {
   const { error } = await supabase.from('property_crm_contacts').delete().eq('id', id);
   if (error) throw error;
