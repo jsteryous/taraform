@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   attemptGap, countAttempts, nextFollowUpDate, schedulesFor, scheduleAfterNote, attemptLabel,
+  clearOnStatusChange, isExcluded,
 } from './followUpCadence';
 import { todayStr } from './contactFilters';
 import { LAND_CONFIG } from './clientConfig';
@@ -158,5 +159,62 @@ describe('attemptLabel', () => {
     expect(attemptLabel(7, CADENCE)).toBe('Attempt 7');
     expect(attemptLabel(12, CADENCE)).toBe('Attempt 12');
     expect(attemptLabel(0, CADENCE)).toBe(null);
+  });
+});
+
+// Reported 2026-08-18: logging a note scheduled +3d correctly, then marking the contact
+// Dead/Pass left the date sitting there. The queue filter hid it, but the contact still
+// read as if it were on the cadence.
+describe('clearOnStatusChange', () => {
+  const fu = LAND_CONFIG.followUp;
+
+  it('retires the scheduled call when the lead stops', () => {
+    for (const s of ['Dead/Pass', 'Closed', 'Offer Rejected/NFS']) {
+      expect(clearOnStatusChange(s, at(3), fu)).toBe(null);
+    }
+  });
+
+  it('leaves the date alone for statuses that are still being worked', () => {
+    for (const s of ['New Lead', 'Contacted', 'Hot Lead', 'Offer Made', 'UC', 'Buyer']) {
+      expect(clearOnStatusChange(s, at(3), fu)).toBe(undefined);
+    }
+  });
+
+  it('is a no-op when there was no date to clear', () => {
+    expect(clearOnStatusChange('Dead/Pass', null, fu)).toBe(undefined);
+    expect(clearOnStatusChange('Dead/Pass', '', fu)).toBe(undefined);
+  });
+
+  it('is inert without config', () => {
+    expect(clearOnStatusChange('Dead/Pass', at(3), null)).toBe(undefined);
+    expect(clearOnStatusChange('Dead/Pass', at(3), { days: 90 })).toBe(undefined);
+  });
+
+  // An offer out is an active deal, not a stop — its date is a real appointment.
+  it('does not treat Offer Made as terminal', () => {
+    expect(isExcluded('Offer Made', fu)).toBe(false);
+    expect(isExcluded('Offer Rejected/NFS', fu)).toBe(true);
+  });
+});
+
+describe('scheduleAfterNote on a stopped lead', () => {
+  const fu = LAND_CONFIG.followUp;
+  const note = () => ({ type: 'note', text: 'pass', timestamp: new Date().toISOString() });
+
+  it('clears rather than reschedules, whatever the date was', () => {
+    for (const s of ['Dead/Pass', 'Closed', 'Offer Rejected/NFS']) {
+      expect(scheduleAfterNote([note()], s, at(-1), fu)).toBe(null);
+      // Even a future date: a commitment made before the lead died isn't worth keeping.
+      expect(scheduleAfterNote([note()], s, at(30), fu)).toBe(null);
+      expect(scheduleAfterNote([note()], s, null, fu)).toBe(undefined);
+    }
+  });
+
+  // The reported sequence, end to end: note schedules, then the status change retires it.
+  it('survives the note-then-mark-dead sequence with no date left behind', () => {
+    const log = [note()];
+    const scheduled = scheduleAfterNote(log, 'Contacted', null, fu);
+    expect(scheduled).toBe(at(3));
+    expect(clearOnStatusChange('Dead/Pass', scheduled, fu)).toBe(null);
   });
 });

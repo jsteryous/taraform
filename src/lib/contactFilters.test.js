@@ -341,9 +341,13 @@ describe('applyContactFilters follow-up + excludeStatuses', () => {
   };
 
   it('gates the manual-date branch on status when excludeStatuses is set', () => {
+    // Derived from the config, not hardcoded: the excluded list is expected to grow, and a
+    // literal here just fails the build every time it does without catching anything.
+    // Quoting matters, though — a status value can contain a slash.
+    const list = LAND_CONFIG.followUp.excludeStatuses.map((s) => `"${s}"`).join(',');
     const expr = exprOf(LAND_CONFIG.followUp);
-    expect(expr).toContain(`and(follow_up_on.lte.${todayStr()},status.not.in.("Dead/Pass","Closed"))`);
-    // Quoted, because a status value can contain a slash.
+    expect(expr).toContain(`and(follow_up_on.lte.${todayStr()},status.not.in.(${list}))`);
+    expect(list).toContain('"Offer Rejected/NFS"'); // has a slash, and was missed once
     expect(expr).not.toContain(`or(follow_up_on.lte.${todayStr()},`);
   });
 

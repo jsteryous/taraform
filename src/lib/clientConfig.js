@@ -39,7 +39,7 @@ export const LAND_CONFIG = {
   //                     window per status. See contactFilters.isFollowUpDue/followUpWindow.
   followUp: {
     days: 90, statuses: ['Contacted', 'Hot Lead'], statusDays: { 'Hot Lead': 7 },
-    excludeStatuses: ['Dead/Pass', 'Closed'],
+    excludeStatuses: ['Dead/Pass', 'Closed', 'Offer Rejected/NFS'],
     cadence: {
       attemptDays: [0, 3, 7, 14, 30, 60],
       repeatEvery: 60,

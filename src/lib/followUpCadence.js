@@ -76,14 +76,35 @@ export function schedulesFor(status, cadence) {
 //   2. On a cadence status, schedule attempt N+1 from today.
 //   3. Off-cadence, fall back to the pre-cadence rule: logging a note while the date is
 //      due counts as having done the follow-up, so clear it.
+// An excluded status (Dead/Pass, Closed, Offer Rejected/NFS) outranks all three and clears.
 export function scheduleAfterNote(activityLog, status, followUpOn, followUp, now = new Date()) {
   const cadence = followUp?.cadence;
+  // An excluded status never carries a scheduled call, so a note logged on one retires the
+  // date instead of rescheduling — ahead of the future-date rule, since a commitment made
+  // before the lead died is not one worth keeping.
+  if (isExcluded(status, followUp)) return followUpOn ? null : undefined;
   if (followUpOn && followUpOn > todayStr(now)) return undefined;
   const attempts = countAttempts(activityLog);
   if (attempts >= 1 && schedulesFor(status, cadence)) {
     return nextFollowUpDate(attempts, cadence, now);
   }
   return followUpOn ? null : undefined;
+}
+
+// Is this status out of the call queue entirely? The queue filter enforces the same list
+// (applyContactFilters), so this is the write-side half of one rule, not a second one.
+export function isExcluded(status, followUp) {
+  return (followUp?.excludeStatuses || []).includes(status);
+}
+
+// What follow_up_on should become when the STATUS changes — same three-valued contract as
+// scheduleAfterNote. Marking a contact dead, closed or NFS retires its scheduled call.
+// The queue filter already hides those, so this is about the contact itself: a date still
+// sitting in the field reads as "on the cadence" when it isn't, and the operator has no
+// way to tell the difference from a real appointment.
+export function clearOnStatusChange(nextStatus, followUpOn, followUp) {
+  if (!followUpOn) return undefined;
+  return isExcluded(nextStatus, followUp) ? null : undefined;
 }
 
 // "Attempt 3 of 7" for the detail sidebar. Past minAttempts the "of N" is dropped rather

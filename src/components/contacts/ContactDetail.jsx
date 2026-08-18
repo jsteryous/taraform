@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
-import { scheduleAfterNote, countAttempts, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
+import { scheduleAfterNote, clearOnStatusChange, countAttempts, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
@@ -177,6 +177,14 @@ export default function ContactDetail({ onClose }) {
   const onCadence  = schedulesFor(draft.status, cfg.followUp?.cadence);
   const nextGap    = onCadence ? attemptGap(attempts + 1, cfg.followUp.cadence) : null;
 
+  // Marking a contact dead/closed/NFS retires its scheduled call, in the SAME save as the
+  // status — two sequential saves would race through draftRef (see components/CLAUDE.md).
+  function handleStatusChange(next) {
+    const cleared = clearOnStatusChange(next, draft.followUpOn, cfg.followUp);
+    if (cleared === undefined) update('status', next);
+    else updateMultiple({ status: next, followUpOn: cleared });
+  }
+
   // Logging a note is logging a call, so it schedules the next one. scheduleAfterNote
   // owns that decision (see lib/followUpCadence.js): a date, null to clear, or undefined
   // to leave the field alone. Whatever it returns goes out in the SAME updateMultiple as
@@ -241,7 +249,7 @@ export default function ContactDetail({ onClose }) {
           {/* Status */}
           <div style={{ marginBottom: '1rem' }}>
             <div className="field-label">Status</div>
-            <Select value={draft.status || 'New Lead'} onChange={v => update('status', v)} options={STATUSES} emptyLabel={null} />
+            <Select value={draft.status || 'New Lead'} onChange={handleStatusChange} options={STATUSES} emptyLabel={null} />
           </div>
 
           {/* Follow-up — the date the next call is due. Normally written by the cadence when a
