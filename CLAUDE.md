@@ -2,7 +2,7 @@
 
 Multi-tenant CRM for land acquisition. Supabase direct DB (anon key + RLS, no backend server), deployed to GitHub Pages (taraform.org) via CI on push to `main`. Primary client: Table Rock Partners (UUID: `f3a69c31-8e40-4ea0-865a-d8bd9214376d`).
 
-> **2026-06-10 — Railway decommissioned.** The Express server (`taraform-server-production.up.railway.app`, repo jsteryous/taraform-server) and its features (Twilio SMS, email automation/OAuth, Reoon verification) were removed to get hosting cost to $0. All data access is now direct-to-Supabase: clients/members via the RLS policies + SECURITY DEFINER RPCs in `db/20260610_clients_rls.sql`, offers/contacts via membership-gated table policies. Historical SMS/email data remains in the DB (`sms_messages`, `email_messages`, …) but has no UI. Do not add features that require an always-on server without flagging the cost.
+> **2026-06-10 — Railway decommissioned.** The Express server (`taraform-server-production.up.railway.app`, repo jsteryous/taraform-server) and its features (Twilio SMS, email automation/OAuth, Reoon verification) were removed to get hosting cost to $0. All data access is now direct-to-Supabase: clients/members via the RLS policies + SECURITY DEFINER RPCs in `db/20260610_clients_rls.sql`, offers/contacts via membership-gated table policies. Those tables were later **dropped** — `sms_messages`, `email_messages` and `sms_settings` are all gone (verified 2026-08-27; this file claimed otherwise until then). Texting came back 2026-08-27 as a Supabase-only build — see **Texting** below. Do not add features that require an always-on server without flagging the cost.
 
 ## Routing
 
@@ -15,6 +15,49 @@ Enforced by RLS only (the anon key ships in the public bundle). `clients`/`conta
 **Signup is enabled**, so anyone on the internet can obtain an `authenticated` JWT — assume the `authenticated` role is hostile, not trusted. Re-verified 2026-08-06 by simulating a fresh signup with zero memberships: `property_crm_contacts`, `contact_offers`, `clients`, `client_users`, `enriched_leads`, `referral_leads` and `subscribers` all return **0 rows**; `google_contact_sync` is DENIED outright. All four member RPCs re-read and confirmed to check the caller's own membership first (`remove_client_member` requires `owner`). The one thing a stranger *can* do is `create_client`, which makes them owner of a brand-new empty client — by design, and it's how onboarding works, since `add_client_member` resolves an existing `auth.users` row by email and therefore **requires the invitee to have signed up first**. Don't "fix" signup by disabling it; that breaks adding members. Enable CAPTCHA + leaked-password protection instead (Auth → Settings) if bot signups become a problem.
 
 **`updated_at` on `property_crm_contacts` is set by the client, not a trigger.** There is exactly one trigger in the whole `public` schema (`enriched_leads_updated_at`); `update_updated_at` is attached to nothing and is dead code. Since `upsertContact`'s optimistic-concurrency guard asserts the last-read `updated_at`, any write path that forgets to bump it silently degrades that guard — and a write made outside the app (psql, a script, the Supabase table editor) won't bump it at all.
+
+## Texting
+
+Manual, one-at-a-time SMS from the contact overlay (Messages tab). No cron, no blasting.
+Runbook + compliance model: `scripts/SMS.md`. Schema: `db/20260827_sms.sql` (applied).
+
+**Every guard is SQL, in `sms_send_precheck()`.** Not React — the anon key is public, so a
+check there is decoration. Not the Edge Function — it runs as `service_role` and bypasses
+RLS, so it cannot be the tenancy boundary. Same precedent as `phone_sync_contacts_for()`.
+The function returns a *reason*, which the UI shows; a bare boolean would leave the operator
+unable to act on a block. Checks: membership → valid number → number is on that contact →
+not `bad_phones` → not opted out → DNC clear or consent recorded → 8am-9pm recipient local →
+under the daily cap. **All of them fail closed.**
+
+**Nothing sends until an area code is DNC-scrubbed** (`scripts/load-dnc.mjs`). This is
+deliberate: a number missing from `dnc_numbers` only means "unlisted" if we hold that area
+code's file, so `dnc_area_codes` tracks coverage separately. Without it a partial download
+silently reads as a clean bill of health for the whole country. 864 alone unblocks ~72% of
+the list and the registry is free for 5 area codes.
+
+**Two traps.** (1) `clients.twilio_number` is the Railway-era column, reused rather than
+duplicated — Table Rock still holds `+18644775752`, a number the org no longer owns, and
+Personal List (the list actually worked out of) has none. (2) `sms-inbound` must deploy with
+`--no-verify-jwt`, making it the only publicly reachable function; its `X-Twilio-Signature`
+check is therefore load-bearing, not defence in depth.
+
+**Opt-outs key on the NUMBER, in `sms_opt_outs` — never on the contact row.** This was a
+real bug, caught 2026-08-27 before anything shipped: **295 numbers sit on more than one
+contact** (one on four), so the original per-contact flag would have honoured a STOP on one
+card and kept the duplicates textable at the same number. Enforced in `sms_send_precheck()`
+*above* the consent branch and again in `sms_record_outbound()` at write time, and written
+before contact matching so an unmatchable STOP still suppresses. Nothing in the app reverses
+it — not consent, not a later START (which unblocks at Twilio but not here).
+
+`sms_is_stop()` has two tiers, exact carrier keywords plus phrases, because people write
+"please stop texting me" and neither Twilio nor an exact matcher catches that. Tuned to
+over-match deliberately. It is still best-effort — the real backstop is that **every send is
+manual**, so a human reads the reply first. `sms_opt_out_number()` (Opt out button) covers
+anyone who asks by phone or email.
+
+**There is no automated sending and adding one is a decision, not a refactor.** No cron job
+touches SMS (`cron.job` holds only `phone-sync-nightly`), and `sms-send` requires a user JWT
+per message. The manual-send property is what makes best-effort STOP detection acceptable.
 
 ## Subdirectory docs
 
@@ -67,6 +110,16 @@ Scoped guidance lives next to the code:
 - [x] **Multi-user phone contact sync** — built 2026-08-04, **deployed and live** (this entry said "not yet deployed" until 2026-08-06; it was wrong and cost an investigation). `phone-sync-run` is ACTIVE at **v5** (carrying `withoutPersonalNumbers`, deployed 2026-08-06), the `google_contact_sync` table holds one connected user, and `cron.job` id 1 `phone-sync-nightly` runs `0 8 * * *` UTC and is **active**. Note the table is `google_contact_sync`, **not** `phone_sync_*` — grepping the DB for `phone_sync%` finds nothing and looks like it was never deployed. Verified end to end 2026-08-06 via `select public.phone_sync_dispatch()`: `skipped_personal: 5`, `created/updated/deleted: 0`, `untouched: 99`, `last_error: null`. Deploy with `SUPABASE_ACCESS_TOKEN=<pat> npx supabase functions deploy phone-sync-run --project-ref ykuenmwfxecmmqichwit` (no Docker needed; the CLI bundles `_shared/` automatically). `skipped_personal` in `last_stats` is the cheapest proof of which code version actually ran. Any user can now connect their own Google account (phone icon in the header) and get nightly caller ID for the contacts RLS says they can see. Supabase Edge Functions + `pg_cron` + Vault-held refresh tokens; still $0, still no always-on server. Runbook + design: `scripts/PHONE_SYNC_MULTIUSER.md`. Two things to know before touching it: (1) the Edge Function runs as `service_role` and *bypasses RLS*, so the tenancy boundary is `phone_sync_contacts_for()` plus the grant list in `db/20260804_google_contact_sync.sql` — never grant a `phone_sync_*` function to `authenticated`; (2) `supabase/functions/_shared/` is **generated** from `src/lib/` by `npm run sync:edge`, and `npm test` fails if it drifts. **This is now the only sync** — the single-operator path (`scripts/phone-sync.mjs`, `phone-sync-authorize.mjs`, `sync-contacts.yml`, `PHONE_SYNC.md`) was retired 2026-08-06 as a second writer on the same Google account plus a standing credential; recover from git history if ever needed. It was also the only bulk-undo (`--purge`); the replacement is to disconnect, then delete the `Taraform` label's contents in Google Contacts.
 - [x] **Stop synced leads from renaming personal contacts** — done 2026-08-06. The sync writes into the operator's **personal** Google account (the workflow comment claimed "a dedicated Google account"; it never was), so lead cards sit beside real contacts. Phones unify cards sharing a number — iOS links, Android aggregates — and the merged contact shows whichever name the OS picks, so a lead card renamed a real contact to "Nicholas Whitaker (Dead/Pass)" and swapped its photo. Five were shadowed. `withoutPersonalNumbers` (`src/lib/phoneSync.js`) now drops any lead whose number is already on a card the sync doesn't own: caller ID already worked for those, so the lead card added nothing but the collision. Self-healing — because `diffContacts` reconciles, dropping them from `desired` deletes the cards earlier runs created (verified live: 1327 → 1322, zero collisions, the 99 personal cards untouched). +6 tests. **Unrelated to this but worth knowing:** turning on Google Contacts sync on the phone also pulls down the operator's own pre-existing Google contacts, including 34 stale phone-less cards that then link to and shadow the real iCloud/device ones. That is not something the sync can fix — the cards predate it by years — and is the actual cause if a personal contact's name changes without a `taraform_id` on it.
 - [x] **Deep-link the synced phone contacts back into the app** — done 2026-08-04. `buildPerson` in `src/lib/phoneSync.js` now emits `urls: [{ value: contactUrl(id) }]`, added to `PERSON_FIELDS`, `UPDATE_MASK` and `personSignature` (the last one matters: without it the diff can't see the field, so contacts synced before the link existed would never gain one). Makes a synced contact tappable from the phone straight to its contact overlay — the closest free thing to a "call from X" popup, since no browser can see incoming call state. +3 tests.
+
+- [ ] **Finish wiring texting.** Built 2026-08-27 (`db/20260827_sms.sql` applied, `sms-send`
+  + `sms-inbound` written, Messages tab live, 179 tests green) but **inert until four
+  external things exist**: a Twilio account with a purchased number, an approved 10DLC brand
+  + campaign (~ once, ~/mo, a few days of review), the `TWILIO_*` Supabase secrets with
+  both functions deployed, and at least one DNC area code loaded via `scripts/load-dnc.mjs`.
+  Steps are in `scripts/SMS.md`. Until the DNC load happens **every send is blocked by
+  design** — that is the feature, not a bug. Also set `clients.twilio_number` on Personal
+  List, and clear the stale `+18644775752` on Table Rock. Motivation: cold calling alone was
+  taking ~5,000 dials per deal, which is not reachable solo.
 
 ### Good as-is (don't "fix") 
 Context data/UI split, `loadingRef` concurrency guard, ref-synced `setContacts`, O(1) import dedup, `useDraftSave` optimistic-save/revert, PostgREST error classification, and the CLAUDE.md docs themselves. Preserve these when refactoring.

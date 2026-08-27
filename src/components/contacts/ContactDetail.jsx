@@ -7,6 +7,7 @@ import { scheduleAfterNote, clearOnStatusChange, countAttempts, attemptGap, atte
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
+import SmsTab from './SmsTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
@@ -498,10 +499,30 @@ export default function ContactDetail({ onClose }) {
             >
               Notes &amp; Activity
             </button>
+            {cfg.tabs.includes('sms') && (
+              <button
+                role="tab"
+                id="tab-sms"
+                aria-selected={tab === 'sms'}
+                aria-controls="tabpanel-sms"
+                tabIndex={0}
+                className={`detail-tab${tab === 'sms' ? ' active' : ''}`}
+                onClick={() => setTab('sms')}
+              >
+                Messages
+              </button>
+            )}
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
             {tab === 'notes' && <NotesTab contact={draft} onChange={handleNotesChange} quickNotes={cfg.quickNotes} />}
           </div>
+          {cfg.tabs.includes('sms') && (
+            <div role="tabpanel" id="tabpanel-sms" aria-labelledby="tab-sms" hidden={tab !== 'sms'}>
+              {/* Keyed on id: the thread and composer must not carry over when the overlay
+                  swaps to another contact. */}
+              {tab === 'sms' && <SmsTab key={draft.id} contact={draft} />}
+            </div>
+          )}
         </div>
 
         {/* ── Offers — equal split right column ── */}
