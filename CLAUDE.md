@@ -35,11 +35,19 @@ code's file, so `dnc_area_codes` tracks coverage separately. Without it a partia
 silently reads as a clean bill of health for the whole country. 864 alone unblocks ~72% of
 the list and the registry is free for 5 area codes.
 
-**Two traps.** (1) `clients.twilio_number` is the Railway-era column, reused rather than
-duplicated — Table Rock still holds `+18644775752`, a number the org no longer owns, and
-Personal List (the list actually worked out of) has none. (2) `sms-inbound` must deploy with
-`--no-verify-jwt`, making it the only publicly reachable function; its `X-Twilio-Signature`
-check is therefore load-bearing, not defence in depth.
+**Provider is Telnyx**, switched from Twilio 2026-08-27 (`db/20260827_telnyx.sql`). Cost was
+not the reason — at ~600 msgs/month the two are ~$3 apart. The vendor surface is deliberately
+one `fetch` in `sms-send` and one signature check in `sms-inbound`; everything that decides
+whether a message *may* be sent is in SQL and would survive another switch. Telnyx signs
+webhooks with **Ed25519** over `${timestamp}|${rawBody}` (Twilio used HMAC-SHA1 over a URL),
+so `sms-inbound` must read the **raw** body — re-serializing the parsed JSON breaks the
+signature. Telnyx also does **not** auto-reply to STOP the way Twilio did.
+
+**Two traps.** (1) `clients.sms_number`, renamed from `twilio_number` — the old name outlived
+the vendor by two migrations. Table Rock still holds `+18644775752`, a Twilio number from the
+Railway era and now doubly dead; Personal List (the list actually worked out of) has none.
+(2) `sms-inbound` must deploy with `--no-verify-jwt`, making it the only publicly reachable
+function; its signature check is therefore load-bearing, not defence in depth.
 
 **Opt-outs key on the NUMBER, in `sms_opt_outs` — never on the contact row.** This was a
 real bug, caught 2026-08-27 before anything shipped: **295 numbers sit on more than one
@@ -117,7 +125,7 @@ Scoped guidance lives next to the code:
   + campaign (~ once, ~/mo, a few days of review), the `TWILIO_*` Supabase secrets with
   both functions deployed, and at least one DNC area code loaded via `scripts/load-dnc.mjs`.
   Steps are in `scripts/SMS.md`. Until the DNC load happens **every send is blocked by
-  design** — that is the feature, not a bug. Also set `clients.twilio_number` on Personal
+  design** — that is the feature, not a bug. Also set `clients.sms_number` on Personal
   List, and clear the stale `+18644775752` on Table Rock. Motivation: cold calling alone was
   taking ~5,000 dials per deal, which is not reachable solo.
 

@@ -1,16 +1,22 @@
-// Browser-facing send. The user presses send in the CRM; this is the only path to Twilio.
+// Browser-facing send. The user presses send in the CRM; this is the only path to Telnyx.
 //
-// The Twilio auth token must never reach the bundle, which is the immediate reason this is
-// a function at all. The larger reason is that every compliance guard lives in
-// sms_send_precheck() — a check in React would be decoration, because the anon key is
-// public and anyone can call PostgREST directly.
+// The API key must never reach the bundle, which is the immediate reason this is a function
+// at all. The larger reason is that every compliance guard lives in sms_send_precheck() —
+// a check in React would be decoration, because the anon key is public and anyone can call
+// PostgREST directly.
 //
 // This function runs as service_role and BYPASSES RLS. So it never takes a client_id or a
 // user id from the body: the user comes from the JWT, and the precheck does the membership
 // join itself. Same precedent as phone-sync-run.
 //
+// Provider: Telnyx (chosen over Twilio 2026-08-27 — see scripts/SMS.md). The provider
+// surface is deliberately confined to the one fetch below; everything that decides whether
+// a message MAY be sent is in SQL and is provider-agnostic.
+//
 // Secrets required (supabase secrets set ...):
-//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
+//   TELNYX_API_KEY            v2 API key ("KEY..."), NOT the public key
+//   TELNYX_MESSAGING_PROFILE_ID  optional; Telnyx infers it from `from` when the number is
+//                                already attached to a profile
 // Provided by the platform: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -18,8 +24,8 @@ import { json, preflight } from '../_shared/http.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const TWILIO_SID = Deno.env.get('TWILIO_ACCOUNT_SID') ?? '';
-const TWILIO_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') ?? '';
+const TELNYX_API_KEY = Deno.env.get('TELNYX_API_KEY') ?? '';
+const PROFILE_ID = Deno.env.get('TELNYX_MESSAGING_PROFILE_ID') ?? '';
 
 const admin = () => createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
@@ -67,7 +73,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight(req);
   if (req.method !== 'POST') return json(req, { error: 'POST only' }, 405);
 
-  if (!TWILIO_SID || !TWILIO_TOKEN) {
+  if (!TELNYX_API_KEY) {
     return json(req, { error: 'Texting is not configured for this deployment.' }, 503);
   }
 
@@ -94,51 +100,54 @@ Deno.serve(async (req) => {
   }
 
   const { data: client } = await db
-    .from('clients').select('twilio_number').eq('id', check.client_id).single();
-  const from = client?.twilio_number;
+    .from('clients').select('sms_number').eq('id', check.client_id).single();
+  const from = client?.sms_number;
   if (!from) return json(req, { error: 'No sending number is configured for this list.' }, 503);
 
   const text = await withDisclosure(db, check.client_id, check.to_number, String(body).trim());
 
-  // Twilio's REST API. E.164 — precheck already proved these are 10 US digits.
-  const form = new URLSearchParams({
-    To: `+1${check.to_number}`,
-    From: `+1${from.replace(/\D/g, '').slice(-10)}`,
-    Body: text,
-  });
-  const statusCb = Deno.env.get('SMS_STATUS_CALLBACK');
-  if (statusCb) form.set('StatusCallback', statusCb);
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form,
+  // Telnyx Messaging API v2. JSON + bearer auth, unlike Twilio's form-encoded basic auth.
+  // E.164 — the precheck already proved these are 10 US digits.
+  const res = await fetch('https://api.telnyx.com/v2/messages', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${TELNYX_API_KEY}`,
+      'Content-Type': 'application/json',
     },
-  );
-  const tw = await res.json().catch(() => ({}));
+    body: JSON.stringify({
+      from: `+1${from.replace(/\D/g, '').slice(-10)}`,
+      to: `+1${check.to_number}`,
+      text,
+      ...(PROFILE_ID ? { messaging_profile_id: PROFILE_ID } : {}),
+    }),
+  });
+  const tx = await res.json().catch(() => ({}));
 
-  // Log the failure too — a message Twilio rejected is exactly the one worth seeing, and a
-  // silent failure here is indistinguishable from never having pressed send.
+  // Telnyx nests everything under data, reports status per-recipient in a `to` ARRAY, and
+  // calls the segment count `parts`. Errors come back as an `errors` array, not a message.
+  const sent = tx?.data;
+  const err = tx?.errors?.[0];
+
+  // Log the failure too — a message the provider rejected is exactly the one worth seeing,
+  // and a silent failure here is indistinguishable from never having pressed send.
   const { data: id, error: recErr } = await db.rpc('sms_record_outbound', {
     p_user: user.id,
     p_contact_id: contactId,
     p_phone: check.to_number,
     p_from: from,
     p_body: text,
-    p_sid: tw?.sid ?? null,
-    p_status: res.ok ? (tw?.status ?? 'queued') : 'failed',
-    p_segments: tw?.num_segments ? Number(tw.num_segments) : null,
-    p_error: res.ok ? null : String(tw?.code ?? res.status),
+    p_sid: sent?.id ?? null,
+    p_status: res.ok ? (sent?.to?.[0]?.status ?? 'queued') : 'failed',
+    p_segments: sent?.parts ? Number(sent.parts) : null,
+    p_error: res.ok ? null : String(err?.code ?? res.status),
   });
   if (recErr) return json(req, { error: recErr.message }, 500);
 
   if (!res.ok) {
-    return json(req, { error: tw?.message ?? `Twilio rejected the message (${res.status})`, code: tw?.code }, 502);
+    return json(req, {
+      error: err?.detail ?? err?.title ?? `Telnyx rejected the message (${res.status})`,
+      code: err?.code,
+    }, 502);
   }
-  return json(req, { ok: true, id, sid: tw?.sid, status: tw?.status, body: text });
+  return json(req, { ok: true, id, sid: sent?.id, status: sent?.to?.[0]?.status, body: text });
 });

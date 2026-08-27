@@ -4,8 +4,9 @@ Manual, one-at-a-time texting from the contact overlay. No blasting, no cron. Bu
 2026-08-27; `db/20260827_sms.sql` is applied, both Edge Functions are written but **not yet
 deployed**, and nothing can send until the steps below are done.
 
-Cost at 20 texts/day: about **$15/month** (number $1.15, 10DLC ~$2, traffic ~$10). Railway
-stays dead — the webhook is an Edge Function, same as the phone sync.
+Provider is **Telnyx** (switched from Twilio 2026-08-27). Cost at 20 texts/day is roughly
+**$7-10/month**: number ~$1, 10DLC ~$2, traffic ~$4. Railway stays dead — the webhook is an
+Edge Function, same as the phone sync.
 
 ---
 
@@ -29,24 +30,65 @@ area code all block.
 
 ## Setup
 
-### 1. Twilio
+### 1. Telnyx account and identity
 
-1. Create an account, buy a local number (prefer a **864** number — it matches the bulk of
-   the list and local numbers answer better).
-2. Register 10DLC: **Brand** (sole proprietor, ~$4 one-time) then a **Campaign**
-   (~$2/month). Approval takes a few days — start this first.
-3. Copy the Account SID and Auth Token.
+Sign up at telnyx.com, verify email, and complete **Level 1 identity verification** (Portal
+→ Account → Verify). Messaging stays disabled until this clears. Add ~$20 of credit; Telnyx
+is prepaid and a zero balance silently fails sends.
 
-### 2. Supabase secrets
+### 2. Buy a number
+
+Numbers → Search & Buy. Filter **area code 864**, feature **SMS**, type **Local**. About
+$1/month. A local 864 number answers better than toll-free and skips toll-free verification
+entirely.
+
+### 3. Create a Messaging Profile
+
+Messaging → Messaging Profiles → Create. Assign the number to it.
+
+Unlike Twilio, the **inbound webhook is configured on the profile, not on the number**. Set:
+
+- **Webhook URL**: `https://ykuenmwfxecmmqichwit.supabase.co/functions/v1/sms-inbound`
+- **Webhook API version**: **API v2** (v1 sends a different payload shape and `sms-inbound`
+  will silently ignore every event)
+- Failover URL: leave blank
+
+### 4. Register 10DLC — do this before sending anything
+
+Messaging → 10DLC. **Brand** first (~$4 one-time), then a **Campaign** (~$2/month) linked to
+the Messaging Profile. Use case: **Low Volume Mixed**.
+
+Approval typically takes 1–5 business days. **Send nothing until it clears** — see the
+billing note at the bottom of this file for why that matters.
+
+Campaign description — accurate, which is also what gets approved:
+
+> Direct outreach to individual property owners regarding potential purchase of their land.
+> Recipients are identified from public county property records. Messages are composed and
+> sent manually, one at a time, by the business owner. All recipients are scrubbed against
+> the National DNC Registry before contact, and opt-out requests are honored permanently.
+
+Sample message must carry opt-out language. `sms-send` appends "Reply STOP to opt out." to
+the first message to any number, so quote a sample with it included.
+
+### 5. Supabase secrets
+
+Two different keys, easy to confuse:
+
+- **API key** — Portal → Account → Keys & Credentials → API Keys. Starts `KEY`. Used to send.
+- **Public key** — same page, "Public Key". Base64 Ed25519. Used to verify webhooks.
 
 ```bash
 npx supabase secrets set \
-  TWILIO_ACCOUNT_SID=ACxxxxxxxx \
-  TWILIO_AUTH_TOKEN=xxxxxxxx \
+  TELNYX_API_KEY=KEYxxxxxxxx \
+  TELNYX_PUBLIC_KEY=xxxxxxxx \
   --project-ref ykuenmwfxecmmqichwit
 ```
 
-### 3. Deploy the functions
+Optional: `TELNYX_MESSAGING_PROFILE_ID` — only needed if a number belongs to more than one
+profile. Telnyx infers it from `from` otherwise.
+
+### 6. Deploy the functions
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=<pat>
@@ -54,39 +96,25 @@ npx supabase functions deploy sms-send    --project-ref ykuenmwfxecmmqichwit
 npx supabase functions deploy sms-inbound --no-verify-jwt --project-ref ykuenmwfxecmmqichwit
 ```
 
-`--no-verify-jwt` on `sms-inbound` is **required** — Twilio has no Supabase JWT. That makes
-it the one publicly reachable function in the project, which is why it validates
-`X-Twilio-Signature` before touching the database. Do not remove that check, and do not
-deploy `sms-send` with `--no-verify-jwt`.
+`--no-verify-jwt` on `sms-inbound` is **required** — Telnyx has no Supabase JWT. That makes
+it the one publicly reachable function in the project, which is why it verifies the Ed25519
+signature before touching the database. Do not remove that check, and do not deploy
+`sms-send` with `--no-verify-jwt`.
 
-### 4. Point Twilio at the webhook
+Telnyx signs `${timestamp}|${rawBody}`, so nothing depends on the URL the platform proxy
+presents — there is no Twilio-style `SMS_WEBHOOK_URL` to get wrong. A 5-minute timestamp
+tolerance guards against replay.
 
-In the number's config, set **A MESSAGE COMES IN** to:
+### 7. Set the sending number on the list
 
-```
-https://ykuenmwfxecmmqichwit.supabase.co/functions/v1/sms-inbound
-```
+The number lives on `clients.sms_number`, editable in Manage Clients. **Set it on Personal
+List** — that is the list actually worked out of day to day.
 
-If signature validation fails with a correct token, the platform proxy is rewriting the URL
-Twilio signed. Fix it by pinning the exact console URL:
+> **Table Rock still carries `+18644775752`** — a Twilio number from the Railway era, now
+> doubly dead. Telnyx rejects a `from` it doesn't own, so it fails loudly and gets logged
+> rather than vanishing silently, but clear it when convenient.
 
-```bash
-npx supabase secrets set SMS_WEBHOOK_URL=https://ykuenmwfxecmmqichwit.supabase.co/functions/v1/sms-inbound --project-ref ykuenmwfxecmmqichwit
-```
-
-Optional, for delivery receipts: set `SMS_STATUS_CALLBACK` to the same URL.
-
-### 5. Set the sending number on the list
-
-The number lives on `clients.twilio_number`, editable in Manage Clients.
-
-> **Table Rock still carries `+18644775752`** from the Railway era — a number the org
-> almost certainly no longer owns. Twilio rejects a send from an unowned number (error
-> 21606), so it fails loudly and gets logged rather than silently vanishing, but clear or
-> replace it. **Personal List has no number set**, and that is the list actually worked out
-> of day to day.
-
-### 6. Load DNC data — nothing sends until you do
+### 8. Load DNC data — nothing sends until you do
 
 ```bash
 SUPABASE_URL=https://ykuenmwfxecmmqichwit.supabase.co \
@@ -132,13 +160,15 @@ number, and are enforced in three places — `sms_send_precheck()` above the con
 gets `do_not_contact` for UI visibility. The suppression is written *before* contact
 matching, so a STOP from a number we can't match to anything still stops us.
 
-Twilio also blocks STOP at the number level, but that block dies with the number; ours
-doesn't. Deliberately one-way — a later START unblocks the sender at Twilio but does **not**
-clear it here. Nothing in the app can reverse an opt-out, including recorded consent.
+Carriers also honour STOP at the network level, but that dies with the number; ours doesn't.
+Deliberately one-way — a later START unblocks at the carrier but does **not** clear it here.
+Nothing in the app can reverse an opt-out, including recorded consent. Note Telnyx, unlike
+Twilio, does **not** send an automatic STOP confirmation, and we deliberately do not send one
+either: an extra text to someone who just asked us to stop is the wrong instinct.
 
 **Detection is two-tier and tuned to over-match.** Exact carrier keywords (`STOP`,
 `UNSUBSCRIBE`, `CANCEL`, …) plus a phrase tier, because people write "please stop texting
-me" rather than the magic word — and neither Twilio nor the original matcher caught that.
+me" rather than the magic word — which neither the carriers nor the original matcher caught.
 A false positive costs one lead; a false negative is a TCPA claim. `sms_is_stop()` was
 checked against 23 stop phrasings (all caught) and 8 non-stop replies including "Can you
 stop by the property tomorrow?" and "non-stop calls from you guys" (none caught).
@@ -194,8 +224,27 @@ across the 850 split.
 | Symptom | Cause |
 |---|---|
 | `dnc_unscrubbed` on everything | No area codes loaded. Run `load-dnc.mjs`. |
-| `No sending number is configured` | `clients.twilio_number` is null for that list. |
-| Twilio error 21606 | Sending from a number the account doesn't own — the stale TRP value. |
-| Inbound 403 in the function logs | Signature mismatch. Set `SMS_WEBHOOK_URL`. |
-| Sends work, nothing is received | Webhook URL not set on the number in Twilio. |
+| `No sending number is configured` | `clients.sms_number` is null for that list. |
+| Telnyx rejects the `from` | Number isn't on the account or the profile — likely the stale TRP value. |
+| `Insufficient funds` / sends stop dead | Telnyx is prepaid. Top up and set a low-balance alert. |
+| Inbound 403 in the function logs | Signature failed. Check `TELNYX_PUBLIC_KEY` is the **public key**, not the API key. |
+| Inbound 403 only sometimes | Clock skew past the 5-minute replay tolerance, or a retry of a stale event. |
+| Sends work, nothing is received | Webhook is set on the **Messaging Profile**, not the number. Confirm API **v2**. |
+| Webhooks arrive but nothing is logged | Profile is on webhook API v1 — the payload shape differs and every event is ignored. |
 | Messages queue then fail silently | Carrier filtering — check 10DLC campaign status. |
+
+## Billing
+
+**The "$1.50 per text" from the earlier Twilio attempt was not a provider rate.** US A2P is
+under a cent per segment on both Twilio and Telnyx. That charge was carrier penalty fees for
+sending on an **unregistered 10DLC campaign** — levied by T-Mobile and AT&T directly, not by
+the provider. Switching providers does not avoid it. Registering before sending does, which
+is why 10DLC is step 4 and not step 9.
+
+Guardrails worth setting up front:
+
+- Telnyx Portal → Billing → **auto-recharge off**, plus a low-balance email alert. Prepaid
+  means a runaway spend stops on its own once the balance drains.
+- `clients.sms_daily_cap` defaults to **25**, enforced in `sms_send_precheck()` over a
+  trailing 24 hours. That is a hard ceiling regardless of what the provider would allow.
+- Send one message to your own phone before touching a real lead.
