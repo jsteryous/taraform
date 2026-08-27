@@ -110,9 +110,9 @@ tolerance guards against replay.
 The number lives on `clients.sms_number`, editable in Manage Clients. **Set it on Personal
 List** — that is the list actually worked out of day to day.
 
-> **Table Rock still carries `+18644775752`** — a Twilio number from the Railway era, now
-> doubly dead. Telnyx rejects a `from` it doesn't own, so it fails loudly and gets logged
-> rather than vanishing silently, but clear it when convenient.
+> **No client currently has a number.** The dead Twilio value on Table Rock
+> (`+18644775752`) was cleared 2026-08-27 — `db/20260827_clear_stale_sms_number.sql` is now
+> the only record of it. Nothing can send until this is set.
 
 ### 8. Load DNC data — nothing sends until you do
 

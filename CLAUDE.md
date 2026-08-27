@@ -44,10 +44,12 @@ so `sms-inbound` must read the **raw** body — re-serializing the parsed JSON b
 signature. Telnyx also does **not** auto-reply to STOP the way Twilio did.
 
 **Two traps.** (1) `clients.sms_number`, renamed from `twilio_number` — the old name outlived
-the vendor by two migrations. Table Rock still holds `+18644775752`, a Twilio number from the
-Railway era and now doubly dead; Personal List (the list actually worked out of) has none.
-(2) `sms-inbound` must deploy with `--no-verify-jwt`, making it the only publicly reachable
-function; its signature check is therefore load-bearing, not defence in depth.
+the vendor by two migrations. **No client has a number set**: the dead Twilio value on Table
+Rock was cleared 2026-08-27 (`db/20260827_clear_stale_sms_number.sql`, which is now the only
+record of what it was), and Personal List — the list actually worked out of — never had one.
+Nothing sends until that is set. (2) `sms-inbound` must deploy with `--no-verify-jwt`, making
+it the only publicly reachable function; its signature check is therefore load-bearing, not
+defence in depth.
 
 **Opt-outs key on the NUMBER, in `sms_opt_outs` — never on the contact row.** This was a
 real bug, caught 2026-08-27 before anything shipped: **295 numbers sit on more than one
@@ -125,9 +127,9 @@ Scoped guidance lives next to the code:
   + campaign (~ once, ~/mo, a few days of review), the `TWILIO_*` Supabase secrets with
   both functions deployed, and at least one DNC area code loaded via `scripts/load-dnc.mjs`.
   Steps are in `scripts/SMS.md`. Until the DNC load happens **every send is blocked by
-  design** — that is the feature, not a bug. Also set `clients.sms_number` on Personal
-  List, and clear the stale `+18644775752` on Table Rock. Motivation: cold calling alone was
-  taking ~5,000 dials per deal, which is not reachable solo.
+  design** — that is the feature, not a bug. Also set `clients.sms_number` on Personal List;
+  no client has one since the stale Twilio value was cleared. Motivation: cold calling alone
+  was taking ~5,000 dials per deal, which is not reachable solo.
 
 ### Good as-is (don't "fix") 
 Context data/UI split, `loadingRef` concurrency guard, ref-synced `setContacts`, O(1) import dedup, `useDraftSave` optimistic-save/revert, PostgREST error classification, and the CLAUDE.md docs themselves. Preserve these when refactoring.

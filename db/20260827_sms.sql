@@ -265,9 +265,8 @@ alter table public.property_crm_contacts
 
 -- Per-client daily send cap. Defaults to 25; the operator's stated pace is 20/day.
 -- The sending number reuses the Railway-era twilio_number column, which ManageClientsModal
--- already edits. NOTE: Table Rock still carries +18644775752 from that era — a number the
--- org no longer owns. Twilio rejects a send from an unowned number (error 21606), so this
--- fails loudly rather than silently, but set the real number before texting.
+-- already edits. Renamed to sms_number by db/20260827_telnyx.sql, and the stale Twilio value
+-- it carried was cleared by db/20260827_clear_stale_sms_number.sql.
 alter table public.clients
   add column if not exists sms_daily_cap int not null default 25;
 

@@ -107,9 +107,9 @@ end;
 $fn$;
 revoke execute on function public.sms_record_inbound(text, text, text, text) from public, anon, authenticated;
 
--- NOTE: Table Rock still holds +18644775752 in sms_number — a Twilio number from the
--- Railway era, now doubly dead. Left in place rather than deleted without asking; it fails
--- loudly (Telnyx rejects a `from` it does not own) and cannot match an inbound. Clear it
--- when convenient. Personal List, the list actually worked out of, has no number yet.
+-- NOTE: at the time of this migration Table Rock still held +18644775752 in sms_number, a
+-- dead Twilio number. Cleared immediately after by db/20260827_clear_stale_sms_number.sql,
+-- so no client has a number set — Personal List needs the new Telnyx one before anything
+-- can send.
 
 commit;
