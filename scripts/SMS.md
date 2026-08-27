@@ -51,7 +51,7 @@ Unlike Twilio, the **inbound webhook is configured on the profile, not on the nu
 - **Webhook URL**: `https://ykuenmwfxecmmqichwit.supabase.co/functions/v1/sms-inbound`
 - **Webhook API version**: **API v2** (v1 sends a different payload shape and `sms-inbound`
   will silently ignore every event)
-- Failover URL: leave blank
+- Failover URL: **leave blank** — see below
 
 ### 4. Register 10DLC — do this before sending anything
 
@@ -70,6 +70,31 @@ Campaign description — accurate, which is also what gets approved:
 
 Sample message must carry opt-out language. `sms-send` appends "Reply STOP to opt out." to
 the first message to any number, so quote a sample with it included.
+
+**The opt-in / "message flow" field is the one that trips people up.** The form assumes a
+subscription list, and this isn't one — there is no opt-in, and inventing one is both a lie
+and the thing that gets campaigns rejected on review. Describe what actually happens:
+
+> No subscription or opt-in list. Each message is an individual, manually composed outreach
+> to a property owner whose contact details come from public county property records. There
+> is no recurring messaging and no automated sending. Recipients may opt out at any time by
+> replying STOP, HELP is answered with contact details, and opt-outs are honored permanently
+> across all future messaging.
+
+Also expect fields for a **HELP reply** ("Reply STOP to opt out. Contact: <your name>,
+<phone>, <email>") and, on some forms, privacy policy and terms URLs.
+
+### Why failover URL stays blank
+
+Telnyx lets a Messaging Profile name a second webhook URL, tried when the primary fails.
+It's for redundancy across separate infrastructure — pointing it at the same Edge Function
+buys nothing, and there is no second endpoint to point it at.
+
+Reliability here comes from retries plus idempotency rather than a second address:
+`sms_record_inbound` inserts `ON CONFLICT (provider_sid) DO NOTHING`, and re-applying an
+opt-out is a no-op, so a retried delivery cannot double-log or corrupt anything. The function
+deliberately answers **403** on a bad signature (a forgery should not be retried) and **500**
+on a database failure (that one *should* be retried — it may carry a STOP).
 
 ### 5. Supabase secrets
 
@@ -102,8 +127,10 @@ signature before touching the database. Do not remove that check, and do not dep
 `sms-send` with `--no-verify-jwt`.
 
 Telnyx signs `${timestamp}|${rawBody}`, so nothing depends on the URL the platform proxy
-presents — there is no Twilio-style `SMS_WEBHOOK_URL` to get wrong. A 5-minute timestamp
-tolerance guards against replay.
+presents — there is no Twilio-style `SMS_WEBHOOK_URL` to get wrong. Timestamps older than
+24h are rejected; the window is deliberately loose because Telnyx re-sends the ORIGINAL
+signature on a retry, and a tight tolerance would drop legitimate retries — including a
+retried STOP. Replay is a no-op regardless (`ON CONFLICT (provider_sid) DO NOTHING`).
 
 ### 7. Set the sending number on the list
 
@@ -228,7 +255,7 @@ across the 850 split.
 | Telnyx rejects the `from` | Number isn't on the account or the profile — likely the stale TRP value. |
 | `Insufficient funds` / sends stop dead | Telnyx is prepaid. Top up and set a low-balance alert. |
 | Inbound 403 in the function logs | Signature failed. Check `TELNYX_PUBLIC_KEY` is the **public key**, not the API key. |
-| Inbound 403 only sometimes | Clock skew past the 5-minute replay tolerance, or a retry of a stale event. |
+| Inbound 403 only sometimes | Clock skew, or a retry of an event more than 24h old. |
 | Sends work, nothing is received | Webhook is set on the **Messaging Profile**, not the number. Confirm API **v2**. |
 | Webhooks arrive but nothing is logged | Profile is on webhook API v1 — the payload shape differs and every event is ignored. |
 | Messages queue then fail silently | Carrier filtering — check 10DLC campaign status. |

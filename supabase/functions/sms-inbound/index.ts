@@ -31,10 +31,18 @@ const b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 async function validSignature(raw: string, sig: string, ts: string) {
   if (!PUBLIC_KEY || !sig || !ts) return false;
 
-  // Replay guard: the signature stays valid forever otherwise, so a captured request could
-  // be replayed to re-open a thread or re-log a message.
+  // Replay guard, deliberately loose. This was 5 minutes and that was wrong: Telnyx retries
+  // a failed webhook over a long window and re-sends the ORIGINAL signature and timestamp,
+  // so a tight tolerance rejects legitimate retries. The failure mode is losing an inbound
+  // STOP because our own database blipped when it first arrived — the exact message that
+  // must never be dropped.
+  //
+  // Widening is safe because replay is already a no-op here, and that — not the clock — is
+  // the real protection: sms_record_inbound inserts ON CONFLICT (provider_sid) DO NOTHING,
+  // and re-applying an opt-out is idempotent and in the safe direction anyway. A replayed
+  // event can at worst re-stamp updated_at. The window only bounds unbounded replay.
   const age = Math.abs(Date.now() / 1000 - Number(ts));
-  if (!Number.isFinite(age) || age > 300) return false;
+  if (!Number.isFinite(age) || age > 86_400) return false;
 
   try {
     const key = await crypto.subtle.importKey(
