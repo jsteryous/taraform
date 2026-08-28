@@ -14,12 +14,14 @@ function unwrap({ data, error }) {
 export const getClients = async () =>
   unwrap(await supabase.from('clients').select('*').order('name', { ascending: true }));
 
-export const createClient = async ({ name, twilio_number }) =>
-  unwrap(await supabase.rpc('create_client', { p_name: name, p_twilio_number: twilio_number || null }));
+// sms_number was called twilio_number until 2026-08-27 (db/20260827_telnyx.sql). The
+// provider is Telnyx; the old name outlived the vendor by two migrations.
+export const createClient = async ({ name, sms_number }) =>
+  unwrap(await supabase.rpc('create_client', { p_name: name, p_sms_number: sms_number || null }));
 
 export const updateClient = async (id, body) => {
   const updates = {};
-  for (const key of ['name', 'twilio_number', 'config', 'custom_field_definitions']) {
+  for (const key of ['name', 'sms_number', 'config', 'custom_field_definitions']) {
     if (body[key] !== undefined) updates[key] = body[key];
   }
   return unwrap(await supabase.from('clients').update(updates).eq('id', id).select().single());

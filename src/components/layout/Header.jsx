@@ -6,6 +6,7 @@ import ManageClientsModal from '../modals/ManageClientsModal';
 import PhoneSyncModal from '../modals/PhoneSyncModal';
 import {
   Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut, Smartphone,
+  MessageSquare,
 } from 'lucide-react';
 
 function hasActiveFilters(f) {
@@ -13,8 +14,8 @@ function hasActiveFilters(f) {
   return !!(f.search || (f.statuses !== null) || (f.counties?.length) || f.phone || f.email || f.activity);
 }
 
-export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
-  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount } = useApp();
+export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive, onInbox }) {
+  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount, unread } = useApp();
   const filtered = hasActiveFilters(filters);
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
@@ -94,6 +95,17 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           </div>
           <div className="user-info">
             <span>{user?.email}</span>
+            {/* The only thing in the app that says a reply arrived. Without it an inbound
+                message is invisible until someone opens that contact's Messages tab. */}
+            <button
+              className="logout-btn inbox-btn"
+              onClick={onInbox}
+              title={unread ? `${unread} unread repl${unread === 1 ? 'y' : 'ies'}` : 'Inbox'}
+              aria-label={unread ? `Inbox, ${unread} unread` : 'Inbox'}
+            >
+              <MessageSquare size={14} />
+              {unread > 0 && <span className="inbox-badge">{unread > 99 ? '99+' : unread}</span>}
+            </button>
             <button className="logout-btn" onClick={() => setShowPhoneSync(true)} title="Caller ID on your phone">
               <Smartphone size={14} />
             </button>

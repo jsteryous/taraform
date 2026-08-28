@@ -47,7 +47,7 @@ export const LAND_CONFIG = {
       minAttempts: 7,
     },
   },
-  tabs: ['notes', 'offers'],
+  tabs: ['notes', 'offers', 'sms'],
   visibleFields: ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'propertyAddresses'],
   listColumns: ['name', 'phone', 'county', 'status'],
 };
