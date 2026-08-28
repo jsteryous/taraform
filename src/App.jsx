@@ -10,6 +10,7 @@ import ContactList from './components/contacts/ContactList';
 import ContactDetail from './components/contacts/ContactDetail';
 import AddContactModal from './components/modals/AddContactModal';
 import ImportModal from './components/modals/ImportModal';
+import InboxModal from './components/modals/InboxModal';
 import Dashboard from './components/Dashboard';
 import Toast from './components/shared/Toast';
 import ErrorBoundary from './components/shared/ErrorBoundary';
@@ -88,6 +89,7 @@ function CRM() {
   const [authReady, setAuthReady] = useState(false);
   const [showAdd, setShowAdd]     = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showInbox, setShowInbox]   = useState(false);
 
   useEffect(() => {
     // Apply saved theme
@@ -164,6 +166,10 @@ function CRM() {
             navigate(showDashboard ? '/' : '/dashboard');
           }}
           dashboardActive={showDashboard}
+          onInbox={() => {
+            if (!currentClientId) { showToast('Select a client first.'); return; }
+            setShowInbox(true);
+          }}
         />
         {showDashboard
           ? <Dashboard onClose={() => navigate('/')} onViewContact={async c => {
@@ -185,6 +191,15 @@ function CRM() {
       </div>
       <AddContactModal open={showAdd} onClose={() => setShowAdd(false)} />
       <ImportModal open={showImport} onClose={() => setShowImport(false)} />
+      <InboxModal
+        open={showInbox}
+        onClose={() => setShowInbox(false)}
+        onViewContact={async id => {
+          navigate('/contact/' + id);
+          const full = await loadFullContact(id);
+          if (full) setCurrentContact(full);
+        }}
+      />
       <Toast />
     </div>
   );

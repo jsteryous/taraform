@@ -26,6 +26,56 @@ export async function fetchThread(contactId) {
   return data ?? [];
 }
 
+// The inbox: every inbound message for a client, newest first. An RPC rather than a
+// PostgREST select because replies from numbers that match no contact carry contact_id
+// null, and no per-contact query can ever surface those — they were the messages most
+// likely to be lost, since nothing else in the app looks for them.
+export async function fetchInbox(clientId, limit = 100) {
+  const { data, error } = await supabase.rpc('sms_inbox', {
+    p_client_id: clientId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Drives the header badge.
+export async function unreadCount(clientId) {
+  const { data, error } = await supabase.rpc('sms_unread_count', { p_client_id: clientId });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+// Marking read is load-bearing, not cosmetic: sms_send_precheck() BLOCKS the next send to
+// a number with an unread reply, so this is what clears the block. Keyed on the number
+// rather than the row id — a number shared by four contacts should not stay unread on
+// three of them after the operator has read the conversation.
+export async function markThreadRead(phone) {
+  const { data, error } = await supabase.rpc('sms_mark_thread_read', { p_phone: phone });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export async function markRead(ids) {
+  if (!ids?.length) return 0;
+  const { data, error } = await supabase.rpc('sms_mark_read', { p_ids: ids });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+// Inbound messages we could not attribute to any client — the dead letter. Empty in normal
+// operation; a non-zero count means a number is receiving replies that no client owns,
+// which in practice means clients.sms_number is unset or stale.
+export async function fetchUnrouted(limit = 50) {
+  const { data, error } = await supabase
+    .from('sms_unrouted')
+    .select('id,from_number,to_number,body,was_stop,created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
 // Whether this number can be texted right now, and if not, why. Pinned to auth.uid() in
 // SQL — the contact id alone is not authority to text.
 export async function checkNumber(contactId, phone) {

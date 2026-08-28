@@ -59,11 +59,44 @@ card and kept the duplicates textable at the same number. Enforced in `sms_send_
 before contact matching so an unmatchable STOP still suppresses. Nothing in the app reverses
 it — not consent, not a later START (which unblocks at Twilio but not here).
 
-`sms_is_stop()` has two tiers, exact carrier keywords plus phrases, because people write
-"please stop texting me" and neither Twilio nor an exact matcher catches that. Tuned to
-over-match deliberately. It is still best-effort — the real backstop is that **every send is
-manual**, so a human reads the reply first. `sms_opt_out_number()` (Opt out button) covers
-anyone who asks by phone or email.
+`sms_is_stop()` has three tiers — exact carrier keywords, a trailing-"stop" tier, and
+phrases — because people write "please stop texting me" and neither Twilio nor an exact
+matcher catches that. Widened 2026-08-28: the old version missed **"please stop."** (tier 1
+is anchored, and the phrase tier demanded an object like "stop texting"), bare **"remove
+me"**, and **"wrong number"**, which is a stop request in every way that matters. Tuned to
+over-match deliberately, but *not* with a bare `stop` — "you can stop by the property"
+is a sentence this business really receives. A 35-case corpus, false positives included,
+sits commented at the foot of `db/20260828_sms_inbox.sql`; re-run it after any edit.
+
+**The regex is no longer the last line of defence.** `sms_send_precheck()` blocks on
+`unread_reply`: a number with an unread inbound message cannot be texted until a human opens
+the thread, which is what marks it read. That converts "we hope the matcher caught it" into
+"a person saw it" — the property 47 CFR 64.1200(d) actually cares about — and it is why the
+inbox below is a compliance component, not a convenience. `sms_opt_out_number()` (Opt out
+button, in the thread and in the inbox) covers anyone who asks by phone or email.
+
+**Every reply is visible in one place** (`db/20260828_sms_inbox.sql`). Until 2026-08-28 the
+per-contact Messages tab was the *only* reader of `sms_messages`, so a reply announced itself
+by nothing at all, and a reply from a number matching no contact (`contact_id` null) could
+not be surfaced by any per-contact query. `sms_inbox()` + the header badge fix both;
+`sms_unread_count()` is polled every 60s while the tab is visible, because inbound arrives by
+webhook with nothing to push it to the browser. Un-attributable inbound now dead-letters to
+`sms_unrouted` instead of being discarded — a non-empty table means `clients.sms_number` is
+unset or stale, which the inbox says in as many words.
+
+**HELP is answered automatically**, once per number per day, never after a STOP. CTIA
+Messaging Principles require it on a 10DLC campaign and Telnyx sends nothing on its own. The
+decision is made in `sms_record_inbound()` (so it obeys the same suppression rules as
+everything else) and only carried out in `sms-inbound`. Text is `clients.sms_help_text`,
+falling back to the client name. This is the one outbound path with `sent_by` null, which is
+also how the once-a-day guard recognises its own messages.
+
+**Recreating a SECURITY DEFINER function drops its REVOKEs.** `CREATE OR REPLACE` keeps
+grants; `DROP` + `CREATE` resets EXECUTE to PUBLIC. Changing `sms_record_inbound`'s return
+type on 2026-08-28 therefore made it briefly callable by `anon` — i.e. forgeable replies and
+forged STOPs from anyone holding the public bundle's key. Caught by re-checking
+`has_function_privilege` after the migration; **do that check every time**. Same family as
+the "a policy named for a role is not scoped to that role" lesson in Tier 1.
 
 **There is no automated sending and adding one is a decision, not a refactor.** No cron job
 touches SMS (`cron.job` holds only `phone-sync-nightly`), and `sms-send` requires a user JWT
@@ -121,15 +154,26 @@ Scoped guidance lives next to the code:
 - [x] **Stop synced leads from renaming personal contacts** — done 2026-08-06. The sync writes into the operator's **personal** Google account (the workflow comment claimed "a dedicated Google account"; it never was), so lead cards sit beside real contacts. Phones unify cards sharing a number — iOS links, Android aggregates — and the merged contact shows whichever name the OS picks, so a lead card renamed a real contact to "Nicholas Whitaker (Dead/Pass)" and swapped its photo. Five were shadowed. `withoutPersonalNumbers` (`src/lib/phoneSync.js`) now drops any lead whose number is already on a card the sync doesn't own: caller ID already worked for those, so the lead card added nothing but the collision. Self-healing — because `diffContacts` reconciles, dropping them from `desired` deletes the cards earlier runs created (verified live: 1327 → 1322, zero collisions, the 99 personal cards untouched). +6 tests. **Unrelated to this but worth knowing:** turning on Google Contacts sync on the phone also pulls down the operator's own pre-existing Google contacts, including 34 stale phone-less cards that then link to and shadow the real iCloud/device ones. That is not something the sync can fix — the cards predate it by years — and is the actual cause if a personal contact's name changes without a `taraform_id` on it.
 - [x] **Deep-link the synced phone contacts back into the app** — done 2026-08-04. `buildPerson` in `src/lib/phoneSync.js` now emits `urls: [{ value: contactUrl(id) }]`, added to `PERSON_FIELDS`, `UPDATE_MASK` and `personSignature` (the last one matters: without it the diff can't see the field, so contacts synced before the link existed would never gain one). Makes a synced contact tappable from the phone straight to its contact overlay — the closest free thing to a "call from X" popup, since no browser can see incoming call state. +3 tests.
 
-- [ ] **Finish wiring texting.** Built 2026-08-27 (`db/20260827_sms.sql` applied, `sms-send`
-  + `sms-inbound` written, Messages tab live, 179 tests green) but **inert until four
-  external things exist**: a Twilio account with a purchased number, an approved 10DLC brand
-  + campaign (~ once, ~/mo, a few days of review), the `TWILIO_*` Supabase secrets with
-  both functions deployed, and at least one DNC area code loaded via `scripts/load-dnc.mjs`.
-  Steps are in `scripts/SMS.md`. Until the DNC load happens **every send is blocked by
-  design** — that is the feature, not a bug. Also set `clients.sms_number` on Personal List;
-  no client has one since the stale Twilio value was cleared. Motivation: cold calling alone
-  was taking ~5,000 dials per deal, which is not reachable solo.
+- [ ] **Finish wiring texting.** All code is written and applied — `db/20260827_sms.sql`,
+  `db/20260827_sms_optout_hardening.sql`, `db/20260827_telnyx.sql` and
+  `db/20260828_sms_inbox.sql` are live on the database, Messages tab + inbox are built, 179
+  tests green. **Inert until four external things exist**, none of them code:
+  1. **Deploy the two Edge Functions.** Verified 2026-08-28: only `greenville-image`,
+     `google-contacts-connect` and `phone-sync-run` are ACTIVE. `sms-send` and `sms-inbound`
+     have *never been deployed*, so the webhook URL registered with Telnyx is a 404 and
+     **inbound STOP is not being received at all**. This is a compliance blocker, not a
+     feature gap. `sms-inbound` needs `--no-verify-jwt`; `sms-send` must not have it.
+  2. **Set the secrets**: `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY` (different keys — see
+     `scripts/SMS.md`). A wrong public key or a Messaging Profile left on webhook API **v1**
+     makes `sms-inbound` reject or ignore every event *silently*, which loses STOPs. The
+     cheapest proof is to text yourself, reply STOP, and confirm a row in `sms_opt_outs`.
+  3. **Set `clients.sms_number` on Personal List.** All four clients are still null.
+  4. **Load a DNC area code** (`scripts/load-dnc.mjs`, start with 864). `dnc_area_codes` and
+     `dnc_numbers` are both empty, so every send is blocked by design — the feature, not a
+     bug.
+  Also worth setting `clients.sms_help_text` per client; it falls back to the client name.
+  Motivation: cold calling alone was taking ~5,000 dials per deal, which is not reachable
+  solo.
 
 ### Good as-is (don't "fix") 
 Context data/UI split, `loadingRef` concurrency guard, ref-synced `setContacts`, O(1) import dedup, `useDraftSave` optimistic-save/revert, PostgREST error classification, and the CLAUDE.md docs themselves. Preserve these when refactoring.

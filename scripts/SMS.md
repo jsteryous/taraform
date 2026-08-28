@@ -1,8 +1,10 @@
 # Texting from the CRM — setup and runbook
 
-Manual, one-at-a-time texting from the contact overlay. No blasting, no cron. Built
-2026-08-27; `db/20260827_sms.sql` is applied, both Edge Functions are written but **not yet
-deployed**, and nothing can send until the steps below are done.
+Manual, one-at-a-time texting from the contact overlay, with an inbox for replies. No
+blasting, no cron. Built 2026-08-27, inbox + unread-gating added 2026-08-28. All migrations
+are applied; both Edge Functions are written but **still not deployed** (verified
+2026-08-28), so the webhook URL registered with Telnyx currently returns 404 and **no
+inbound STOP is reaching us**. Nothing can send until the steps below are done.
 
 Provider is **Telnyx** (switched from Twilio 2026-08-27). Cost at 20 texts/day is roughly
 **$7-10/month**: number ~$1, 10DLC ~$2, traffic ~$4. Railway stays dead — the webhook is an
@@ -20,11 +22,53 @@ area code; a silent failure would tell you nothing. Same precedent as
 `phone_sync_contacts_for()`.
 
 The checks, in order: membership → number is valid → number is actually on that contact →
-not in `bad_phones` → contact hasn't opted out → DNC clear or consent recorded → inside
-8am–9pm **recipient local** → under the daily cap.
+not in `bad_phones` → contact hasn't opted out → **no unread reply from that number** → DNC
+clear or consent recorded → inside 8am–9pm **recipient local** → under the daily cap.
 
 Everything **fails closed**. An unknown area code, a malformed number, or an unscrubbed
 area code all block.
+
+## The unread-reply block
+
+`sms_send_precheck()` refuses to text a number that has an inbound message nobody has read.
+Opening the thread marks it read (`sms_mark_thread_read`, keyed on the number so a reply
+reaches all contacts sharing it), which clears the block.
+
+This exists because STOP detection is a regex and a regex will always miss some way of
+saying "go away". Every send being manual was supposed to be the backstop — a human reads
+the reply first — but nothing in the app *made* that happen or even said a reply had
+arrived. Now the send is blocked until it does. Cost: one click. Benefit: an opt-out
+phrased in a way `sms_is_stop()` misses cannot be followed by another text.
+
+If the operator ever needs to bypass it, the honest way is to read the message. There is no
+override flag and that is deliberate.
+
+## Inbox
+
+Header icon, with a badge counting unread replies for the current client; polled every 60s
+while the tab is visible (inbound arrives by webhook, and nothing pushes it to the browser).
+Shows every inbound message, including:
+
+- **replies from numbers matching no contact** — these carry `contact_id` null and were
+  invisible to every per-contact query, which made them the most likely to be lost;
+- **un-attributable inbound** from `sms_unrouted`, the dead letter. Non-empty means the
+  message arrived on a number no client owns — in practice `clients.sms_number` is unset or
+  stale. Before 2026-08-28 these were silently discarded.
+
+Each row has an inline **Opt out**, so a reply that plainly means stop can be honoured
+without opening the contact.
+
+## HELP
+
+Answered automatically, once per number per 24h, and **never** to a number that has opted
+out. Required by CTIA Messaging Principles for a 10DLC campaign; Telnyx, unlike Twilio,
+sends nothing on its own. The decision is made in SQL (`sms_record_inbound`) so it obeys the
+same suppression rules as everything else — `sms-inbound` only carries it out, and a failure
+there is logged and swallowed rather than 500ing, since a retry would re-run the opt-out path.
+
+Text comes from `clients.sms_help_text`, falling back to `"<client name>: we buy land. Reply
+STOP to opt out."` Set it to something with a real contact name, phone and email — that is
+what the campaign registration promises.
 
 ---
 
@@ -100,7 +144,8 @@ on a database failure (that one *should* be retried — it may carry a STOP).
 
 Two different keys, easy to confuse:
 
-- **API key** — Portal → Account → Keys & Credentials → API Keys. Starts `KEY`. Used to send.
+- **API key** — Portal → Account → Keys & Credentials → API Keys. Starts `KEY`. Used to send,
+  and by `sms-inbound` for the HELP auto-reply.
 - **Public key** — same page, "Public Key". Base64 Ed25519. Used to verify webhooks.
 
 ```bash

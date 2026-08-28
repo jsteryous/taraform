@@ -11,6 +11,9 @@
 // Secrets required:
 //   TELNYX_PUBLIC_KEY — base64 Ed25519 public key from Portal → Account → Keys & Credentials
 //                       → Public Key. This is NOT the API key.
+//   TELNYX_API_KEY    — needed only for the HELP auto-reply below. CTIA Messaging
+//                       Principles require HELP to be answered on a 10DLC campaign and
+//                       Telnyx, unlike Twilio, sends nothing automatically.
 //
 // Telnyx signs with Ed25519 over `${timestamp}|${rawBody}`, where Twilio used HMAC-SHA1
 // over a URL plus sorted params. The upside is that nothing depends on the URL the platform
@@ -21,6 +24,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PUBLIC_KEY = Deno.env.get('TELNYX_PUBLIC_KEY') ?? '';
+const TELNYX_API_KEY = Deno.env.get('TELNYX_API_KEY') ?? '';
 
 // Telnyx retries on non-2xx, so a signature failure returns 403 (don't retry a forgery)
 // while a database failure returns 500 (do retry — we want that message).
@@ -108,12 +112,52 @@ Deno.serve(async (req) => {
   // an extra text to someone who just asked us to stop is the wrong instinct, and the
   // suppression is already recorded by the time we get here.
   const row = Array.isArray(data) ? data[0] : data;
+
+  // HELP. Whether to answer at all was decided in SQL (sms_record_inbound), which checks
+  // that this is a HELP, that the number has not opted out, and that we have not already
+  // auto-replied in the last 24h — the loop guard that matters when the peer is itself an
+  // autoresponder. This function only carries out the decision.
+  //
+  // A failure here is logged and swallowed: the inbound message is already recorded and an
+  // unanswered HELP must never cause a 500, which would make Telnyx retry the whole event
+  // and re-run the opt-out path.
+  if (row?.help_reply && row?.reply_from && TELNYX_API_KEY) {
+    try {
+      const sent = await fetch('https://api.telnyx.com/v2/messages', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TELNYX_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `+1${row.reply_from}`,
+          to: `+1${(p?.from?.phone_number ?? '').replace(/\D/g, '').slice(-10)}`,
+          text: row.help_reply,
+        }),
+      });
+      const body = await sent.json().catch(() => ({}));
+      if (!sent.ok) {
+        console.error('[sms-inbound] help reply failed', sent.status, JSON.stringify(body));
+      } else {
+        await db.rpc('sms_record_help_reply', {
+          p_peer: p?.from?.phone_number ?? '',
+          p_from: row.reply_from,
+          p_body: row.help_reply,
+          p_sid: body?.data?.id ?? null,
+        });
+      }
+    } catch (e) {
+      console.error('[sms-inbound] help reply threw', String(e));
+    }
+  }
+
   // contacts_stopped can exceed 1: shared numbers are common in this data, and every
   // contact holding the number is opted out, not just the matched one.
   console.log('[sms-inbound]', {
     contact: row?.contact_id ?? null,
     opted_out: row?.opted_out ?? false,
     contacts_stopped: row?.contacts_stopped ?? 0,
+    helped: !!row?.help_reply,
   });
   return ok();
 });

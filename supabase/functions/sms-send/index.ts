@@ -40,6 +40,7 @@ const REASONS: Record<string, string> = {
   dnc_listed: 'This number is on the National Do Not Call Registry.',
   dnc_unscrubbed: "This area code has not been DNC-scrubbed yet, so it can't be texted. Load it with scripts/load-dnc.mjs.",
   quiet_hours: "It is outside 8am-9pm in the recipient's local time.",
+  unread_reply: 'They replied and nobody has read it yet. Open the thread and read it before texting again.',
   daily_cap: 'You have hit the daily send cap for this list.',
 };
 

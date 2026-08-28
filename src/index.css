@@ -1601,3 +1601,59 @@ input::placeholder { color: var(--text-muted); }
     transition: color 0.15s, border-color 0.15s;
 }
 .sms-optout-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ── Inbox ──────────────────────────────────────────────────────────────────── */
+/* The header badge is the only signal in the app that a reply arrived; everything
+   below is the panel it opens. */
+.inbox-btn { position: relative; }
+.inbox-badge {
+    position: absolute; top: -5px; right: -5px;
+    min-width: 15px; height: 15px; padding: 0 3px;
+    border-radius: 8px; background: var(--danger); color: #fff;
+    font-family: var(--mono); font-size: var(--text-2xs); font-weight: 700;
+    line-height: 15px; text-align: center;
+}
+
+.inbox-row {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    padding: 0.65rem 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.inbox-row:last-child { border-bottom: none; }
+.inbox-row-main { flex: 1; min-width: 0; cursor: pointer; }
+.inbox-row-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.inbox-row-unread { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.inbox-row-dead { opacity: 0.85; }
+
+.inbox-row-top { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; }
+.inbox-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.inbox-name {
+    font-size: var(--text-sm); font-weight: 600; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.inbox-time { margin-left: auto; font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-muted); flex-shrink: 0; }
+.inbox-body {
+    font-size: var(--text-sm); color: var(--text-muted); line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.inbox-tag {
+    display: inline-flex; align-items: center; gap: 0.2rem;
+    padding: 0.1rem 0.35rem; border-radius: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+}
+.inbox-tag-stop { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #f87171; }
+
+/* Un-attributable replies. Non-empty means clients.sms_number is unset or stale, so the
+   banner says what to do rather than just flagging that something is odd. */
+.inbox-unrouted { margin-bottom: 1rem; }
+.inbox-unrouted-head {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+    border: 1px solid rgba(245,158,11,0.3); border-radius: 6px;
+    background: rgba(245,158,11,0.08);
+    font-size: var(--text-sm); color: var(--text); line-height: 1.45;
+}
+.inbox-unrouted-head svg { flex-shrink: 0; margin-top: 0.15rem; color: #fbbf24; }

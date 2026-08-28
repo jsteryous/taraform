@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Send, ShieldAlert, Clock, Ban, Loader2, UserX } from 'lucide-react';
+import { Send, ShieldAlert, Clock, Ban, Loader2, UserX, MessageSquare } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { fetchThread, checkNumber, sendSms, optOutNumber, segmentCount, DNC_LABELS } from '../../lib/sms';
+import { fetchThread, checkNumber, sendSms, optOutNumber, segmentCount, markThreadRead, DNC_LABELS } from '../../lib/sms';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 
@@ -12,6 +12,7 @@ import { useConfirm } from '../shared/ConfirmDialog';
 // is blocked before typing 300 characters into it, not to decide anything.
 
 const BLOCK_ICONS = {
+  unread_reply: MessageSquare,
   quiet_hours: Clock,
   opted_out: Ban,
   dnc_listed: ShieldAlert,
@@ -19,7 +20,7 @@ const BLOCK_ICONS = {
 };
 
 export default function SmsTab({ contact }) {
-  const { showToast } = useApp();
+  const { showToast, refreshUnread } = useApp();
   const [confirmOptOut, ConfirmUI] = useConfirm();
   const phones = contact.phones || [];
 
@@ -45,6 +46,18 @@ export default function SmsTab({ contact }) {
       setLoading(false);
     }
   }, [contact.id, showToast]);
+
+  // Opening the thread IS reading it, and reading it is what clears the send block —
+  // sms_send_precheck() refuses to text a number with an unread inbound message, so this
+  // is the release valve rather than a UI nicety. Keyed on the number, so a reply reaches
+  // every contact sharing it. Fire-and-forget: failing to mark read leaves the operator
+  // blocked, which is the safe direction.
+  useEffect(() => {
+    if (!phone) return;
+    markThreadRead(phone)
+      .then(n => { if (n > 0) refreshUnread(); })
+      .catch(() => {});
+  }, [phone, contact.id, thread.length, refreshUnread]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -189,6 +202,8 @@ function blockText(reason, phone) {
       return 'This number is on the National Do Not Call Registry. Only recorded consent or an existing business relationship allows a text.';
     case 'opted_out':
       return 'This contact opted out. That is permanent and cannot be undone here.';
+    case 'unread_reply':
+      return 'They replied and it has not been read yet. Scroll up and read it — that clears this block.';
     case 'quiet_hours':
       return "Outside 8am–9pm in the recipient's local time.";
     case 'daily_cap':

@@ -4,6 +4,7 @@ import {
   insertContact, upsertContact, deleteContactById, isNewerVersion,
 } from '../lib/contacts';
 import { hasActiveFilters } from '../lib/contactFilters';
+import { unreadCount } from '../lib/sms';
 import { classifyError } from '../lib/errors';
 
 // State + orchestration only. Every query lives in src/lib/contacts.js (contacts) or
@@ -25,6 +26,10 @@ export function AppProvider({ children }) {
   const [currentContact, setCurrentContact]   = useState(null);
   const [theme, setThemeState]                = useState(() => localStorage.getItem('taraform_theme') || 'dark');
   const [toast, setToast]                     = useState(null);
+  // Unread inbound SMS for the current client. Lives here rather than in the Inbox modal
+  // because the header badge is the only thing that tells the operator a reply arrived at
+  // all — a count that only loads when the inbox is already open would be useless.
+  const [unread, setUnread]                   = useState(0);
 
   // Paginated contact state
   const [contacts, setContacts]               = useState([]);
@@ -248,6 +253,29 @@ export function AppProvider({ children }) {
     setCurrentContact(prev => prev?.id === id ? null : prev);
   }, [_setContacts]);
 
+  // ── Unread replies ────────────────────────────────────────
+  const refreshUnread = useCallback(async () => {
+    if (!currentClientId) { setUnread(0); return; }
+    try {
+      setUnread(await unreadCount(currentClientId));
+    } catch {
+      // A failed count must not surface as an error: it is a badge, and the send block in
+      // sms_send_precheck() does not depend on it being right.
+    }
+  }, [currentClientId]);
+
+  // Poll while the tab is visible. Inbound arrives by webhook with nothing to push it to
+  // the browser, so a poll is the whole mechanism; 60s is well inside the response time of
+  // a channel where every reply is answered by hand. Piggybacks on focus for immediacy.
+  useEffect(() => {
+    refreshUnread();
+    if (!currentClientId) return undefined;
+    const tick = () => { if (document.visibilityState === 'visible') refreshUnread(); };
+    const id = setInterval(tick, 60_000);
+    window.addEventListener('focus', tick);
+    return () => { clearInterval(id); window.removeEventListener('focus', tick); };
+  }, [currentClientId, refreshUnread]);
+
   // ── Split context values ──────────────────────────────────
   // Data value: changes on contact/client/filter state — never on toast or theme.
   const dataValue = useMemo(() => ({
@@ -261,8 +289,9 @@ export function AppProvider({ children }) {
     currentContact, setCurrentContact,
     loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
     filters, setFilters,
+    unread, refreshUnread,
   }), [user, clientsList, currentClientId, currentClient, contacts, totalCount,
-      loadingContacts, currentContact, filters,
+      loadingContacts, currentContact, filters, unread, refreshUnread,
       loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
 
   // UI value: only changes on toast or theme — never on contact data.
