@@ -2,9 +2,11 @@
 
 Manual, one-at-a-time texting from the contact overlay, with an inbox for replies. No
 blasting, no cron. Built 2026-08-27, inbox + unread-gating added 2026-08-28. All migrations
-are applied; both Edge Functions are written but **still not deployed** (verified
-2026-08-28), so the webhook URL registered with Telnyx currently returns 404 and **no
-inbound STOP is reaching us**. Nothing can send until the steps below are done.
+are applied and **both Edge Functions are deployed** (2026-08-28, v1 — `sms-inbound` with
+`verify_jwt: false`, `sms-send` with `verify_jwt: true`). The remaining blocker is secrets:
+`TELNYX_PUBLIC_KEY` is unset, so `sms-inbound` fails every signature check and answers 403
+to real Telnyx events — **inbound STOP is still not reaching us**. Nothing can send until
+the steps below are done.
 
 Provider is **Telnyx** (switched from Twilio 2026-08-27). Cost at 20 texts/day is roughly
 **$7-10/month**: number ~$1, 10DLC ~$2, traffic ~$4. Railway stays dead — the webhook is an

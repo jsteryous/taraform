@@ -158,15 +158,21 @@ Scoped guidance lives next to the code:
   `db/20260827_sms_optout_hardening.sql`, `db/20260827_telnyx.sql` and
   `db/20260828_sms_inbox.sql` are live on the database, Messages tab + inbox are built, 179
   tests green. **Inert until four external things exist**, none of them code:
-  1. **Deploy the two Edge Functions.** Verified 2026-08-28: only `greenville-image`,
-     `google-contacts-connect` and `phone-sync-run` are ACTIVE. `sms-send` and `sms-inbound`
-     have *never been deployed*, so the webhook URL registered with Telnyx is a 404 and
-     **inbound STOP is not being received at all**. This is a compliance blocker, not a
-     feature gap. `sms-inbound` needs `--no-verify-jwt`; `sms-send` must not have it.
-  2. **Set the secrets**: `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY` (different keys — see
-     `scripts/SMS.md`). A wrong public key or a Messaging Profile left on webhook API **v1**
-     makes `sms-inbound` reject or ignore every event *silently*, which loses STOPs. The
-     cheapest proof is to text yourself, reply STOP, and confirm a row in `sms_opt_outs`.
+  1. ~~Deploy the two Edge Functions.~~ **Done 2026-08-28.** Both ACTIVE at v1:
+     `sms-inbound` with `verify_jwt: false` (it is now genuinely the only publicly reachable
+     function in the project), `sms-send` with `verify_jwt: true`. Probed live afterwards:
+     unsigned POST → 403, forged signature → 403, GET → 405, `sms-send` without a JWT → 401,
+     and **zero rows written** by the forgery attempts. The signature check is load-bearing
+     and it holds.
+  2. **Set the secrets** — `TELNYX_API_KEY` and `TELNYX_PUBLIC_KEY` (different keys, see
+     `scripts/SMS.md`). **Neither is set**, confirmed 2026-08-28 by probing `sms-send`, which
+     answers 503 "Texting is not configured". The consequence is the one that matters:
+     without `TELNYX_PUBLIC_KEY` every webhook fails the signature check, so `sms-inbound`
+     returns 403 to *real* Telnyx events and **inbound STOP is still not being received**.
+     Deployed-but-keyless is fail-closed, not finished. Easiest route is the dashboard
+     (Project Settings → Edge Functions → Secrets), no PAT needed. A Messaging Profile left
+     on webhook API **v1** fails the same way and just as silently. The cheapest proof either
+     way is to text yourself, reply STOP, and confirm a row in `sms_opt_outs`.
   3. **Set `clients.sms_number` on Personal List.** All four clients are still null.
   4. **Load a DNC area code** (`scripts/load-dnc.mjs`, start with 864). `dnc_area_codes` and
      `dnc_numbers` are both empty, so every send is blocked by design — the feature, not a
