@@ -10,12 +10,26 @@ function unwrap({ data, error }) {
   return data;
 }
 
-// Clients — RLS limits rows to clients the caller is a member of
-export const getClients = async () =>
-  unwrap(await supabase.from('clients').select('*').order('name', { ascending: true }));
-
-export const createClient = async ({ name }) =>
-  unwrap(await supabase.rpc('create_client', { p_name: name }));
+// Workspaces ("clients" in the schema) — RLS limits rows to the ones the caller is a member
+// of. Each comes back with the caller's own `role` in it ('owner' | 'member'), read from
+// their membership rows, so the UI can offer settings only to someone who may save them.
+// The role here is for presentation; what an owner can do that a member cannot is enforced
+// by the policies on `clients` (db/20261113_no_self_serve_workspaces.sql).
+//
+// There is deliberately no createClient. Workspaces are not self-serve: a new one is made
+// by hand in SQL (snippet in that migration), because signup is open to the internet and
+// the app is one team's shared CRM, not a product strangers can start their own space in.
+export const getClients = async () => {
+  const [clients, memberships] = await Promise.all([
+    supabase.from('clients').select('*').order('name', { ascending: true }),
+    supabase.from('client_users').select('client_id, role'),
+  ]);
+  const rows = unwrap(clients);
+  // A failed role lookup must not hide the workspaces themselves; it only withholds the
+  // owner controls, which is the safe direction to be wrong in.
+  const roles = new Map((memberships.error ? [] : memberships.data || []).map(m => [m.client_id, m.role]));
+  return rows.map(c => ({ ...c, role: roles.get(c.id) || 'member' }));
+};
 
 export const updateClient = async (id, body) => {
   const updates = {};

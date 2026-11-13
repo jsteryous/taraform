@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
-import { createClient, updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser, getClientDataCounts } from '../../lib/api';
+import { updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser, getClientDataCounts } from '../../lib/api';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
 import { parseCustomFieldDefs } from '../../lib/utils';
@@ -17,7 +17,6 @@ const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generi
 export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   const { clientsList, setClientsList, showToast } = useApp();
   const [confirm, confirmDialog]  = useConfirm();
-  const [newName, setNewName]     = useState('');
   const [activeEditor, setActiveEditor] = useState(null);
   const [editorTab, setEditorTab] = useState('settings');
 
@@ -26,14 +25,6 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
     setClientsList(clients);
     onClientsChange?.(clients);
     return clients;
-  }
-
-  async function handleCreate() {
-    if (!newName.trim()) return;
-    await createClient({ name: newName.trim() });
-    setNewName('');
-    await refresh();
-    showToast('Client created');
   }
 
   // Deleting a client cascades to every contact and offer under it, and there
@@ -85,6 +76,10 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
     }
   }
 
+  // Only workspaces this person owns: the settings, members and delete below are all
+  // owner-only in RLS, so listing the rest would offer controls that get refused.
+  const owned = clientsList.filter(c => c.role === 'owner');
+
   function handleToggleEditor(clientId) {
     if (activeEditor === clientId) {
       setActiveEditor(null);
@@ -95,11 +90,11 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Manage Clients" width="740px">
-      <div style={{ marginBottom: '1.5rem' }}>
-        {clientsList.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No clients yet.</p>
-        ) : clientsList.map(c => (
+    <Modal open={open} onClose={onClose} title="Workspace settings" width="740px">
+      <div>
+        {owned.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>You don’t own a workspace.</p>
+        ) : owned.map(c => (
           <div key={c.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '0.5rem', alignItems: 'center' }}>
               <div>
@@ -123,16 +118,6 @@ export default function ManageClientsModal({ open, onClose, onClientsChange }) {
         ))}
       </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
-        <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>Add New Client</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label>Business Name *</label>
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Rosso Restaurant" />
-          </div>
-        </div>
-        <button className="btn-primary" onClick={handleCreate}>+ Add Client</button>
-      </div>
       {confirmDialog}
     </Modal>
   );

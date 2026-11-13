@@ -22,6 +22,7 @@ export default function ContactList({ onView, onExport }) {
   const {
     contacts, totalCount, loadingContacts,
     currentClientId, currentClient,
+    user, clientsList, clientsLoaded,
     deleteContact, showToast,
     loadContacts, loadMoreContacts,
     filters, setFilters,
@@ -230,11 +231,23 @@ export default function ContactList({ onView, onExport }) {
 
   const filterBtnClass = (active) => `filter-btn${active ? ' active' : ''}`;
 
+  // Signed in but a member of nothing. Workspaces are not self-serve, so the only way in is
+  // for an owner to add this email — say so, and say which email.
+  if (clientsLoaded && clientsList.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon"><Building2 size={40} /></div>
+        <h3>You’re not in a workspace yet</h3>
+        <p>Ask the person who runs your team’s Taraform to add <strong>{user?.email}</strong>, then reload this page.</p>
+      </div>
+    );
+  }
+
   if (!currentClientId) {
     return (
       <div className="empty-state">
         <div className="empty-icon"><Building2 size={40} /></div>
-        <p>Select a client above to get started</p>
+        <p>Select a workspace above to get started</p>
       </div>
     );
   }

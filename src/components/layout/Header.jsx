@@ -14,7 +14,7 @@ function hasActiveFilters(f) {
 }
 
 export default function Header({ onAddContact, onImport, onExport, onDashboard, dashboardActive }) {
-  const { user, clientsList, setClientsList, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount } = useApp();
+  const { user, clientsList, setClientsList, setClientsLoaded, currentClientId, setCurrentClientId, currentClient, theme, setTheme, loadContacts, showToast, filters, totalCount } = useApp();
   const filtered = hasActiveFilters(filters);
   const [clientDropOpen, setClientDropOpen] = useState(false);
   const [themeOpen, setThemeOpen]         = useState(false);
@@ -36,8 +36,8 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   useEffect(() => {
     getClients().then(clients => {
       setClientsList(clients);
+      setClientsLoaded(true);
       selectIfOnlyOne(clients);
-      if (clients.length === 0) setShowClients(true);
     }).catch(() => showToast('Failed to load clients — check your connection'));
   }, []); // eslint-disable-line
 
@@ -103,7 +103,11 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                 )}
               </div>
               )}
-              <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Manage clients"><Settings size={14} /></button>
+              {/* Settings and members are the owner's to change (enforced by RLS), so only
+                  an owner is offered the way in. */}
+              {clientsList.some(c => c.role === 'owner') && (
+                <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Workspace settings"><Settings size={14} /></button>
+              )}
             </div>
           </div>
           <div className="user-info">

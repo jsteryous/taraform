@@ -21,6 +21,9 @@ export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: 
 export function AppProvider({ children }) {
   const [user, setUser]                       = useState(null);
   const [clientsList, setClientsList]         = useState([]);
+  // False until the first workspace fetch returns, so "you are in no workspace" can be
+  // told apart from "we have not asked yet".
+  const [clientsLoaded, setClientsLoaded]     = useState(false);
   const [currentClientId, setCurrentClientId] = useState(null);
   const [currentContact, setCurrentContact]   = useState(null);
   const [theme, setThemeState]                = useState(() => localStorage.getItem('taraform_theme') || 'dark');
@@ -253,6 +256,7 @@ export function AppProvider({ children }) {
   const dataValue = useMemo(() => ({
     user, setUser,
     clientsList, setClientsList,
+    clientsLoaded, setClientsLoaded,
     currentClientId, setCurrentClientId,
     currentClient,
     contacts, setContacts: _setContacts,
@@ -261,7 +265,7 @@ export function AppProvider({ children }) {
     currentContact, setCurrentContact,
     loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
     filters, setFilters,
-  }), [user, clientsList, currentClientId, currentClient, contacts, totalCount,
+  }), [user, clientsList, clientsLoaded, currentClientId, currentClient, contacts, totalCount,
       loadingContacts, currentContact, filters,
       loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
 
