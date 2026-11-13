@@ -1,6 +1,8 @@
 # Taraform Frontend
 
-Multi-tenant CRM for land acquisition. Supabase direct DB (anon key + RLS, no backend server), deployed to GitHub Pages (taraform.org) via CI on push to `main`. Primary client: Table Rock Partners (UUID: `f3a69c31-8e40-4ea0-865a-d8bd9214376d`).
+Multi-tenant CRM for land acquisition. Supabase direct DB (anon key + RLS, no backend server), deployed to GitHub Pages (taraform.org) via CI on push to `main`.
+
+**Two workspaces exist as of 2026-11-13:** Personal List (`df98b2a7-741b-48bf-9715-53b897b7cfa7`, the land pipeline, private to the operator) and Bank (`132e2940-3b67-417b-9326-4f6af3a23314`, the `banking` preset — a shared relationship book, see `PLAN.md`). Table Rock Partners, TRP and REBB were deleted that day; older entries below that name them are history, not current state. This repo is public: never write the bank's real name, its email domain or customer details here.
 
 > **2026-06-10 — Railway decommissioned.** The Express server (`taraform-server-production.up.railway.app`, repo jsteryous/taraform-server) and its features (Twilio SMS, email automation/OAuth, Reoon verification) were removed to get hosting cost to $0. All data access is now direct-to-Supabase: clients/members via the RLS policies + SECURITY DEFINER RPCs in `db/20260610_clients_rls.sql`, offers/contacts via membership-gated table policies. Those tables were later **dropped** — `email_messages` and `sms_settings` are gone (verified 2026-08-27). Texting came back briefly as a Supabase-only build and was removed again 2026-11-13 — see **Texting** below. Do not add features that require an always-on server without flagging the cost.
 

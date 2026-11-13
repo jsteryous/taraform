@@ -148,8 +148,9 @@ comes back:
 
 ## Order of work
 
-0. **Clean up.** Export, then delete Table Rock Partners, TRP and REBB. Side effect: the next
-   nightly phone sync removes those leads' cards from your Google contacts.
+0. **Clean up.** Done 2026-11-13: Table Rock Partners, TRP and REBB are deleted. TRP and REBB
+   were exported first, to a folder outside this repo. Side effect: the next nightly phone
+   sync removes those leads' cards from your Google contacts.
 1. **Remove texting.** Done 2026-11-13, app and database. Left over: the two deployed Edge
    Functions still need deleting (dashboard, or the CLI with an access token).
 2. **Backup.**
@@ -158,8 +159,8 @@ comes back:
    (all 2026-11-13). Done, apart from dropping the old `activity_log` column once a backup exists.
 4. **Companies, people, the banking preset (with the follow-up switch), and the bank workspace.**
    Built 2026-11-13 on branch `feat/companies`; the database side is applied. A company is
-   a contact of a second kind, linked to people. Still to do: deploy, then create the bank
-   workspace by hand.
+   a contact of a second kind, linked to people. Deployed, and the bank workspace exists
+   (2026-11-13).
 5. The duplicate check and display names. (The company page shipped with step 4; "last
    contact" in search was dropped.)
 6. **Add teammates by hand.** Nothing to build.
