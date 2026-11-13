@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Modal from '../shared/Modal';
+import Select from '../shared/Select';
 import { useApp } from '../../context/AppContext';
-import { normalizeCounty, parseCustomFieldDefs } from '../../lib/utils';
+import { normalizeCounty } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import { fetchDuplicateCandidates } from '../../lib/contacts';
 import { addNote } from '../../lib/notes';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Building2, Plus, User, X } from 'lucide-react';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
+const FORM_ID = 'add-contact-form';
 
 function findDuplicates(contact, existing) {
   return existing.filter(c => {
@@ -31,29 +33,73 @@ function findDuplicates(contact, existing) {
   });
 }
 
+function defaultForm(statuses) {
+  return { kind: 'person', firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'' };
+}
+
+// A field that holds a list (phones, addresses, parcel ids): one input per value, a remove
+// button once there is more than one, and a quiet "add another" underneath.
+function MultiField({ label, values, onChange, onAdd, onRemove, addLabel, ...inputProps }) {
+  return (
+    <div className="add-field">
+      <label className="add-label">{label}</label>
+      {values.map((v, i) => (
+        <div className="multi-row" key={i}>
+          <input className="add-input" value={v} onChange={e => onChange(i, e.target.value)}
+            aria-label={`${label} ${i + 1}`} autoFocus={i > 0} {...inputProps} />
+          {values.length > 1 && (
+            <button type="button" className="multi-remove" onClick={() => onRemove(i)} aria-label={`Remove ${label} ${i + 1}`}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+      <button type="button" className="add-more" onClick={onAdd}><Plus size={13} /> {addLabel}</button>
+    </div>
+  );
+}
+
 export default function AddContactModal({ open, onClose }) {
   const { saveContact, setContacts, currentClientId, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
   const term = cfg.terminology?.contact || 'Contact';
-  const fieldDefs = parseCustomFieldDefs(currentClient?.custom_field_definitions);
 
-  const [form, setForm] = useState(defaultForm(statuses));
-  const [dupeWarning, setDupeWarning] = useState(null);
+  const [form, setForm] = useState(() => defaultForm(statuses));
+  const [dupes, setDupes] = useState(null);
+  const [nameError, setNameError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const dupeRef = useRef(null);
 
-  function defaultForm(sts) {
-    return { kind: 'person', firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: sts?.[0] || 'New Lead', notes:'' };
+  // A different workspace has different statuses; a status carried over from the last one
+  // would save a value that workspace has no pill for.
+  useEffect(() => {
+    setForm(f => (statuses.includes(f.status) ? f : { ...f, status: statuses[0] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentClientId]);
+
+  useEffect(() => {
+    if (dupes) dupeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [dupes]);
+
+  const isCompany = !!cfg.companies && form.kind === 'company';
+  const has = f => visibleFields.includes(f);
+  const hasProperty = has('ownerAddress') || has('propertyAddresses') || has('taxMapIds');
+
+  // Any edit invalidates the duplicate warning: it described the form as it was.
+  function edit(fn) {
+    setForm(fn);
+    setDupes(null);
+    setNameError('');
   }
+  const update = (field, val) => edit(f => ({ ...f, [field]: val }));
+  const updateArr = (field, i, val) => edit(f => { const a = [...f[field]]; a[i] = val; return { ...f, [field]: a }; });
+  const addArr = field => setForm(f => ({ ...f, [field]: [...f[field], ''] }));
+  const removeArr = (field, i) => edit(f => ({ ...f, [field]: f[field].filter((_, j) => j !== i) }));
 
-  async function handleSave(e) {
-    e.preventDefault();
-    const isCompany = cfg.companies && form.kind === 'company';
-    if (!form.firstName.trim() && (isCompany || !form.lastName.trim())) {
-      showToast(isCompany ? 'Please enter the company name.' : 'Please enter at least a first or last name.');
-      return;
-    }
-    const contact = {
+  function buildContact() {
+    return {
       kind: isCompany ? 'company' : 'person',
       // No id — the DB assigns it via property_crm_contacts_id_seq. saveContact
       // inserts new (id-less) contacts and reads the generated id back.
@@ -62,34 +108,47 @@ export default function AddContactModal({ open, onClose }) {
       phones: form.phones.map(p => p.trim()).filter(Boolean),
       county: normalizeCounty(form.county),
       ownerAddress: form.ownerAddress.trim(),
-      propertyAddresses: form.propertyAddresses.filter(Boolean),
-      taxMapIds: form.taxMapIds.filter(Boolean),
+      propertyAddresses: form.propertyAddresses.map(a => a.trim()).filter(Boolean),
+      taxMapIds: form.taxMapIds.map(t => t.trim()).filter(Boolean),
       status: form.status,
       notes: form.notes.trim(),
       customFields: {},
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+  }
 
-    // Ask the DB for rows that could collide, then apply the precise rules below. The
-    // old code scanned AppContext's `contacts`, which is one page of the list — so the
-    // warning only ever saw ~50 contacts, and never matched on address at all (that
-    // column isn't in LIST_FIELDS). A failed lookup must not block the save.
-    let dupes = [];
-    try {
-      dupes = findDuplicates(contact, await fetchDuplicateCandidates(currentClientId, contact));
-    } catch (err) {
-      console.error('Duplicate check failed:', err);
-    }
-    if (dupes.length > 0 && !dupeWarning) {
-      setDupeWarning({ contact, dupes });
+  async function submit(e) {
+    e?.preventDefault();
+    if (saving) return;
+    if (!form.firstName.trim() && (isCompany || !form.lastName.trim())) {
+      setNameError(isCompany ? 'Enter the company name.' : 'Enter a first or last name.');
       return;
     }
-
-    await createWithNote(contact);
-    setForm(defaultForm());
-    setDupeWarning(null);
-    onClose();
+    const contact = buildContact();
+    setSaving(true);
+    try {
+      // `dupes` already set means the warning is on screen and this is "save anyway".
+      if (!dupes) {
+        // Ask the DB for rows that could collide, then apply the precise rules above.
+        // AppContext's `contacts` is one page of the list, not the corpus. A failed
+        // lookup must not block the save.
+        let found = [];
+        try {
+          found = findDuplicates(contact, await fetchDuplicateCandidates(currentClientId, contact));
+        } catch (err) {
+          console.error('Duplicate check failed:', err);
+        }
+        if (found.length > 0) { setDupes(found); return; }
+      }
+      // A failed save keeps the modal open with everything still typed in.
+      if (!(await createWithNote(contact))) return;
+      setForm(defaultForm(statuses));
+      setDupes(null);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
 
   // The note typed on the form becomes the contact's first note. It has to follow the
@@ -98,7 +157,7 @@ export default function AddContactModal({ open, onClose }) {
   async function createWithNote(contact) {
     const saved = await saveContact(contact);
     const text = (contact.notes || '').trim();
-    if (!saved || !text) return;
+    if (!saved || !text) return saved;
     try {
       const note = await addNote(saved.id, text);
       setContacts(prev => prev.map(c => (c.id === saved.id ? { ...c, noteCount: 1, lastNoteAt: note.createdAt } : c)));
@@ -106,120 +165,113 @@ export default function AddContactModal({ open, onClose }) {
       console.error('First note failed:', err);
       showToast('Contact saved, but the note was not — add it from the contact.', 'warning');
     }
+    return saved;
   }
 
-  async function confirmSaveDespiteDupe() {
-    if (!dupeWarning) return;
-    await createWithNote(dupeWarning.contact);
-    setForm(defaultForm());
-    setDupeWarning(null);
+  function close() {
+    setDupes(null);
+    setNameError('');
     onClose();
   }
 
-  function update(field, val) { setForm(f => ({ ...f, [field]: val })); }
-  function updateArr(field, i, val) { setForm(f => { const a = [...f[field]]; a[i] = val; return { ...f, [field]: a }; }); }
-  function addArr(field) { setForm(f => ({ ...f, [field]: [...f[field], ''] })); }
-
   return (
-    <Modal open={open} onClose={() => { setDupeWarning(null); onClose(); }} title={`Add ${term}`} width="600px"
+    <Modal open={open} onClose={close} title={`Add ${term}`} width="520px"
       footer={
-        dupeWarning ? (
-          <><button onClick={() => setDupeWarning(null)}>← Edit</button><button className="btn-primary" onClick={confirmSaveDespiteDupe}>Save Anyway</button></>
-        ) : (
-          <><button onClick={onClose}>Cancel</button><button className="btn-primary" onClick={handleSave}>Save Contact</button></>
-        )
+        <>
+          <button type="button" onClick={close}>Cancel</button>
+          <button type="submit" form={FORM_ID} className="btn-primary" disabled={saving}>
+            {saving ? 'Saving…' : dupes ? 'Save Anyway' : `Save ${term}`}
+          </button>
+        </>
       }>
+      <form id={FORM_ID} className="add-form" onSubmit={submit} noValidate>
+        {dupes && (
+          <div className="dupe-banner" ref={dupeRef} role="alert">
+            <div className="dupe-title"><AlertTriangle size={14} /> This may already exist</div>
+            {dupes.map(d => (
+              <div key={d.id} className="dupe-item">
+                <strong>{d.firstName} {d.lastName}</strong>
+                {d.county && <span className="dupe-meta">{d.county}</span>}
+                {d.taxMapIds?.[0] && <span className="dupe-meta dupe-mono">{d.taxMapIds[0]}</span>}
+              </div>
+            ))}
+            <div className="dupe-sub">Edit the details below, or save anyway to keep both.</div>
+          </div>
+        )}
 
-      {/* Duplicate warning */}
-      {dupeWarning && (
-        <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: 'var(--warning)', marginBottom: '0.5rem' }}><AlertTriangle size={14} /> Possible duplicate detected</div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>This contact may already exist:</div>
-          {dupeWarning.dupes.map(d => (
-            <div key={d.id} style={{ fontSize: '0.875rem', padding: '0.4rem 0.6rem', background: 'var(--surface)', borderRadius: '5px', marginBottom: '0.35rem' }}>
-              <strong>{d.firstName} {d.lastName}</strong>
-              {d.county && <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>{d.county}</span>}
-              {d.taxMapIds?.[0] && <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--mono)', fontSize: '0.8rem' }}>{d.taxMapIds[0]}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-      {cfg.companies && (
-        <div className="seg-toggle" style={{ marginBottom: '1rem' }}>
-          <button type="button" className={`seg-btn${form.kind !== 'company' ? ' active' : ''}`} onClick={() => update('kind', 'person')}>Person</button>
-          <button type="button" className={`seg-btn${form.kind === 'company' ? ' active' : ''}`} onClick={() => update('kind', 'company')}>Company</button>
-        </div>
-      )}
-      <div className="form-grid">
-        {cfg.companies && form.kind === 'company' ? (
-          <div className="form-group full-width">
-            <label>Company Name</label>
-            <input value={form.firstName} onChange={e => update('firstName', e.target.value)} placeholder="e.g. Acme Holdings LLC" />
+        {cfg.companies && (
+          <div className="kind-toggle" role="tablist" aria-label="Contact type">
+            <button type="button" role="tab" aria-selected={!isCompany} className={`kind-btn${!isCompany ? ' active' : ''}`} onClick={() => update('kind', 'person')}>
+              <User size={14} /> Person
+            </button>
+            <button type="button" role="tab" aria-selected={isCompany} className={`kind-btn${isCompany ? ' active' : ''}`} onClick={() => update('kind', 'company')}>
+              <Building2 size={14} /> Company
+            </button>
+          </div>
+        )}
+
+        {isCompany ? (
+          <div className="add-field">
+            <label className="add-label" htmlFor="add-company">Company name</label>
+            <input id="add-company" data-autofocus className={`add-input${nameError ? ' invalid' : ''}`} value={form.firstName}
+              onChange={e => update('firstName', e.target.value)} placeholder="Acme Holdings LLC" autoComplete="off" />
           </div>
         ) : (
-          <>
-            <div className="form-group">
-              <label>First Name</label>
-              <input value={form.firstName} onChange={e => update('firstName', e.target.value)} />
+          <div className="add-field-row">
+            <div className="add-field">
+              <label className="add-label" htmlFor="add-first">First name</label>
+              <input id="add-first" data-autofocus className={`add-input${nameError ? ' invalid' : ''}`} value={form.firstName}
+                onChange={e => update('firstName', e.target.value)} autoComplete="off" />
             </div>
-            <div className="form-group">
-              <label>Last Name</label>
-              <input value={form.lastName} onChange={e => update('lastName', e.target.value)} />
+            <div className="add-field">
+              <label className="add-label" htmlFor="add-last">Last name</label>
+              <input id="add-last" className={`add-input${nameError ? ' invalid' : ''}`} value={form.lastName}
+                onChange={e => update('lastName', e.target.value)} autoComplete="off" />
             </div>
-          </>
+          </div>
         )}
-        <div className="form-group full-width">
-          <label>Phone Numbers</label>
-          {form.phones.map((p, i) => (
-            <input key={i} type="tel" value={p} onChange={e => updateArr('phones', i, e.target.value)}
-              placeholder="(864) 555-1234" style={{ marginBottom: '0.5rem' }} />
-          ))}
-          <button className="btn-small" onClick={() => addArr('phones')}>+ Add Phone</button>
+        {nameError && <div className="add-error" role="alert">{nameError}</div>}
+
+        <MultiField label="Phone" values={form.phones} addLabel="Add phone"
+          type="tel" inputMode="tel" placeholder="(864) 555-1234" autoComplete="off"
+          onChange={(i, v) => updateArr('phones', i, v)} onAdd={() => addArr('phones')} onRemove={i => removeArr('phones', i)} />
+
+        <div className="add-field-row">
+          <div className="add-field">
+            <label className="add-label">Status</label>
+            <Select value={form.status} onChange={v => update('status', v)} options={statuses} emptyLabel={null} />
+          </div>
+          {has('county') && (
+            <div className="add-field">
+              <label className="add-label">County</label>
+              <Select value={form.county} onChange={v => update('county', v)} options={COUNTIES} emptyLabel="Select county" />
+            </div>
+          )}
         </div>
-        <div className="form-group">
-          <label>Status</label>
-          <select value={form.status} onChange={e => update('status', e.target.value)}>
-            {statuses.map(s => <option key={s}>{s}</option>)}
-          </select>
+
+        {hasProperty && <div className="add-section">Property</div>}
+        {has('ownerAddress') && (
+          <div className="add-field">
+            <label className="add-label" htmlFor="add-owner-address">Owner address</label>
+            <input id="add-owner-address" className="add-input" value={form.ownerAddress}
+              onChange={e => update('ownerAddress', e.target.value)} placeholder="Mailing address" autoComplete="off" />
+          </div>
+        )}
+        {has('propertyAddresses') && (
+          <MultiField label="Property address" values={form.propertyAddresses} addLabel="Add address" autoComplete="off"
+            onChange={(i, v) => updateArr('propertyAddresses', i, v)} onAdd={() => addArr('propertyAddresses')} onRemove={i => removeArr('propertyAddresses', i)} />
+        )}
+        {has('taxMapIds') && (
+          <MultiField label="Tax map ID" values={form.taxMapIds} addLabel="Add tax map ID" autoComplete="off"
+            onChange={(i, v) => updateArr('taxMapIds', i, v)} onAdd={() => addArr('taxMapIds')} onRemove={i => removeArr('taxMapIds', i)} />
+        )}
+
+        <div className="add-field">
+          <label className="add-label" htmlFor="add-notes">Note <span className="add-optional">optional</span></label>
+          <textarea id="add-notes" className="add-input" value={form.notes} onChange={e => update('notes', e.target.value)}
+            rows={3} placeholder="Saved as the first note" />
         </div>
-        {visibleFields.includes('county') && (
-          <div className="form-group">
-            <label>County</label>
-            <select value={form.county} onChange={e => update('county', e.target.value)}>
-              <option value="">-- Select county --</option>
-              {COUNTIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-        )}
-        {visibleFields.includes('ownerAddress') && (
-          <div className="form-group full-width">
-            <label>Owner Address</label>
-            <input value={form.ownerAddress} onChange={e => update('ownerAddress', e.target.value)} />
-          </div>
-        )}
-        {visibleFields.includes('propertyAddresses') && (
-          <div className="form-group full-width">
-            <label>Property Addresses</label>
-            {form.propertyAddresses.map((a, i) => (
-              <input key={i} value={a} onChange={e => updateArr('propertyAddresses', i, e.target.value)} style={{ marginBottom: '0.5rem' }} />
-            ))}
-            <button className="btn-small" onClick={() => addArr('propertyAddresses')}>+ Add Address</button>
-          </div>
-        )}
-        {visibleFields.includes('taxMapIds') && (
-          <div className="form-group full-width">
-            <label>Tax Map IDs</label>
-            {form.taxMapIds.map((t, i) => (
-              <input key={i} value={t} onChange={e => updateArr('taxMapIds', i, e.target.value)} style={{ marginBottom: '0.5rem' }} />
-            ))}
-            <button className="btn-small" onClick={() => addArr('taxMapIds')}>+ Add Tax ID</button>
-          </div>
-        )}
-        <div className="form-group full-width">
-          <label>Notes</label>
-          <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
-        </div>
-      </div>
+      </form>
     </Modal>
   );
 }

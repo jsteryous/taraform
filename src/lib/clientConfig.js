@@ -126,6 +126,9 @@ export const BANKING_CONFIG = {
     { value: 'Prospect',         color: '#3b82f6' },
     { value: 'Loan Customer',    color: '#10b981' },
     { value: 'Deposit Customer', color: '#06b6d4' },
+    // Not a pipeline stage: a pure networking relationship (referral source, peer) that
+    // nobody is selling to but that has to be kept warm. See followUp below.
+    { value: 'In Network',       color: '#f59e0b' },
     { value: 'Former Customer',  color: '#a855f7' },
     { value: 'Not a Fit',        color: '#ef4444' },
   ],
@@ -135,8 +138,11 @@ export const BANKING_CONFIG = {
     { label: 'loan customers',    status: 'Loan Customer',    color: '#34d399' },
     { label: 'deposit customers', status: 'Deposit Customer', color: '#22d3ee' },
   ],
+  // In Network is in `statuses` but not in `cadence.statuses` on purpose: it resurfaces
+  // after 90 days without a note (a keep-in-touch rhythm) instead of being chased on the
+  // 3/7/14-day sales cadence.
   followUp: {
-    days: 90, statuses: ['Prospect'],
+    days: 90, statuses: ['Prospect', 'In Network'],
     excludeStatuses: ['Not a Fit', 'Former Customer'],
     cadence: {
       attemptDays: [0, 3, 7, 14, 30, 60],

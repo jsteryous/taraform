@@ -66,6 +66,8 @@ company, plus the text.
   - **Prospect**: in conversation, not a customer.
   - **Loan Customer**: has a loan with us (with or without deposits).
   - **Deposit Customer**: banks with us, no loan.
+  - **In Network**: not a customer and not being pitched; a relationship worth keeping warm
+    (referral sources, peers). Resurfaces for follow-up after 90 days without a note.
   - **Former Customer**
   - **Not a Fit**
 - The company link is optional, so Personal List's land contacts are unaffected.

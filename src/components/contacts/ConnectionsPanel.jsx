@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, User, X } from 'lucide-react';
+import { Building2, Plus, User, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { fetchConnections, addConnection, removeConnection, searchByKind } from '../../lib/links';
 import { classifyError } from '../../lib/errors';
+import { resolveConfig } from '../../lib/clientConfig';
 
 // Who this contact is connected to: a company's people, or a person's companies.
 // Loads and edits the links itself; `onLoaded` tells the parent who is connected so a
 // company's Notes tab can pull in the notes written on its people.
 export default function ConnectionsPanel({ contact, onLoaded }) {
-  const { currentClientId, loadFullContact, setCurrentContact, showToast } = useApp();
+  const { currentClientId, currentClient, loadFullContact, setCurrentContact, saveContact, showToast } = useApp();
   const navigate = useNavigate();
   const [confirmRemove, ConfirmUI] = useConfirm();
   const isCompany = contact.kind === 'company';
@@ -22,6 +23,10 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
   const [query, setQuery] = useState('');
   const [title, setTitle] = useState('');
   const [results, setResults] = useState([]);
+  const [creating, setCreating] = useState(false);
+  // The query the current `results` answer. Until it matches what is typed, "no company by
+  // that name" is not yet known, and offering to create one would invite a duplicate.
+  const [searched, setSearched] = useState('');
   const searchSeq = useRef(0);
 
   function apply(next) {
@@ -47,7 +52,7 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
     if (query.trim().length < 2) { setResults([]); return undefined; }
     const t = setTimeout(() => {
       searchByKind(currentClientId, otherKind, query)
-        .then(rows => { if (seq === searchSeq.current) setResults(rows); })
+        .then(rows => { if (seq === searchSeq.current) { setResults(rows); setSearched(query); } })
         .catch(e => console.error('link search failed:', e));
     }, 200);
     return () => clearTimeout(t);
@@ -64,6 +69,40 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
       setQuery(''); setTitle(''); setResults([]);
     } catch (e) {
       showToast(e.message || classifyError(e), 'error');
+    }
+  }
+
+  // Typing a company that does not exist yet offers to create it. It is a deliberate,
+  // confirmed step rather than something that happens on blur: a typo here would
+  // otherwise become a permanent second company in a book other people share.
+  async function createAndLink() {
+    const name = query.trim().replace(/\s+/g, ' ');
+    if (!name || creating) return;
+    if (!await confirmRemove(`Create “${name}” as a new company and link it to this contact?`, { danger: false })) return;
+    setCreating(true);
+    let company;
+    try {
+      const now = new Date().toISOString();
+      company = await saveContact({
+        kind: 'company', firstName: name, lastName: '', phones: [], county: '', ownerAddress: '',
+        propertyAddresses: [], taxMapIds: [], status: resolveConfig(currentClient).statuses[0].value,
+        notes: '', customFields: {}, createdAt: now, updatedAt: now,
+      });
+      if (!company) throw new Error('The company could not be created.');
+    } catch (e) {
+      setCreating(false);
+      showToast(e.message || classifyError(e), 'error');
+      return;
+    }
+    try {
+      const linkId = await addConnection({ companyId: company.id, personId: contact.id, title });
+      apply([...links, { linkId, title: title.trim(), contact: { id: company.id, name, phone: '', status: company.status, kind: 'company' } }]);
+      setQuery(''); setTitle(''); setResults([]);
+    } catch (e) {
+      console.error('link after create failed:', e);
+      showToast(`“${name}” was created but not linked — search for it and link it.`, 'warning');
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -85,6 +124,10 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
 
   const linkedIds = new Set(links.map(l => l.contact.id));
   const choices = results.filter(r => !linkedIds.has(r.id));
+  const typed = query.trim().replace(/\s+/g, ' ');
+  const exactExists = [...results, ...links.map(l => l.contact)]
+    .some(r => r.name.trim().toLowerCase() === typed.toLowerCase());
+  const canCreate = !isCompany && typed.length >= 2 && searched === query && !exactExists;
 
   return (
     <div className="sidebar-section">
@@ -119,15 +162,18 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
               placeholder={isCompany ? 'Their title here (optional)' : 'Title there (optional)'}
             />
             <div className="conn-results">
-              {choices.length === 0 ? (
-                <div className="conn-empty">
-                  No {isCompany ? 'person' : 'company'} by that name. Add them with “Add Contact” first, then link.
-                </div>
-              ) : choices.map(r => (
+              {choices.map(r => (
                 <button key={r.id} type="button" className="conn-result" onClick={() => link(r)}>
                   <OtherIcon size={12} /> {r.name}
                 </button>
               ))}
+              {canCreate ? (
+                <button type="button" className="conn-result conn-create" onClick={createAndLink} disabled={creating}>
+                  <Plus size={12} /> {creating ? 'Creating…' : `Create company “${typed}”`}
+                </button>
+              ) : isCompany && choices.length === 0 && (
+                <div className="conn-empty">No person by that name. Add them with “Add Contact” first, then link.</div>
+              )}
             </div>
           </>
         )}

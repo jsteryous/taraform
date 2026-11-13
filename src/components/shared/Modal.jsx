@@ -11,8 +11,10 @@ export default function Modal({ open, onClose, title, children, footer, width = 
     if (open) {
       triggerRef.current = document.activeElement;
       requestAnimationFrame(() => {
-        const first = dialogRef.current?.querySelector(FOCUSABLE);
-        first?.focus();
+        // The first focusable element is the header's close button. A modal that is a
+        // form marks the field typing should start in with `data-autofocus`.
+        const el = dialogRef.current;
+        (el?.querySelector('[data-autofocus]') ?? el?.querySelector(FOCUSABLE))?.focus();
       });
     } else if (triggerRef.current) {
       triggerRef.current.focus();
@@ -24,7 +26,11 @@ export default function Modal({ open, onClose, title, children, footer, width = 
   useEffect(() => {
     function onKey(e) {
       if (!open) return;
-      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Escape') {
+        // An open dropdown takes the first Escape; the modal takes the next.
+        if (!dialogRef.current?.querySelector('.custom-select-dropdown')) onClose();
+        return;
+      }
       if (e.key !== 'Tab') return;
       const focusable = [...(dialogRef.current?.querySelectorAll(FOCUSABLE) ?? [])];
       if (!focusable.length) return;
