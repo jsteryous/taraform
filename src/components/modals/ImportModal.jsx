@@ -1,3 +1,4 @@
+import { resolveConfig } from '../../lib/clientConfig';
 import { useState, useRef } from 'react';
 import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
@@ -176,13 +177,16 @@ export default function ImportModal({ open, onClose }) {
         taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
         acreage:           acreage || '',
         customFields,
-        status: 'New Lead',
+        status: defaultStatus,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
     }).filter(c => c.firstName || c.lastName);
   }
 
   async function handlePreview() {
+    // The workspace's first status, not a hard-coded land one: "New Lead" is not a
+    // status at all in a banking workspace.
+    const defaultStatus = resolveConfig(currentClient).statuses[0]?.value || 'New Lead';
     const parsed = buildContacts();
     // Dedup against every contact in the client, fetched fresh — NOT the `contacts` array
     // from context, which is one page of the list (see fetchDedupIndex). Scanning that

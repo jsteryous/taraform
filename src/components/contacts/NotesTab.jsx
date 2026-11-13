@@ -13,7 +13,11 @@ import { classifyError } from '../../lib/errors';
 //   onNotesChanged({ count, lastNoteAt, added })
 //     added: true when a note was just logged — a note is a call, so the parent schedules
 //     the next follow-up off it. Deleting or editing is not a call.
-export default function NotesTab({ contact, onNotesChanged, quickNotes = [] }) {
+//
+//   related: [{ id, name }] — other contacts whose notes belong on this timeline (a
+//   company's people). Their notes are shown tagged with the name and are read-only
+//   here in one respect: a new note always goes on `contact` itself.
+export default function NotesTab({ contact, onNotesChanged, quickNotes = [], related = [] }) {
   const { user, currentClientId, showToast } = useApp();
   const [notes, setNotes] = useState([]);
   const [authors, setAuthors] = useState(new Map());
@@ -27,18 +31,22 @@ export default function NotesTab({ contact, onNotesChanged, quickNotes = [] }) {
   const contactIdRef = useRef(contact.id);
   contactIdRef.current = contact.id;
 
+  // Reload when the set of related contacts changes, not on every new array identity.
+  const relatedKey = related.map(r => r.id).join(',');
+  const relatedNames = new Map(related.map(r => [r.id, r.name]));
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError('');
     setNotes([]);
     setEditing(null);
-    fetchNotes(contact.id)
+    fetchNotes([contact.id, ...related.map(r => r.id)])
       .then(rows => { if (!cancelled) setNotes(rows); })
       .catch(e => { if (!cancelled) setLoadError(classifyError(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [contact.id]);
+  }, [contact.id, relatedKey]); // eslint-disable-line
 
   // Names are cosmetic: a failure leaves notes readable with no author shown.
   useEffect(() => {
@@ -49,8 +57,11 @@ export default function NotesTab({ contact, onNotesChanged, quickNotes = [] }) {
     return () => { cancelled = true; };
   }, [currentClientId]);
 
+  // The parent mirrors note_count / last_note_at for THIS contact, so notes pulled in from
+  // related contacts are left out of what it hears.
   function report(next, added) {
-    onNotesChanged?.({ count: next.length, lastNoteAt: next[0]?.createdAt || null, added });
+    const own = next.filter(n => n.contactId === contact.id);
+    onNotesChanged?.({ count: own.length, lastNoteAt: own[0]?.createdAt || null, added });
   }
 
   async function submit(text) {
@@ -148,6 +159,9 @@ export default function NotesTab({ contact, onNotesChanged, quickNotes = [] }) {
                 <span className="note-type-badge badge-note">
                   <StickyNote size={10} /> {authorOf(note) || 'Note'}
                 </span>
+                {note.contactId !== contact.id && relatedNames.has(note.contactId) && (
+                  <span className="note-about">with {relatedNames.get(note.contactId)}</span>
+                )}
                 <div className="note-header-right">
                   <span className="note-timestamp">
                     {new Date(note.createdAt).toLocaleString()}{note.editedAt ? ' · edited' : ''}

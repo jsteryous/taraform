@@ -11,8 +11,8 @@ function unwrap({ data, error }) {
 }
 
 // Workspaces ("clients" in the schema) — RLS limits rows to the ones the caller is a member
-// of. Each comes back with the caller's own `role` in it ('owner' | 'member'), read from
-// their membership rows, so the UI can offer settings only to someone who may save them.
+// of. Each comes back with the caller's own `role` ('owner' | 'member') and `autoFollowUp`
+// in it, read from their membership rows, so the UI can offer settings only to someone who may save them.
 // The role here is for presentation; what an owner can do that a member cannot is enforced
 // by the policies on `clients` (db/20261113_no_self_serve_workspaces.sql).
 //
@@ -22,14 +22,25 @@ function unwrap({ data, error }) {
 export const getClients = async () => {
   const [clients, memberships] = await Promise.all([
     supabase.from('clients').select('*').order('name', { ascending: true }),
-    supabase.from('client_users').select('client_id, role'),
+    supabase.from('client_users').select('client_id, role, auto_follow_up'),
   ]);
   const rows = unwrap(clients);
   // A failed role lookup must not hide the workspaces themselves; it only withholds the
   // owner controls, which is the safe direction to be wrong in.
-  const roles = new Map((memberships.error ? [] : memberships.data || []).map(m => [m.client_id, m.role]));
-  return rows.map(c => ({ ...c, role: roles.get(c.id) || 'member' }));
+  const mine = new Map((memberships.error ? [] : memberships.data || []).map(m => [m.client_id, m]));
+  return rows.map(c => ({
+    ...c,
+    role: mine.get(c.id)?.role || 'member',
+    // This person's own switch for this workspace; on unless they turned it off.
+    autoFollowUp: mine.get(c.id)?.auto_follow_up !== false,
+  }));
 };
+
+// Each person's own on/off for automatic follow-up scheduling in one workspace. An RPC
+// because a membership row is otherwise read-only to its owner: it also holds `role`,
+// and a plain UPDATE policy would let anyone promote themselves.
+export const setAutoFollowUp = async (clientId, on) =>
+  unwrap(await supabase.rpc('set_auto_follow_up', { p_client_id: clientId, p_on: on }));
 
 export const updateClient = async (id, body) => {
   const updates = {};

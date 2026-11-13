@@ -68,6 +68,8 @@ export function getStatusClass(status) {
 export function mapDbContact(d) {
   return {
     id: d.id,
+    // 'person' | 'company'. A company keeps its whole name in firstName.
+    kind: d.kind || 'person',
     firstName: d.first_name,
     lastName: d.last_name,
     phones: d.phones || [],
@@ -102,6 +104,7 @@ export function mapContactToDb(contact, userId, clientId) {
     id: contact.id,
     user_id: userId,
     client_id: clientId,
+    kind: contact.kind || 'person',
     first_name: contact.firstName,
     last_name: contact.lastName,
     phones: contact.phones,

@@ -3,7 +3,7 @@ import Modal from '../shared/Modal';
 import { useApp } from '../../context/AppContext';
 import { updateClient, deleteClient, getClients, getClientUsers, addClientUser, removeClientUser, getClientDataCounts } from '../../lib/api';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, resolveConfig } from '../../lib/clientConfig';
+import { PRESET_TYPES, LAND_CONFIG, RESTAURANT_CONFIG, GENERIC_CONFIG, BANKING_CONFIG, resolveConfig } from '../../lib/clientConfig';
 import { parseCustomFieldDefs } from '../../lib/utils';
 
 const ALL_TABS      = ['notes', 'offers'];
@@ -12,7 +12,7 @@ const ALL_FIELDS    = ['county', 'taxMapIds', 'acreage', 'ownerAddress', 'proper
 const FIELD_LABELS  = { county: 'County', taxMapIds: 'Tax Map IDs', acreage: 'Acreage', ownerAddress: 'Owner Address', propertyAddresses: 'Property Addresses' };
 const ALL_COLUMNS   = ['name', 'phone', 'county', 'status'];
 const COLUMN_LABELS = { name: 'Name', phone: 'Phone', county: 'County', status: 'Status' };
-const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG };
+const PRESETS       = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG, banking: BANKING_CONFIG };
 
 export default function ManageClientsModal({ open, onClose, onClientsChange }) {
   const { clientsList, setClientsList, showToast } = useApp();

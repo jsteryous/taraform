@@ -12,9 +12,14 @@ const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','La
 function findDuplicates(contact, existing) {
   return existing.filter(c => {
     if (c.id === contact.id) return false;
-    const nameMatch = contact.firstName && contact.lastName &&
+    const personMatch = contact.firstName && contact.lastName &&
       c.firstName?.toLowerCase() === contact.firstName.toLowerCase() &&
       c.lastName?.toLowerCase() === contact.lastName.toLowerCase();
+    // A company has one name. Only another company can be its duplicate — a person who
+    // happens to share the first name is not.
+    const companyMatch = contact.kind === 'company' && c.kind === 'company' && contact.firstName &&
+      c.firstName?.trim().toLowerCase() === contact.firstName.trim().toLowerCase();
+    const nameMatch = personMatch || companyMatch;
     const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
       contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
     // Tax map IDs are only unique within a county — same parcel ID in different counties is fine.
@@ -38,20 +43,22 @@ export default function AddContactModal({ open, onClose }) {
   const [dupeWarning, setDupeWarning] = useState(null);
 
   function defaultForm(sts) {
-    return { firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: sts?.[0] || 'New Lead', notes:'' };
+    return { kind: 'person', firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: sts?.[0] || 'New Lead', notes:'' };
   }
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!form.firstName.trim() && !form.lastName.trim()) {
-      showToast('Please enter at least a first or last name.');
+    const isCompany = cfg.companies && form.kind === 'company';
+    if (!form.firstName.trim() && (isCompany || !form.lastName.trim())) {
+      showToast(isCompany ? 'Please enter the company name.' : 'Please enter at least a first or last name.');
       return;
     }
     const contact = {
+      kind: isCompany ? 'company' : 'person',
       // No id — the DB assigns it via property_crm_contacts_id_seq. saveContact
       // inserts new (id-less) contacts and reads the generated id back.
       firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
+      lastName: isCompany ? '' : form.lastName.trim(),
       phones: form.phones.map(p => p.trim()).filter(Boolean),
       county: normalizeCounty(form.county),
       ownerAddress: form.ownerAddress.trim(),
@@ -137,15 +144,30 @@ export default function AddContactModal({ open, onClose }) {
           ))}
         </div>
       )}
+      {cfg.companies && (
+        <div className="seg-toggle" style={{ marginBottom: '1rem' }}>
+          <button type="button" className={`seg-btn${form.kind !== 'company' ? ' active' : ''}`} onClick={() => update('kind', 'person')}>Person</button>
+          <button type="button" className={`seg-btn${form.kind === 'company' ? ' active' : ''}`} onClick={() => update('kind', 'company')}>Company</button>
+        </div>
+      )}
       <div className="form-grid">
-        <div className="form-group">
-          <label>First Name</label>
-          <input value={form.firstName} onChange={e => update('firstName', e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label>Last Name</label>
-          <input value={form.lastName} onChange={e => update('lastName', e.target.value)} />
-        </div>
+        {cfg.companies && form.kind === 'company' ? (
+          <div className="form-group full-width">
+            <label>Company Name</label>
+            <input value={form.firstName} onChange={e => update('firstName', e.target.value)} placeholder="e.g. Acme Holdings LLC" />
+          </div>
+        ) : (
+          <>
+            <div className="form-group">
+              <label>First Name</label>
+              <input value={form.firstName} onChange={e => update('firstName', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Last Name</label>
+              <input value={form.lastName} onChange={e => update('lastName', e.target.value)} />
+            </div>
+          </>
+        )}
         <div className="form-group full-width">
           <label>Phone Numbers</label>
           {form.phones.map((p, i) => (

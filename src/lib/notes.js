@@ -21,12 +21,14 @@ export function mapNote(d) {
   };
 }
 
-// Every note on a contact, from every teammate, newest first.
-export async function fetchNotes(contactId) {
+// Every note on a contact, from every teammate, newest first. Pass several ids to read
+// them as one timeline — a company's page shows the notes on its people too.
+export async function fetchNotes(contactIds) {
+  const ids = [].concat(contactIds);
   const { data, error } = await supabase
     .from('contact_notes')
     .select(FIELDS)
-    .eq('contact_id', contactId)
+    .in('contact_id', ids)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });
   if (error) throw error;

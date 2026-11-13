@@ -110,13 +110,54 @@ export const GENERIC_CONFIG = {
   listColumns: ['name', 'phone', 'status'],
 };
 
+// A bank's shared relationship book. `companies: true` turns on the second kind of
+// contact (a business) and the links between businesses and people — see lib/links.js.
+// Status describes the relationship with the bank; on a company, "Loan Customer" is the
+// answer to "who actually has the loan", since the borrower is usually the LLC.
+export const BANKING_CONFIG = {
+  type: 'banking',
+  companies: true,
+  terminology: { contact: 'Contact', contacts: 'Contacts' },
+  leadSourceOptions: [],
+  contactMethodOptions: [],
+  quickNotes: ['Left voicemail', 'Called — no answer', 'Met in person', 'Sent info', 'Call back later'],
+  statuses: [
+    { value: 'Target',           color: '#6b7280' },
+    { value: 'Prospect',         color: '#3b82f6' },
+    { value: 'Loan Customer',    color: '#10b981' },
+    { value: 'Deposit Customer', color: '#06b6d4' },
+    { value: 'Former Customer',  color: '#a855f7' },
+    { value: 'Not a Fit',        color: '#ef4444' },
+  ],
+  statsPills: [
+    { label: 'total',             status: null,               color: 'var(--text)' },
+    { label: 'prospects',         status: 'Prospect',         color: '#60a5fa' },
+    { label: 'loan customers',    status: 'Loan Customer',    color: '#34d399' },
+    { label: 'deposit customers', status: 'Deposit Customer', color: '#22d3ee' },
+  ],
+  followUp: {
+    days: 90, statuses: ['Prospect'],
+    excludeStatuses: ['Not a Fit', 'Former Customer'],
+    cadence: {
+      attemptDays: [0, 3, 7, 14, 30, 60],
+      repeatEvery: 60,
+      statuses: ['Target', 'Prospect'],
+      minAttempts: 7,
+    },
+  },
+  tabs: ['notes'],
+  visibleFields: [],
+  listColumns: ['name', 'phone', 'status'],
+};
+
 export const PRESET_TYPES = [
   { value: 'land',       label: 'Land Acquisition' },
   { value: 'restaurant', label: 'Restaurant / Hospitality' },
   { value: 'generic',    label: 'General Marketing' },
+  { value: 'banking',    label: 'Banking Relationships' },
 ];
 
-const PRESETS = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG };
+const PRESETS = { land: LAND_CONFIG, restaurant: RESTAURANT_CONFIG, generic: GENERIC_CONFIG, banking: BANKING_CONFIG };
 
 // Merge saved client config with defaults so missing keys always fall back cleanly
 export function resolveConfig(client) {

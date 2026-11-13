@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Building2 } from 'lucide-react';
 import { useAppData } from '../../context/AppContext';
 import { getStatusClass } from '../../lib/utils';
 import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
@@ -32,7 +33,10 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
         onChange={() => onSelect(contact.id)}
       />
 
-      <div className="contact-name">{contact.firstName} {contact.lastName}</div>
+      <div className="contact-name">
+        {contact.kind === 'company' && <Building2 size={13} className="company-icon" />}
+        {contact.firstName} {contact.lastName}
+      </div>
       <div className="contact-phones">{contact.phones?.[0] ? <span className="phone-chip">{contact.phones[0]}</span> : '—'}</div>
       {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 

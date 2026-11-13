@@ -1538,3 +1538,31 @@ input::placeholder { color: var(--text-muted); }
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* ── Company / person links (ConnectionsPanel) ── */
+.company-icon { vertical-align: -2px; margin-right: 0.35rem; color: var(--text-muted); }
+.conn-empty { color: var(--text-muted); font-size: var(--text-sm); padding: 0.25rem 0; }
+.conn-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0; }
+.conn-icon { color: var(--text-muted); flex-shrink: 0; }
+.conn-name {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--accent); font-family: var(--sans); font-size: var(--text-sm); font-weight: 500;
+    text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conn-name:hover { text-decoration: underline; }
+.conn-title { color: var(--text-muted); font-size: var(--text-xs); margin-right: auto; white-space: nowrap; }
+.conn-row .note-delete-btn { margin-left: auto; }
+.conn-add { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.conn-results { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.25rem; }
+.conn-result {
+    display: flex; align-items: center; gap: 0.4rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+    padding: 0.3rem 0.5rem; cursor: pointer; text-align: left;
+    color: var(--text); font-family: var(--sans); font-size: var(--text-sm);
+}
+.conn-result:hover { border-color: var(--accent); }
+.note-about { margin-left: 0.5rem; margin-right: auto; color: var(--text-muted); font-size: var(--text-xs); }
+.followup-auto {
+    display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem;
+    color: var(--text-muted); font-size: var(--text-xs); cursor: pointer;
+}

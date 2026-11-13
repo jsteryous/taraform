@@ -5,7 +5,9 @@ import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } fro
 import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
 import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
+import { setAutoFollowUp } from '../../lib/api';
 import NotesTab from './NotesTab';
+import ConnectionsPanel from './ConnectionsPanel';
 import OffersTab from './OffersTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
@@ -14,13 +16,16 @@ import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, Pencil, HelpCircle } f
 
 
 export default function ContactDetail({ onClose }) {
-  const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, showToast } = useApp();
+  const { currentContact, setCurrentContact, saveContact, deleteContact, currentClient, setClientsList, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const STATUSES = cfg.statuses.map(s => s.value);
   const [tab, setTab] = useState('notes');
   const [draft, setDraft] = useState(null);
   const [editingPhone, setEditingPhone] = useState(null); // index of phone row in edit mode
   const [showCallHelp, setShowCallHelp] = useState(false);
+  // Who this contact is linked to, as reported by ConnectionsPanel. A company's Notes
+  // tab uses it to pull in the notes written on its people.
+  const [connections, setConnections] = useState([]);
   const [confirmDelete, ConfirmUI] = useConfirm();
 
   // Browsers can't tell us whether a tel: click reached a handler, so after
@@ -186,9 +191,25 @@ export default function ContactDetail({ onClose }) {
   // updated_at, which is what keeps a just-worked contact at the top of the list and what
   // runs the drift re-check against the active filter. noteCount / lastNoteAt ride along
   // for the local copy only — mapContactToDb does not send them; the DB trigger owns them.
+  // Each person's own switch, per workspace, on by default (client_users.auto_follow_up).
+  // It changes what THIS person's notes do; it does not touch teammates or existing dates.
+  const autoFollowUp = currentClient?.autoFollowUp !== false;
+  async function toggleAutoFollowUp() {
+    const next = !autoFollowUp;
+    const id = currentClient.id;
+    setClientsList(list => list.map(c => (c.id === id ? { ...c, autoFollowUp: next } : c)));
+    try {
+      await setAutoFollowUp(id, next);
+    } catch (e) {
+      setClientsList(list => list.map(c => (c.id === id ? { ...c, autoFollowUp: !next } : c)));
+      showToast('Could not change that setting — try again', 'error');
+    }
+  }
+
   function handleNotesChanged({ count, lastNoteAt, added }) {
     const fields = { noteCount: count, lastNoteAt };
-    if (added) {
+    // With this person's switch off, a note is just a note: the date is theirs to set.
+    if (added && autoFollowUp) {
       const next = scheduleAfterNote(count, draft.status, draft.followUpOn, cfg.followUp);
       if (next !== undefined) fields.followUpOn = next;
     }
@@ -215,6 +236,16 @@ export default function ContactDetail({ onClose }) {
 
           {/* Name */}
           <div style={{ marginBottom: '1rem' }}>
+            {draft.kind === 'company' ? (
+              <input
+                value={draft.firstName || ''}
+                onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))}
+                onBlur={e => update('firstName', e.target.value)}
+                placeholder="Company name"
+                className="inline-input name-input"
+              />
+            ) : (
+              <>
             <input
               value={draft.firstName || ''}
               onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))}
@@ -230,6 +261,8 @@ export default function ContactDetail({ onClose }) {
               placeholder="Last name"
               className="inline-input name-input"
             />
+              </>
+            )}
           </div>
 
           {/* Status */}
@@ -260,7 +293,13 @@ export default function ContactDetail({ onClose }) {
                 <button type="button" className="btn-small" onClick={() => update('followUpOn', null)}>Clear</button>
               )}
             </div>
-            {attempts > 0 && (
+            {cfg.followUp?.cadence && (
+              <label className="followup-auto" title="When on, logging a note schedules your next call automatically. This is your own setting; teammates have theirs.">
+                <input type="checkbox" checked={autoFollowUp} onChange={toggleAutoFollowUp} />
+                Schedule my next call automatically
+              </label>
+            )}
+            {attempts > 0 && autoFollowUp && (
               <div className="followup-cadence" title={onCadence
                 ? `Each note counts as a call attempt. Logging the next one schedules the following call ${nextGap} days out.`
                 : `Calls on "${draft.status}" don't auto-schedule — set a date by hand.`}>
@@ -393,6 +432,11 @@ export default function ContactDetail({ onClose }) {
             </div>
           )}
 
+          {/* People at a company / companies a person belongs to */}
+          {cfg.companies && (
+            <ConnectionsPanel key={draft.id} contact={draft} onLoaded={setConnections} />
+          )}
+
           {/* Addresses section */}
           {(visibleFields.includes('ownerAddress') || visibleFields.includes('propertyAddresses')) && (
             <div className="sidebar-section">
@@ -486,7 +530,8 @@ export default function ContactDetail({ onClose }) {
             </button>
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
-            {tab === 'notes' && <NotesTab key={draft.id} contact={draft} onNotesChanged={handleNotesChanged} quickNotes={cfg.quickNotes} />}
+            {tab === 'notes' && <NotesTab key={draft.id} contact={draft} onNotesChanged={handleNotesChanged} quickNotes={cfg.quickNotes}
+              related={cfg.companies && draft.kind === 'company' ? connections.map(l => ({ id: l.contact.id, name: l.contact.name })) : []} />}
           </div>
         </div>
 
