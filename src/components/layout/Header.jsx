@@ -23,13 +23,20 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   const themeRef = useRef(null);
   const clientDropRef = useRef(null);
 
+  // With one workspace there is no picker (see below), so it has to be selected for the
+  // person. That includes the case where the workspace they were in was just deleted and
+  // one remains: without the id check they would be left pointing at a workspace that no
+  // longer exists, with no control on screen to leave it.
+  function selectIfOnlyOne(clients) {
+    if (clients.length !== 1 || clients[0].id === currentClientId) return;
+    setCurrentClientId(clients[0].id);
+    loadContacts(clients[0].id);
+  }
+
   useEffect(() => {
     getClients().then(clients => {
       setClientsList(clients);
-      if (clients.length === 1 && !currentClientId) {
-        setCurrentClientId(clients[0].id);
-        loadContacts(clients[0].id);
-      }
+      selectIfOnlyOne(clients);
       if (clients.length === 0) setShowClients(true);
     }).catch(() => showToast('Failed to load clients — check your connection'));
   }, []); // eslint-disable-line
@@ -70,6 +77,12 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           <div className="header-left">
             <h1>Taraform</h1>
             <div className="client-switcher">
+              {/* Someone in exactly one workspace has nothing to pick, so they get its name and
+                  no menu. Hiding the picker is presentation only: which workspaces a person
+                  can see is decided by their membership rows and RLS, never by this. */}
+              {clientsList.length === 1 ? (
+                <span className="client-name-static">{clientsList[0].name}</span>
+              ) : (
               <div ref={clientDropRef} style={{ position: 'relative' }}>
                 <button className="client-drop-btn" onClick={() => setClientDropOpen(o => !o)}>
                   <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
@@ -89,6 +102,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
                   </div>
                 )}
               </div>
+              )}
               <button className="client-switcher-gear" onClick={() => setShowClients(true)} title="Manage clients"><Settings size={14} /></button>
             </div>
           </div>
@@ -139,10 +153,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
         onClose={() => setShowClients(false)}
         onClientsChange={clients => {
           setClientsList(clients);
-          if (clients.length === 1 && !currentClientId) {
-            setCurrentClientId(clients[0].id);
-            loadContacts(clients[0].id);
-          }
+          selectIfOnlyOne(clients);
         }}
       />
 

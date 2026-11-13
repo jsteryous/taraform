@@ -892,6 +892,14 @@ input[type="file"] {
 .logout-btn:hover { background: var(--surface-hover); }
 
 /* ── Client switcher dropdown ── */
+/* Shown instead of the dropdown when there is only one workspace to be in. */
+.client-name-static {
+    padding: 0.35rem 0.25rem;
+    color: var(--text);
+    font-size: var(--text-base);
+    font-weight: 500;
+    font-family: var(--sans);
+}
 .client-drop-btn {
     display: flex;
     align-items: center;
