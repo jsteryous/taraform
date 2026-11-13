@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
-import { scheduleAfterNote, clearOnStatusChange, countAttempts, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
+import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
@@ -164,7 +164,7 @@ export default function ContactDetail({ onClose }) {
 
   // Attempts made, and the wait the NEXT one will earn (attempts+1, since logging it is
   // what schedules). Null off-cadence — an Offer Made contact isn't on a call clock.
-  const attempts   = countAttempts(draft.activityLog);
+  const attempts   = draft.noteCount || 0;
   const onCadence  = schedulesFor(draft.status, cfg.followUp?.cadence);
   const nextGap    = onCadence ? attemptGap(attempts + 1, cfg.followUp.cadence) : null;
 
@@ -176,19 +176,23 @@ export default function ContactDetail({ onClose }) {
     else updateMultiple({ status: next, followUpOn: cleared });
   }
 
-  // Logging a note is logging a call, so it schedules the next one. scheduleAfterNote
-  // owns that decision (see lib/followUpCadence.js): a date, null to clear, or undefined
-  // to leave the field alone. Whatever it returns goes out in the SAME updateMultiple as
-  // the log — sequential saves race through draftRef, see components/CLAUDE.md. Deleting
-  // a note is not a call and never reschedules.
-  function handleNotesChange(field, value) {
-    if (field !== 'activityLog' || value.length <= (draft.activityLog || []).length) {
-      update(field, value);
-      return;
+  // The Notes tab writes notes itself (they are rows in contact_notes, not a field on the
+  // contact) and reports the new totals here. Logging a note is logging a call, so it
+  // schedules the next one: scheduleAfterNote owns that decision (lib/followUpCadence.js)
+  // and returns a date, null to clear, or undefined to leave the field alone. Deleting a
+  // note is not a call and never reschedules.
+  //
+  // Either way the contact is saved. That is deliberate, not incidental: the save bumps
+  // updated_at, which is what keeps a just-worked contact at the top of the list and what
+  // runs the drift re-check against the active filter. noteCount / lastNoteAt ride along
+  // for the local copy only — mapContactToDb does not send them; the DB trigger owns them.
+  function handleNotesChanged({ count, lastNoteAt, added }) {
+    const fields = { noteCount: count, lastNoteAt };
+    if (added) {
+      const next = scheduleAfterNote(count, draft.status, draft.followUpOn, cfg.followUp);
+      if (next !== undefined) fields.followUpOn = next;
     }
-    const next = scheduleAfterNote(value, draft.status, draft.followUpOn, cfg.followUp);
-    if (next === undefined) update('activityLog', value);
-    else updateMultiple({ activityLog: value, followUpOn: next });
+    updateMultiple(fields);
   }
 
 
@@ -482,7 +486,7 @@ export default function ContactDetail({ onClose }) {
             </button>
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
-            {tab === 'notes' && <NotesTab contact={draft} onChange={handleNotesChange} quickNotes={cfg.quickNotes} />}
+            {tab === 'notes' && <NotesTab key={draft.id} contact={draft} onNotesChanged={handleNotesChanged} quickNotes={cfg.quickNotes} />}
           </div>
         </div>
 

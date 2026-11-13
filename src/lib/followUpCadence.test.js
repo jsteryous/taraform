@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  attemptGap, countAttempts, nextFollowUpDate, schedulesFor, scheduleAfterNote, attemptLabel,
+  attemptGap, nextFollowUpDate, schedulesFor, scheduleAfterNote, attemptLabel,
   clearOnStatusChange, isExcluded,
 } from './followUpCadence';
 import { todayStr } from './contactFilters';
@@ -12,7 +12,6 @@ const at = (offsetDays) => {
   d.setDate(d.getDate() + offsetDays);
   return todayStr(d);
 };
-const note = (text = 'Left voicemail') => ({ type: 'note', text, timestamp: new Date().toISOString() });
 
 describe('attemptGap', () => {
   // The spec, verbatim: attempt 1 day 0, then days 3, 7, 14, 30, 60, then every 60.
@@ -56,24 +55,6 @@ describe('attemptGap', () => {
   });
 });
 
-describe('countAttempts', () => {
-  it('counts notes, not status or offer audit entries', () => {
-    const log = [
-      note(), { type: 'status_change', text: 'New Lead -> Contacted' },
-      { type: 'offer', text: '$40,000' }, note('Called — no answer'),
-      { text: 'legacy untyped note' }, // pre-type entries are notes
-      { type: 'status_change' },
-    ];
-    expect(countAttempts(log)).toBe(3);
-  });
-
-  it('is 0 for an empty or absent log', () => {
-    expect(countAttempts([])).toBe(0);
-    expect(countAttempts(null)).toBe(0);
-    expect(countAttempts(undefined)).toBe(0);
-  });
-});
-
 describe('nextFollowUpDate', () => {
   it('schedules from the day the call happened, not from a fixed day-0 anchor', () => {
     expect(nextFollowUpDate(1, CADENCE)).toBe(at(3));
@@ -113,42 +94,42 @@ describe('scheduleAfterNote', () => {
   // Offsets are gaps from today, not the cumulative day numbers: a 2nd call logged
   // today earns the day-3-to-day-7 step (4 days), not 7.
   it('schedules the next call off the number of notes logged', () => {
-    expect(scheduleAfterNote([note()], 'Contacted', null, fu)).toBe(at(3));
-    expect(scheduleAfterNote([note(), note()], 'Contacted', null, fu)).toBe(at(4));
-    expect(scheduleAfterNote([note(), note(), note()], 'Contacted', null, fu)).toBe(at(7));
+    expect(scheduleAfterNote(1, 'Contacted', null, fu)).toBe(at(3));
+    expect(scheduleAfterNote(2, 'Contacted', null, fu)).toBe(at(4));
+    expect(scheduleAfterNote(3, 'Contacted', null, fu)).toBe(at(7));
   });
 
   // The whole point of the change: one call used to mean three months of silence.
   it('replaces the old 90-day wait with 3 days after the first call', () => {
-    expect(scheduleAfterNote([note()], 'Contacted', null, fu)).toBe(at(3));
+    expect(scheduleAfterNote(1, 'Contacted', null, fu)).toBe(at(3));
     expect(fu.days).toBe(90); // the backstop is still there, it just stops being reached
   });
 
   it('reschedules over a date that has already come due', () => {
-    expect(scheduleAfterNote([note()], 'Contacted', at(-2), fu)).toBe(at(3));
-    expect(scheduleAfterNote([note()], 'Contacted', at(0), fu)).toBe(at(3));
+    expect(scheduleAfterNote(1, 'Contacted', at(-2), fu)).toBe(at(3));
+    expect(scheduleAfterNote(1, 'Contacted', at(0), fu)).toBe(at(3));
   });
 
   // "Call them the 3rd" is a commitment; interim notes must not drag it forward.
   it('leaves a future date alone', () => {
-    expect(scheduleAfterNote([note()], 'Contacted', at(30), fu)).toBe(undefined);
-    expect(scheduleAfterNote([note(), note()], 'New Lead', at(1), fu)).toBe(undefined);
+    expect(scheduleAfterNote(1, 'Contacted', at(30), fu)).toBe(undefined);
+    expect(scheduleAfterNote(2, 'New Lead', at(1), fu)).toBe(undefined);
   });
 
   it('off-cadence, keeps the old rule: a due date clears, no date stays no date', () => {
-    expect(scheduleAfterNote([note()], 'Offer Made', at(-1), fu)).toBe(null);
-    expect(scheduleAfterNote([note()], 'Offer Made', null, fu)).toBe(undefined);
-    expect(scheduleAfterNote([note()], 'Dead/Pass', at(-1), fu)).toBe(null);
+    expect(scheduleAfterNote(1, 'Offer Made', at(-1), fu)).toBe(null);
+    expect(scheduleAfterNote(1, 'Offer Made', null, fu)).toBe(undefined);
+    expect(scheduleAfterNote(1, 'Dead/Pass', at(-1), fu)).toBe(null);
   });
 
-  it('does nothing when the log holds no calls at all', () => {
-    expect(scheduleAfterNote([{ type: 'status_change' }], 'Contacted', null, fu)).toBe(undefined);
+  it('does nothing when no note has been logged', () => {
+    expect(scheduleAfterNote(0, 'Contacted', null, fu)).toBe(undefined);
   });
 
   it('is inert for a client with no cadence configured', () => {
     const noCadence = { days: 90, statuses: ['Contacted'] };
-    expect(scheduleAfterNote([note()], 'Contacted', null, noCadence)).toBe(undefined);
-    expect(scheduleAfterNote([note()], 'Contacted', at(-1), noCadence)).toBe(null);
+    expect(scheduleAfterNote(1, 'Contacted', null, noCadence)).toBe(undefined);
+    expect(scheduleAfterNote(1, 'Contacted', at(-1), noCadence)).toBe(null);
   });
 });
 
@@ -199,21 +180,19 @@ describe('clearOnStatusChange', () => {
 
 describe('scheduleAfterNote on a stopped lead', () => {
   const fu = LAND_CONFIG.followUp;
-  const note = () => ({ type: 'note', text: 'pass', timestamp: new Date().toISOString() });
 
   it('clears rather than reschedules, whatever the date was', () => {
     for (const s of ['Dead/Pass', 'Closed', 'Offer Rejected/NFS']) {
-      expect(scheduleAfterNote([note()], s, at(-1), fu)).toBe(null);
+      expect(scheduleAfterNote(1, s, at(-1), fu)).toBe(null);
       // Even a future date: a commitment made before the lead died isn't worth keeping.
-      expect(scheduleAfterNote([note()], s, at(30), fu)).toBe(null);
-      expect(scheduleAfterNote([note()], s, null, fu)).toBe(undefined);
+      expect(scheduleAfterNote(1, s, at(30), fu)).toBe(null);
+      expect(scheduleAfterNote(1, s, null, fu)).toBe(undefined);
     }
   });
 
   // The reported sequence, end to end: note schedules, then the status change retires it.
   it('survives the note-then-mark-dead sequence with no date left behind', () => {
-    const log = [note()];
-    const scheduled = scheduleAfterNote(log, 'Contacted', null, fu);
+    const scheduled = scheduleAfterNote(1, 'Contacted', null, fu);
     expect(scheduled).toBe(at(3));
     expect(clearOnStatusChange('Dead/Pass', scheduled, fu)).toBe(null);
   });

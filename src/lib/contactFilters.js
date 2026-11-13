@@ -14,23 +14,6 @@ export function todayStr(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-// Is this activity-log entry a note (type 'note', or legacy untyped-with-text) rather
-// than a status/offer audit entry? The single spelling of the predicate — followUpCadence
-// counts call attempts with it, so "what's a note" can't drift between the two.
-export function isNoteEntry(e) {
-  return e?.type === 'note' || (!e?.type && !!e?.text);
-}
-
-// Most recent note timestamp from the activity log — the JS counterpart of the
-// last_note_at generated column.
-export function lastNoteDate(contact) {
-  return (contact.activityLog || [])
-    .filter(isNoteEntry)
-    .map((e) => new Date(e.timestamp || e.createdAt))
-    .filter((d) => !isNaN(d))
-    .sort((a, b) => b - a)[0] || null;
-}
-
 // How stale a contact's notes may get before its status resurfaces it, in days.
 // `statusDays` holds per-status overrides on top of the default `days` — a Hot Lead
 // resurfaces weekly while a merely Contacted one waits the full 90. Returns null when
@@ -59,7 +42,8 @@ export function isFollowUpDue(contact, followUp) {
   if (contact.followUpOn) return contact.followUpOn <= todayStr();
   const window = followUpWindow(contact.status, followUp);
   if (!window) return false;
-  const last = lastNoteDate(contact);
+  // lastNoteAt is the last_note_at column, rolled up from contact_notes by a trigger.
+  const last = contact.lastNoteAt ? new Date(contact.lastNoteAt) : null;
   return !last || last < new Date(Date.now() - window * 86400000);
 }
 

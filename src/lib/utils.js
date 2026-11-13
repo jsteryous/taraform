@@ -83,7 +83,10 @@ export function mapDbContact(d) {
     emailStatus: d.email_status || 'eligible',
     notes: d.notes,
     offers: d.offers || [],
-    activityLog: d.activity_log || [],
+    // Rolled up from contact_notes by a DB trigger. Read-only here: mapContactToDb does
+    // not send them back, so a save can never overwrite what the trigger computed.
+    noteCount: d.note_count ?? 0,
+    lastNoteAt: d.last_note_at || null,
     customFields: d.custom_fields || {},
     createdAt: d.created_at,
     updatedAt: d.updated_at,
@@ -112,7 +115,6 @@ export function mapContactToDb(contact, userId, clientId) {
     status: contact.status,
     follow_up_on: contact.followUpOn || null,
     notes: contact.notes,
-    activity_log: contact.activityLog,
     custom_fields: contact.customFields || {},
     created_at: contact.createdAt,
     updated_at: contact.updatedAt,

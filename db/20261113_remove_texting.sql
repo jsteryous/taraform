@@ -26,7 +26,15 @@
 
 begin;
 
--- Functions first: several are SECURITY DEFINER and reference the tables below.
+-- No CASCADE on purpose: if anything unexpected still depends on these, fail and look.
+drop table public.sms_messages;
+drop table public.sms_unrouted;
+drop table public.sms_opt_outs;
+drop table public.dnc_numbers;
+drop table public.dnc_area_codes;
+
+-- Functions after the tables: a column default or index on those tables may call one
+-- (sms_digits), while function bodies are not tracked dependencies of the tables.
 drop function if exists public.sms_send_precheck(uuid, bigint, text);
 drop function if exists public.sms_check_number(bigint, text);
 drop function if exists public.sms_record_outbound(uuid, bigint, text, text, text, text, text, integer, text);
@@ -43,13 +51,6 @@ drop function if exists public.sms_is_stop(text);
 drop function if exists public.sms_is_help(text);
 drop function if exists public.dnc_state(text);
 drop function if exists public.sms_digits(text);
-
--- No CASCADE on purpose: if anything unexpected still depends on these, fail and look.
-drop table public.sms_messages;
-drop table public.sms_unrouted;
-drop table public.sms_opt_outs;
-drop table public.dnc_numbers;
-drop table public.dnc_area_codes;
 
 -- create_client took the number as a second argument. Changing a signature means
 -- DROP + CREATE, and that resets EXECUTE to PUBLIC (see CLAUDE.md), so the grants are

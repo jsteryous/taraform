@@ -176,7 +176,7 @@ export default function ImportModal({ open, onClose }) {
         taxMapIds:         mapping.taxMapId !== undefined && row[mapping.taxMapId] ? [row[mapping.taxMapId].trim()] : [],
         acreage:           acreage || '',
         customFields,
-        status: 'New Lead', activityLog: [],
+        status: 'New Lead',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
     }).filter(c => c.firstName || c.lastName);
@@ -241,7 +241,6 @@ export default function ImportModal({ open, onClose }) {
           tax_map_ids: c.taxMapIds,
           acreage: c.acreage || null,
           status: c.status,
-          activity_log: [],
           custom_fields: c.customFields || {},
           created_at: c.createdAt,
           updated_at: c.updatedAt,

@@ -3,7 +3,9 @@
 // contactFilters decides whether a contact IS due (follow_up_on has arrived, or its
 // status went stale). This module decides what follow_up_on BECOMES after a call, so a
 // contact schedules its own next attempt instead of falling through to the stale-note
-// rule a quarter later. Each note in the activity log is one call attempt.
+// rule a quarter later. Each note on a contact is one call attempt; the count comes from
+// the contact's note_count column (maintained from contact_notes), so nothing here needs
+// the notes themselves.
 //
 // Config lives at clientConfig followUp.cadence:
 //   attemptDays  cumulative day offsets from the first attempt, written the way a cadence
@@ -23,7 +25,7 @@
 // Everything here is pure. The one place it meets the DB is ContactDetail writing the
 // returned date to follow_up_on, which the existing queue filter already reads.
 
-import { todayStr, isNoteEntry } from './contactFilters';
+import { todayStr } from './contactFilters';
 
 // Days to wait after `attempt` (1-based) before the next one is due. Returns null when
 // the cadence isn't configured, so callers can tell "no cadence" from "wait 0 days".
@@ -38,13 +40,6 @@ export function attemptGap(attempt, cadence) {
   // A non-ascending attemptDays would schedule into the past and make the contact
   // permanently due. Clamp rather than trust the config.
   return Math.max(1, Math.round(gap));
-}
-
-// Attempts made so far = notes logged. Same predicate as lastNoteDate / the last_note_at
-// generated column, imported rather than re-spelled: status and offer entries are an
-// audit trail, not calls.
-export function countAttempts(activityLog) {
-  return (activityLog || []).filter(isNoteEntry).length;
 }
 
 // The date attempt N+1 comes due, as YYYY-MM-DD in the user's local calendar (the unit
@@ -63,7 +58,8 @@ export function schedulesFor(status, cadence) {
   return !!cadence?.attemptDays && (cadence.statuses || []).includes(status);
 }
 
-// What follow_up_on should become when a note is logged.
+// What follow_up_on should become when a note is logged. `attempts` is the number of
+// notes on the contact INCLUDING the one just logged.
 //
 // Three-valued on purpose, because "leave it alone" and "clear it" are different answers:
 //   undefined  don't touch the field (don't include it in the save)
@@ -77,14 +73,13 @@ export function schedulesFor(status, cadence) {
 //   3. Off-cadence, fall back to the pre-cadence rule: logging a note while the date is
 //      due counts as having done the follow-up, so clear it.
 // An excluded status (Dead/Pass, Closed, Offer Rejected/NFS) outranks all three and clears.
-export function scheduleAfterNote(activityLog, status, followUpOn, followUp, now = new Date()) {
+export function scheduleAfterNote(attempts, status, followUpOn, followUp, now = new Date()) {
   const cadence = followUp?.cadence;
   // An excluded status never carries a scheduled call, so a note logged on one retires the
   // date instead of rescheduling — ahead of the future-date rule, since a commitment made
   // before the lead died is not one worth keeping.
   if (isExcluded(status, followUp)) return followUpOn ? null : undefined;
   if (followUpOn && followUpOn > todayStr(now)) return undefined;
-  const attempts = countAttempts(activityLog);
   if (attempts >= 1 && schedulesFor(status, cadence)) {
     return nextFollowUpDate(attempts, cadence, now);
   }

@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase';
 import { AppProvider, useApp } from './context/AppContext';
 import { fetchAllFilteredContacts, fetchContactsByIds } from './lib/contacts';
 import { hasActiveFilters } from './lib/contactFilters';
+import { fetchNotesByContact } from './lib/notes';
 import LoginScreen from './components/auth/LoginScreen';
 import Header from './components/layout/Header';
 import ContactList from './components/contacts/ContactList';
@@ -15,16 +16,15 @@ import Toast from './components/shared/Toast';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 
 // Notes live in two places: the freeform `notes` text column (written at create / CSV import,
-// but never re-shown in the UI) and `activity_log` note entries (what the Notes tab reads).
-// Merge both into one CSV cell, de-duped so the create-path — which writes the same text to
-// both — doesn't print twice. Status/offer audit entries in the log are excluded.
-function notesForExport(d) {
+// but never re-shown in the UI) and the contact's rows in contact_notes (what the Notes tab
+// reads). Merge both into one CSV cell, de-duped so the create-path — which writes the same
+// text to both — doesn't print twice.
+function notesForExport(d, noteBodies = []) {
   const parts = [];
   const freeform = (d.notes || '').trim();
   if (freeform) parts.push(freeform);
-  for (const e of (d.activity_log || [])) {
-    if (!e || (e.type && e.type !== 'note')) continue;
-    const t = (e.text || '').trim();
+  for (const body of noteBodies) {
+    const t = (body || '').trim();
     if (t && !parts.includes(t)) parts.push(t);
   }
   return parts.join(' | ');
@@ -41,16 +41,17 @@ function CRM() {
       let source;
       let filteredAll = false;
       // Both paths refetch full rows (select('*')) because the list view loads LIST_FIELDS,
-      // which omits owner_address / property_addresses (and activity_log). Passing the lean
+      // which omits owner_address / property_addresses. Passing the lean
       // list objects straight through left those CSV columns blank for un-opened contacts.
+      // Notes are rows in contact_notes, fetched once for the workspace and joined here.
+      const notesByContact = await fetchNotesByContact(currentClientId);
       const toExportRow = d => ({
         firstName: d.first_name, lastName: d.last_name,
         phones: d.phones || [], email: d.email || '',
         county: d.county, ownerAddress: d.owner_address,
         propertyAddresses: d.property_addresses || [],
         taxMapIds: d.tax_map_ids || [], status: d.status,
-        activityLog: d.activity_log || [],
-        notes: notesForExport(d),
+        notes: notesForExport(d, notesByContact.get(d.id)),
       });
       if (selectedContacts?.length) {
         const rows = await fetchContactsByIds(selectedContacts.map(c => c.id));

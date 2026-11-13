@@ -13,9 +13,10 @@ import { applyContactFilters } from './contactFilters';
 // contacts via mapDbContact. The two bulk export helpers are the deliberate exception and
 // return RAW snake_case DB rows — see their comments.
 
-// activity_log + bad_phones are carried so the detail overlay's re-check has something to
-// show; the filter itself is entirely server-side (see applyContactFilters).
-export const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,follow_up_on,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
+// note_count + last_note_at are the rolled-up view of contact_notes (attempt label, Due
+// badge); the notes themselves load per contact in lib/notes.js. The filter itself is
+// entirely server-side (see applyContactFilters).
+export const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,follow_up_on,email_status,lead_source,contact_method,acreage,tax_map_ids,note_count,last_note_at,updated_at,created_at,client_id,user_id';
 export const PAGE_SIZE = 50;
 
 // The one place a filtered contact query is shaped. Every read path below goes through it,
@@ -69,7 +70,7 @@ export async function contactStillMatches(id, clientId, filters = {}) {
 
 // Pages past Supabase's 1000-row cap for Export All.
 // Returns RAW DB rows (snake_case, select('*')) — the CSV needs owner_address /
-// property_addresses / activity_log, which LIST_FIELDS omits, and App.handleExport
+// property_addresses, which LIST_FIELDS omits, and App.handleExport
 // reads snake_case keys directly.
 export async function fetchAllFilteredContacts(clientId, filters = {}) {
   if (!clientId) return [];
@@ -190,9 +191,9 @@ export class ContactConflictError extends Error {
 // lands if the row still carries it.
 //
 // Without this the save was a full-row upsert with no precondition, so two people editing
-// one contact was last-write-wins with no error — and because activity_log is rewritten
-// wholesale rather than appended, a note logged concurrently just disappeared. Silent data
-// loss, invisible at one user and live at two. Passing null keeps the old unguarded
+// one contact was last-write-wins with no error. Silent data loss, invisible at one user
+// and live at two. (Notes were the worst case and have since moved to their own table,
+// see lib/notes.js, but every other field still rides on this guard.) Passing null keeps the old unguarded
 // behaviour for callers that have no version to offer.
 //
 // Returns the new server updated_at so the caller can advance its version.

@@ -239,7 +239,7 @@ describe('isFollowUpDue', () => {
     return todayStr(d);
   };
   const cfg = { days: 90, statuses: ['Contacted'] };
-  const noted = (days) => ({ status: 'Contacted', activityLog: [{ type: 'note', text: 'x', timestamp: daysAgoISO(days) }] });
+  const noted = (days) => ({ status: 'Contacted', lastNoteAt: daysAgoISO(days) });
 
   it('is never due without config (auto rule unset)', () => {
     expect(isFollowUpDue(noted(200), null)).toBe(false);
@@ -281,14 +281,14 @@ describe('isFollowUpDue', () => {
   it('auto rule: due when the last note is older than the window, or never noted', () => {
     expect(isFollowUpDue(noted(100), cfg)).toBe(true);
     expect(isFollowUpDue(noted(10), cfg)).toBe(false);
-    expect(isFollowUpDue({ status: 'Contacted', activityLog: [] }, cfg)).toBe(true);
+    expect(isFollowUpDue({ status: 'Contacted', lastNoteAt: null }, cfg)).toBe(true);
     expect(isFollowUpDue({ status: 'Contacted' }, cfg)).toBe(true);
   });
 
   it('auto rule only applies to eligible statuses', () => {
     expect(isFollowUpDue({ ...noted(200), status: 'New Lead' }, cfg)).toBe(false);
     expect(isFollowUpDue({ ...noted(200), status: 'Dead/Pass' }, cfg)).toBe(false);
-    expect(isFollowUpDue({ status: 'Contacted', activityLog: [] }, { days: 90, statuses: [] })).toBe(false);
+    expect(isFollowUpDue({ status: 'Contacted', lastNoteAt: null }, { days: 90, statuses: [] })).toBe(false);
   });
 
   // Hot Leads go stale in a week; everything else on the default 90-day window.

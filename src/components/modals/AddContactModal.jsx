@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { normalizeCounty, parseCustomFieldDefs } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import { fetchDuplicateCandidates } from '../../lib/contacts';
+import { addNote } from '../../lib/notes';
 import { AlertTriangle } from 'lucide-react';
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
@@ -26,7 +27,7 @@ function findDuplicates(contact, existing) {
 }
 
 export default function AddContactModal({ open, onClose }) {
-  const { saveContact, currentClientId, currentClient, showToast } = useApp();
+  const { saveContact, setContacts, currentClientId, currentClient, showToast } = useApp();
   const cfg = resolveConfig(currentClient);
   const visibleFields = cfg.visibleFields;
   const statuses = cfg.statuses.map(s => s.value);
@@ -58,7 +59,6 @@ export default function AddContactModal({ open, onClose }) {
       taxMapIds: form.taxMapIds.filter(Boolean),
       status: form.status,
       notes: form.notes.trim(),
-      activityLog: form.notes ? [{ id: crypto.randomUUID(), text: form.notes, timestamp: new Date().toISOString(), type: 'note' }] : [],
       customFields: {},
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -79,15 +79,31 @@ export default function AddContactModal({ open, onClose }) {
       return;
     }
 
-    await saveContact(contact);
+    await createWithNote(contact);
     setForm(defaultForm());
     setDupeWarning(null);
     onClose();
   }
 
+  // The note typed on the form becomes the contact's first note. It has to follow the
+  // insert — a note needs the contact's id — so a failure here leaves a saved contact with
+  // no note, and says so rather than pretending the whole thing failed.
+  async function createWithNote(contact) {
+    const saved = await saveContact(contact);
+    const text = (contact.notes || '').trim();
+    if (!saved || !text) return;
+    try {
+      const note = await addNote(saved.id, text);
+      setContacts(prev => prev.map(c => (c.id === saved.id ? { ...c, noteCount: 1, lastNoteAt: note.createdAt } : c)));
+    } catch (err) {
+      console.error('First note failed:', err);
+      showToast('Contact saved, but the note was not — add it from the contact.', 'warning');
+    }
+  }
+
   async function confirmSaveDespiteDupe() {
     if (!dupeWarning) return;
-    await saveContact(dupeWarning.contact);
+    await createWithNote(dupeWarning.contact);
     setForm(defaultForm());
     setDupeWarning(null);
     onClose();

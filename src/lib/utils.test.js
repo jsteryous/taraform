@@ -66,7 +66,8 @@ describe('mapDbContact / mapContactToDb', () => {
     tax_map_ids: ['0123-45-6789'],
     status: 'New Lead',
     notes: 'hi',
-    activity_log: [{ t: 'note' }],
+    note_count: 2,
+    last_note_at: '2026-01-02T00:00:00Z',
     custom_fields: { foo: 'bar' },
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
@@ -79,6 +80,20 @@ describe('mapDbContact / mapContactToDb', () => {
     expect(c.ownerAddress).toBe('1 Main St');
     expect(c.taxMapIds).toEqual(['0123-45-6789']);
     expect(c.customFields).toEqual({ foo: 'bar' });
+  });
+
+  // note_count / last_note_at are rolled up from contact_notes by a DB trigger. They are
+  // read into the app shape and must never be written back, or a save would overwrite
+  // what the trigger computed with whatever this tab last saw.
+  it('reads the note rollup but never writes it back', () => {
+    const c = mapDbContact(dbRow);
+    expect(c.noteCount).toBe(2);
+    expect(c.lastNoteAt).toBe('2026-01-02T00:00:00Z');
+    expect(mapDbContact({ ...dbRow, note_count: undefined, last_note_at: null }).noteCount).toBe(0);
+    const out = mapContactToDb(c, 'user-1', 'client-uuid');
+    expect(out).not.toHaveProperty('note_count');
+    expect(out).not.toHaveProperty('last_note_at');
+    expect(out).not.toHaveProperty('activity_log');
   });
 
   it('normalizes county on the way in', () => {
