@@ -66,6 +66,19 @@ export async function deleteNote(id) {
   if (!data?.length) throw new Error('Only the person who wrote a note can delete it.');
 }
 
+// One person's notes in a workspace since a given time, as { contact_id, note_at } — the
+// shape summarizeNoteActivity buckets for the dashboard. Timestamps only, no text.
+export async function fetchNoteActivity(clientId, authorId, since) {
+  const { data, error } = await supabase
+    .from('contact_notes')
+    .select('contact_id,note_at:created_at')
+    .eq('client_id', clientId)
+    .eq('author_id', authorId)
+    .gte('created_at', since);
+  if (error) throw error;
+  return data || [];
+}
+
 // Every note in a workspace, grouped by contact, oldest first — for the CSV export. Paged
 // past the 1000-row cap. Pulling the lot is the simple, obviously-correct choice at this
 // size (hundreds of notes); it is one query per thousand notes regardless of how many

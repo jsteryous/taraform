@@ -1,75 +1,40 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp, EMPTY_FILTERS } from '../context/AppContext';
-import { resolveConfig, getOfferStatusColors } from '../lib/clientConfig';
+import { resolveConfig } from '../lib/clientConfig';
 import { summarizeNoteActivity } from '../lib/activityStats';
-import { applyContactFilters } from '../lib/contactFilters';
+import { applyContactFilters, myFollowUps } from '../lib/contactFilters';
+import { fetchNoteActivity } from '../lib/notes';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Download, CalendarClock } from 'lucide-react';
+import { ArrowLeft, CalendarClock } from 'lucide-react';
 
-const PERIODS = [
-  { value: 'today',   label: 'Today' },
-  { value: 'week',    label: '7 Days' },
-  { value: 'month',   label: '30 Days' },
-  { value: 'alltime', label: 'All Time' },
-];
-
-function downloadOffersReport(recent, period) {
-  const rows = recent
-    .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(o => [
-      o.contactName || '',
-      o.county || '',
-      (o.taxMapIds || []).join(' | '),
-      Number(o.amount) || 0,
-      o.status || '',
-      o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '',
-    ]);
-
-  const headers = ['Contact', 'County', 'Tax Map IDs', 'Amount', 'Status', 'Date'];
-  const csv = [headers, ...rows]
-    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `offers-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
+// The dashboard is about the person looking at it, not the workspace: their follow-ups
+// and the notes they logged. Same layout for every preset — nothing here is land- or
+// bank-specific, and anything workspace-wide belongs in the list and its stats pills.
 export default function Dashboard({ onClose, onViewContact }) {
-  const { currentClientId, currentClient, theme, setFilters } = useApp();
+  const { user, currentClientId, currentClient, setFilters } = useApp();
   const cfg = resolveConfig(currentClient);
-  const offerColors = getOfferStatusColors(theme);
-  const [period, setPeriod]         = useState('week');
-  const [offerStats, setOfferStats] = useState(null);
-  const [offerLoading, setOfferLoading] = useState(true);
-  const [offerError, setOfferError] = useState(null);
+  const userId = user?.id;
   const [noteStats, setNoteStats]     = useState(null);
   const [noteLoading, setNoteLoading] = useState(true);
   const [noteError, setNoteError]     = useState(null);
   const [fuStats, setFuStats]         = useState(null);
   const [fuLoading, setFuLoading]     = useState(true);
   const [fuError, setFuError]         = useState(null);
-  const [lifetimeOffers, setLifetimeOffers] = useState(null);
 
-  // Follow-ups due — the same filter pipeline as the list view (applyContactFilters
-  // with the followUp facet), so this count always equals what "Work the queue" shows.
-  // Ordered most-neglected first: never-noted, then oldest last note.
+  // My follow-ups due — the same filter pipeline as the list view (applyContactFilters
+  // with the followUp facet from myFollowUps), so this count always equals what "Work the
+  // queue" shows. Ordered most-neglected first: never-noted, then oldest last note.
   const loadFollowUps = useCallback(async () => {
     setFuLoading(true);
     setFuError(null);
-    if (!currentClientId) { setFuLoading(false); return; }
+    if (!currentClientId || !userId) { setFuLoading(false); return; }
     try {
-      const followUp = resolveConfig(currentClient).followUp;
+      const followUp = myFollowUps(resolveConfig(currentClient).followUp, userId);
       let q = supabase.from('property_crm_contacts')
-        .select('id,first_name,last_name,county,status,follow_up_on,last_note_at', { count: 'exact' })
+        .select('id,first_name,last_name,status,follow_up_on,last_note_at', { count: 'exact' })
         .eq('client_id', currentClientId)
         .order('last_note_at', { ascending: true, nullsFirst: true })
-        .limit(7);
+        .limit(10);
       q = applyContactFilters(q, { followUp });
       const { data, count, error } = await q;
       if (error) throw error;
@@ -80,121 +45,36 @@ export default function Dashboard({ onClose, onViewContact }) {
     } finally {
       setFuLoading(false);
     }
-  }, [currentClientId, currentClient]);
+  }, [currentClientId, currentClient, userId]);
 
   useEffect(() => {
     loadFollowUps();
   }, [loadFollowUps]);
 
   function workTheQueue() {
-    setFilters({ ...EMPTY_FILTERS, followUp: cfg.followUp });
+    setFilters({ ...EMPTY_FILTERS, followUp: myFollowUps(cfg.followUp, userId) });
     onClose();
   }
 
-  // Notes logged across the client's contacts, bucketed today/7d/30d. One fetch per
-  // client (the card shows all three windows at once, so the period toggle doesn't apply).
+  // Notes I logged, bucketed today/7d/30d. One fetch covers all three windows.
   const loadNoteStats = useCallback(async () => {
     setNoteLoading(true);
     setNoteError(null);
-    if (!currentClientId) { setNoteLoading(false); return; }
+    if (!currentClientId || !userId) { setNoteLoading(false); return; }
     try {
       const since = new Date(Date.now() - 30 * 86400000).toISOString();
-      const { data, error } = await supabase.rpc('note_activity', {
-        p_client_id: currentClientId,
-        p_since: since,
-      });
-      if (error) throw error;
-      setNoteStats(summarizeNoteActivity(data));
+      setNoteStats(summarizeNoteActivity(await fetchNoteActivity(currentClientId, userId, since)));
     } catch (e) {
       console.error('loadNoteStats error:', e);
       setNoteError(e.message);
     } finally {
       setNoteLoading(false);
     }
-  }, [currentClientId]);
+  }, [currentClientId, userId]);
 
   useEffect(() => {
     loadNoteStats();
   }, [loadNoteStats]);
-
-  // Lifetime offers written — deliberately NOT period-scoped, so the volume number
-  // stays put while the toggle moves everything else. This is the count the "offers"
-  // stat pill used to show before it went back to counting contacts (see StatsBar).
-  useEffect(() => {
-    if (!currentClientId) return;
-    let cancelled = false;
-    setLifetimeOffers(null); // hide rather than flash the previous client's number
-    supabase.from('contact_offers')
-      .select('id, property_crm_contacts!inner(client_id)', { count: 'exact', head: true })
-      .eq('property_crm_contacts.client_id', currentClientId)
-      .then(({ count, error }) => {
-        if (cancelled || error) return;
-        setLifetimeOffers(count || 0);
-      });
-    return () => { cancelled = true; };
-  }, [currentClientId]);
-
-  const loadOfferStats = useCallback(async (p) => {
-    setOfferLoading(true);
-    setOfferError(null);
-    if (!currentClientId) { setOfferLoading(false); return; }
-
-    const now = new Date();
-    let since = null;
-    if (p === 'today')      since = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    else if (p === 'week')  since = new Date(now - 7 * 86400000).toISOString();
-    else if (p === 'month') since = new Date(now - 30 * 86400000).toISOString();
-
-    try {
-      let q = supabase
-        .from('contact_offers')
-        .select('id, contact_id, amount, status, created_at, property_crm_contacts!inner(first_name, last_name, county, tax_map_ids, client_id)')
-        .eq('property_crm_contacts.client_id', currentClientId)
-        .order('created_at', { ascending: false });
-      if (since) q = q.gte('created_at', since);
-
-      const { data: rows, error: offersError } = await q;
-      if (offersError) throw offersError;
-
-      const offers = (rows || []).map(row => ({
-        id: row.id,
-        contact_id: row.contact_id,
-        amount: row.amount,
-        status: row.status,
-        created_at: row.created_at,
-        contactName: `${row.property_crm_contacts?.first_name || ''} ${row.property_crm_contacts?.last_name || ''}`.trim(),
-        county: row.property_crm_contacts?.county || '',
-        taxMapIds: row.property_crm_contacts?.tax_map_ids || [],
-      }));
-
-      const uniqueContacts = new Set(offers.map(o => o.contact_id));
-      const totalValue     = offers.reduce((s, o) => s + (Number(o.amount) || 0), 0);
-      const acceptedValue  = offers.filter(o => o.status === 'Accepted').reduce((s, o) => s + (Number(o.amount) || 0), 0);
-      const byStatus = {};
-      for (const o of offers) byStatus[o.status || 'Pending'] = (byStatus[o.status || 'Pending'] || 0) + 1;
-
-      const recent = offers.map(o => ({
-        contactId:   o.contact_id,
-        contactName: o.contactName,
-        county:      o.county,
-        taxMapIds:   o.taxMapIds,
-        amount:      o.amount,
-        status:      o.status,
-        createdAt:   o.created_at,
-      }));
-
-      setOfferStats({ count: uniqueContacts.size, totalCount: offers.length, totalValue, acceptedValue, byStatus, recent });
-    } catch (e) {
-      console.error('loadOfferStats error:', e);
-      setOfferError(e.message);
-    } finally {
-      setOfferLoading(false);
-    }
-  }, [currentClientId]);
-
-  useEffect(() => {
-    loadOfferStats(period);
-  }, [period, loadOfferStats]);
 
   // ── Styles ────────────────────────────────────────────────────
   const card = {
@@ -212,6 +92,7 @@ export default function Dashboard({ onClose, onViewContact }) {
     letterSpacing: '0.6px', color: 'var(--text-muted)', fontFamily: 'var(--mono)',
     marginBottom: '0.875rem',
   };
+  const cols = '2fr 1fr 1fr';
 
   return (
     <div style={{ padding: '0 2rem 2rem', maxWidth: '960px' }}>
@@ -220,29 +101,16 @@ export default function Dashboard({ onClose, onViewContact }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingTop: '1rem' }}>
         <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}><ArrowLeft size={14} /> Back</button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Dashboard</h2>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentClient?.name}</span>
-
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.2rem' }}>
-          {PERIODS.map(p => (
-            <button key={p.value} onClick={() => setPeriod(p.value)} style={{
-              padding: '0.3rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500,
-              border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', transition: 'all 0.15s',
-              background: period === p.value ? 'var(--accent)' : 'transparent',
-              color: period === p.value ? 'white' : 'var(--text-muted)',
-            }}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{user?.email}</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-        {/* ── Follow-ups due ── */}
+        {/* ── My follow-ups due ── */}
         <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
             <div style={{ ...sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <CalendarClock size={13} /> Follow-ups Due
+              <CalendarClock size={13} /> My Follow-ups Due
             </div>
             {!fuLoading && fuStats?.count > 0 && (
               <button
@@ -265,18 +133,18 @@ export default function Dashboard({ onClose, onViewContact }) {
           {!fuLoading && fuStats && (
             fuStats.count === 0 ? (
               <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                Nobody is due for follow-up. Nice work.
+                You have nobody due for follow-up. Nice work.
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ ...bigNum, color: 'var(--warning)' }}>{fuStats.count}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                    contact{fuStats.count !== 1 ? 's' : ''} due — most neglected first
+                    of your {fuStats.count !== 1 ? cfg.terminology.contacts.toLowerCase() : cfg.terminology.contact.toLowerCase()} due — most neglected first
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                  <span>Contact</span><span>County</span><span>Status</span><span style={{ textAlign: 'right' }}>Last Note</span>
+                <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
+                  <span>{cfg.terminology.contact}</span><span>Status</span><span style={{ textAlign: 'right' }}>Due / Last Note</span>
                 </div>
                 {fuStats.rows.map(r => {
                   const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || '—';
@@ -284,12 +152,11 @@ export default function Dashboard({ onClose, onViewContact }) {
                     ? `${Math.floor((Date.now() - new Date(r.last_note_at)) / 86400000)}d ago`
                     : 'Never';
                   return (
-                    <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                    <div key={r.id} style={{ display: 'grid', gridTemplateColumns: cols, gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                       <span
                         onClick={() => { if (onViewContact) onViewContact({ id: r.id }); }}
                         style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
                       >{name}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.county || '—'}</span>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.status || '—'}</span>
                       <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
                         {r.follow_up_on ? `due ${new Date(r.follow_up_on + 'T00:00:00').toLocaleDateString()}` : lastNote}
@@ -299,7 +166,7 @@ export default function Dashboard({ onClose, onViewContact }) {
                 })}
                 {fuStats.count > fuStats.rows.length && (
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '0.5rem' }}>
-                    + {fuStats.count - fuStats.rows.length} more in the queue
+                    + {fuStats.count - fuStats.rows.length} more in your queue
                   </div>
                 )}
               </>
@@ -307,9 +174,9 @@ export default function Dashboard({ onClose, onViewContact }) {
           )}
         </div>
 
-        {/* ── Activity (notes logged) ── */}
+        {/* ── My activity (notes I logged) ── */}
         <div style={card}>
-          <div style={sectionTitle}>Activity — Notes Logged</div>
+          <div style={sectionTitle}>My Activity — Notes Logged</div>
 
           {noteLoading && (
             <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading…</div>
@@ -330,104 +197,11 @@ export default function Dashboard({ onClose, onViewContact }) {
                   <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>{label}</div>
                   <div style={{ ...bigNum, color: 'var(--accent)' }}>{noteStats[key].notes}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                    {noteStats[key].contacts} contact{noteStats[key].contacts !== 1 ? 's' : ''}
+                    {noteStats[key].contacts} {noteStats[key].contacts !== 1 ? cfg.terminology.contacts.toLowerCase() : cfg.terminology.contact.toLowerCase()}
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* ── Offers ── */}
-        <div style={card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-            <div style={{ ...sectionTitle, marginBottom: 0 }}>Offers — {PERIODS.find(p => p.value === period)?.label}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              {lifetimeOffers !== null && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  <strong style={{ color: 'var(--text)', fontWeight: 700, fontFamily: 'var(--mono)' }}>{lifetimeOffers.toLocaleString()}</strong> written all time
-                </span>
-              )}
-              {offerStats && (
-                <button
-                  onClick={() => downloadOffersReport(offerStats.recent || [], period)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', padding: '0.3rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  <Download size={12} /> Download Report
-                </button>
-              )}
-            </div>
-          </div>
-
-          {offerLoading && (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading…</div>
-          )}
-
-          {offerError && (
-            <div style={{ color: '#f87171', fontSize: '0.875rem' }}>Failed to load offers: {offerError}</div>
-          )}
-
-          {!offerLoading && offerStats && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: (offerStats.totalCount || 0) > 0 ? '1.25rem' : 0 }}>
-                <div>
-                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Contacts w/ Offers</div>
-                  <div style={{ ...bigNum, color: offerColors.Pending }}>{offerStats.count}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{offerStats.totalCount} total offer{offerStats.totalCount !== 1 ? 's' : ''}</div>
-                </div>
-                <div>
-                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Total Value</div>
-                  <div style={{ ...bigNum, color: offerColors.Countered, fontSize: '1.5rem' }}>${offerStats.totalValue.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div style={{ ...cardLabel, marginBottom: '0.3rem' }}>Accepted Value</div>
-                  <div style={{ ...bigNum, color: offerColors.Accepted, fontSize: '1.5rem' }}>${offerStats.acceptedValue.toLocaleString()}</div>
-                </div>
-              </div>
-
-              {Object.keys(offerStats.byStatus).length > 0 && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: offerStats.totalCount > 0 ? '1.25rem' : 0 }}>
-                  {Object.entries(offerStats.byStatus).map(([status, count]) => {
-                    const c = offerColors[status] || '#6b7280';
-                    return (
-                      <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '20px', background: `${c}18`, border: `1px solid ${c}33` }}>
-                        <span style={{ fontSize: '0.8rem', color: c, fontWeight: 600 }}>{count}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{status}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {offerStats.recent.length > 0 && (
-                <div>
-                  <div style={{ ...cardLabel, marginBottom: '0.5rem' }}>Recent Offers</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.4px', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-                    <span>Contact</span><span>County</span><span style={{ textAlign: 'right' }}>Amount</span><span style={{ textAlign: 'right' }}>Status</span><span style={{ textAlign: 'right' }}>Date</span>
-                  </div>
-                  <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
-                  {offerStats.recent.map((o, i) => {
-                    return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 0, padding: '0.5rem 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-                        <span
-                          onClick={() => { if (o.contactId && onViewContact) onViewContact({ id: o.contactId }); }}
-                          style={{ fontSize: '0.8rem', color: onViewContact ? 'var(--accent)' : 'var(--text)', cursor: onViewContact ? 'pointer' : 'default', textDecoration: onViewContact ? 'underline' : 'none', textUnderlineOffset: '2px' }}
-                        >{o.contactName}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.county || '—'}</span>
-                        <span style={{ textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>${Number(o.amount).toLocaleString()}</span>
-                        <span style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 600, color: offerColors[o.status || 'Pending'] || 'var(--text-muted)' }}>{o.status || 'Pending'}</span>
-                        <span style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</span>
-                      </div>
-                    );
-                  })}
-                  </div>
-                </div>
-              )}
-
-              {offerStats.totalCount === 0 && (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No offers in this period.</div>
-              )}
-            </>
           )}
         </div>
 

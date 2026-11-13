@@ -4,6 +4,7 @@ import ContactCard from './ContactCard';
 import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
+import { myFollowUps } from '../../lib/contactFilters';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
@@ -374,8 +375,8 @@ export default function ContactList({ onView, onExport }) {
               {/* The filter value carries the resolved config so applyContactFilters
                   stays pure — see EMPTY_FILTERS in AppContext. */}
               <label className="filter-dropdown-item">
-                <input type="checkbox" checked={!!filterFollowUp} onChange={() => setFilterFollowUp(filterFollowUp ? null : cfg.followUp)} style={{ width: '14px', height: '14px' }} />
-                Due for follow-up
+                <input type="checkbox" checked={!!filterFollowUp} onChange={() => setFilterFollowUp(filterFollowUp ? null : myFollowUps(cfg.followUp, user?.id))} style={{ width: '14px', height: '14px' }} />
+                My follow-ups due
               </label>
             </div>
           )}

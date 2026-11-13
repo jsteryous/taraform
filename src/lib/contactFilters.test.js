@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyContactFilters, hasActiveFilters, isFollowUpDue, followUpWindow, todayStr } from './contactFilters';
+import { applyContactFilters, hasActiveFilters, isFollowUpDue, followUpWindow, todayStr, myFollowUps } from './contactFilters';
 import { LAND_CONFIG } from './clientConfig';
 
 // Records every PostgREST builder method call and stays chainable, so we can assert
@@ -180,6 +180,20 @@ describe('applyContactFilters', () => {
     const q = mockQuery();
     applyContactFilters(q, { followUp: { days: 90, statuses: [] } });
     expect(callsOf(q)).toEqual([{ method: 'or', args: [`follow_up_on.lte.${todayStr()}`] }]);
+  });
+
+  it('narrows the queue to one person: latest note is theirs, or un-noted and last saved by them', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { followUp: myFollowUps({ days: 90, statuses: [] }, 'u-1') });
+    expect(callsOf(q)).toEqual([
+      { method: 'or', args: [`follow_up_on.lte.${todayStr()}`] },
+      { method: 'or', args: ['last_note_by.eq.u-1,and(last_note_by.is.null,user_id.eq.u-1)'] },
+    ]);
+    // No user id (not signed in yet) leaves the queue unscoped rather than emitting eq.null.
+    const anon = mockQuery();
+    applyContactFilters(anon, { followUp: myFollowUps({ days: 90, statuses: [] }, undefined) });
+    expect(callsOf(anon)).toHaveLength(1);
+    expect(myFollowUps(null, 'u-1')).toBe(null);
   });
 
   it('emits no follow-up clause when the facet is off', () => {

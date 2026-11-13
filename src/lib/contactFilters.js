@@ -47,6 +47,13 @@ export function isFollowUpDue(contact, followUp) {
   return !last || last < new Date(Date.now() - window * 86400000);
 }
 
+// The follow-up facet for one person: the workspace's resolved follow-up config plus whose
+// queue it is. Every caller that turns the facet on goes through here, so the dashboard
+// count, "Work the queue" and the list's checkbox cannot disagree about whose calls show.
+export function myFollowUps(followUp, userId) {
+  return followUp ? { ...followUp, mine: userId || null } : null;
+}
+
 // Pure query-shaping for property_crm_contacts list/export.
 // Takes a PostgREST query builder `q` and the current `filters` object, applies
 // the active filters, and returns the builder. No supabase/component state here so
@@ -117,6 +124,16 @@ export function applyContactFilters(q, filters = {}) {
       ? `and(follow_up_on.lte.${todayStr()},status.not.in.(${excluded.map((s) => `"${s}"`).join(',')}))`
       : `follow_up_on.lte.${todayStr()}`;
     q = q.or([manual, ...auto].join(','));
+
+    // The queue is per person: `mine` is the signed-in user's id, added by myFollowUps
+    // below. A follow-up belongs to whoever wrote the contact's latest note — a note is a
+    // call, and logging one is what scheduled the next (last_note_by, rolled up by the
+    // contact_notes_rollup trigger, db/20261113_last_note_by.sql). A contact nobody has
+    // noted falls back to user_id, the last person to save it, i.e. whoever set the date
+    // or the status. A second .or() ANDs with the one above. The id is a uuid from the
+    // session, safe to interpolate.
+    const mine = filters.followUp.mine;
+    if (mine) q = q.or(`last_note_by.eq.${mine},and(last_note_by.is.null,user_id.eq.${mine})`);
   }
 
   if (filters.search) {
