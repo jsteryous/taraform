@@ -26,7 +26,6 @@ const MISSING_ONLY = process.argv.includes('--missing-only');
 // Script can't know the full set of generated names — suppress false positives.
 const DYNAMIC_PREFIXES = [
   'status-',  // getStatusClass() generates e.g. status-new-lead
-  'sms-',     // sms-${contact.smsStatus} generates e.g. sms-do-not-contact
   'bar-',     // getStatusClass() also returns bar-* for the color sidebar
   'swatch-',  // swatch-${theme} in Header.jsx theme picker
 ];
@@ -37,7 +36,7 @@ const APPLIED_TO_BODY = new Set(['theme-light', 'theme-dark', 'theme-dim']);
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isValidClassName(str) {
   // Must start with a letter, contain only letters/digits/hyphens (no underscores),
-  // and not end with a hyphen (filters partial dynamic prefixes like "sms-")
+  // and not end with a hyphen (filters partial dynamic prefixes like "status-")
   return /^[a-zA-Z][a-zA-Z\d-]*[a-zA-Z\d]$|^[a-zA-Z\d]$/.test(str);
 }
 

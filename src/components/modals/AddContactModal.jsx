@@ -60,7 +60,6 @@ export default function AddContactModal({ open, onClose }) {
       notes: form.notes.trim(),
       activityLog: form.notes ? [{ id: crypto.randomUUID(), text: form.notes, timestamp: new Date().toISOString(), type: 'note' }] : [],
       customFields: {},
-      smsStatus: 'eligible',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

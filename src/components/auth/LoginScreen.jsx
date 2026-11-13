@@ -49,7 +49,7 @@ export default function LoginScreen() {
     <div className="login-container">
       <div className="login-box">
         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>Taraform</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.875rem' }}>CRM & SMS Outreach</p>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.875rem' }}>Shared CRM</p>
         {error && <div style={{ color: 'var(--danger)', marginBottom: '1rem', fontSize: '0.875rem' }}>{error}</div>}
         <button className="google-btn" onClick={handleGoogle} disabled={loading}>
           {loading ? 'Connecting…' : (

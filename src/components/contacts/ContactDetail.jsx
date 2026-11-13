@@ -7,17 +7,10 @@ import { scheduleAfterNote, clearOnStatusChange, countAttempts, attemptGap, atte
 import { resolveConfig } from '../../lib/clientConfig';
 import NotesTab from './NotesTab';
 import OffersTab from './OffersTab';
-import SmsTab from './SmsTab';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
 import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, Pencil, HelpCircle } from 'lucide-react';
-
-const SMS_STATUS_COLORS = {
-  eligible: 'var(--text-muted)', contacted: 'var(--accent)',
-  interested: 'var(--success)', not_interested: 'var(--text-muted)',
-  do_not_contact: 'var(--danger)', unclear: 'var(--warning)',
-};
 
 
 export default function ContactDetail({ onClose }) {
@@ -159,9 +152,6 @@ export default function ContactDetail({ onClose }) {
     update(field, (draft[field] || []).filter((_, i) => i !== idx));
   }
 
-  const smsStatus = draft.smsStatus || 'eligible';
-  const smsColor = SMS_STATUS_COLORS[smsStatus] || 'var(--text-muted)';
-
   // Due via the manual date or the auto rule (eligible status + stale notes) — same
   // predicate the queue filter uses, so the badge agrees with the list.
   const followUpDue = isFollowUpDue(draft, cfg.followUp);
@@ -237,15 +227,6 @@ export default function ContactDetail({ onClose }) {
               className="inline-input name-input"
             />
           </div>
-
-          {/* SMS status pill */}
-          {smsStatus !== 'eligible' && (
-            <div style={{ marginBottom: '0.75rem' }}>
-              <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600, background: `color-mix(in srgb, ${smsColor} 13%, transparent)`, color: smsColor, border: `1px solid color-mix(in srgb, ${smsColor} 27%, transparent)`, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                SMS · {smsStatus.replace(/_/g, ' ')}
-              </span>
-            </div>
-          )}
 
           {/* Status */}
           <div style={{ marginBottom: '1rem' }}>
@@ -499,30 +480,10 @@ export default function ContactDetail({ onClose }) {
             >
               Notes &amp; Activity
             </button>
-            {cfg.tabs.includes('sms') && (
-              <button
-                role="tab"
-                id="tab-sms"
-                aria-selected={tab === 'sms'}
-                aria-controls="tabpanel-sms"
-                tabIndex={0}
-                className={`detail-tab${tab === 'sms' ? ' active' : ''}`}
-                onClick={() => setTab('sms')}
-              >
-                Messages
-              </button>
-            )}
           </div>
           <div role="tabpanel" id="tabpanel-notes" aria-labelledby="tab-notes" hidden={tab !== 'notes'}>
             {tab === 'notes' && <NotesTab contact={draft} onChange={handleNotesChange} quickNotes={cfg.quickNotes} />}
           </div>
-          {cfg.tabs.includes('sms') && (
-            <div role="tabpanel" id="tabpanel-sms" aria-labelledby="tab-sms" hidden={tab !== 'sms'}>
-              {/* Keyed on id: the thread and composer must not carry over when the overlay
-                  swaps to another contact. */}
-              {tab === 'sms' && <SmsTab key={draft.id} contact={draft} />}
-            </div>
-          )}
         </div>
 
         {/* ── Offers — equal split right column ── */}

@@ -77,8 +77,6 @@ export function mapDbContact(d) {
     taxMapIds: d.tax_map_ids || [],
     status: d.status,
     followUpOn: d.follow_up_on || null,
-    smsStatus: d.sms_status || 'eligible',
-    lastSmsAt: d.last_sms_at || null,
     leadSource: d.lead_source || '',
     contactMethod: d.contact_method || '',
     acreage: d.acreage || '',

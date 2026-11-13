@@ -3,15 +3,9 @@ import { useAppData } from '../../context/AppContext';
 import { getStatusClass } from '../../lib/utils';
 import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
 
-const SMS_LABELS = {
-  eligible: null, contacted: 'SMS', interested: 'interested',
-  not_interested: 'not interested', do_not_contact: 'DNC', unclear: 'unclear',
-};
-
 const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onClick }) {
   const { currentClient } = useAppData();
   const cfg = resolveConfig(currentClient);
-  const smsLabel = SMS_LABELS[contact.smsStatus];
   const barColor = getStatusColor(cfg, contact.status);
   const showCounty = cfg.listColumns?.includes('county');
 
@@ -47,7 +41,6 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
           style={{ background: `${barColor}22`, color: barColor, borderColor: `${barColor}44` }}>
           {contact.status}
         </span>
-        {smsLabel && <span className={`sms-badge sms-${contact.smsStatus}`}>{smsLabel}</span>}
       </div>
     </div>
   );

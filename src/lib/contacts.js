@@ -15,7 +15,7 @@ import { applyContactFilters } from './contactFilters';
 
 // activity_log + bad_phones are carried so the detail overlay's re-check has something to
 // show; the filter itself is entirely server-side (see applyContactFilters).
-export const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,follow_up_on,sms_status,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
+export const LIST_FIELDS = 'id,first_name,last_name,phones,bad_phones,verified_phones,email,county,status,follow_up_on,email_status,lead_source,contact_method,acreage,tax_map_ids,activity_log,updated_at,created_at,client_id,user_id';
 export const PAGE_SIZE = 50;
 
 // The one place a filtered contact query is shaped. Every read path below goes through it,

@@ -2,7 +2,7 @@
 
 Multi-tenant CRM for land acquisition. Supabase direct DB (anon key + RLS, no backend server), deployed to GitHub Pages (taraform.org) via CI on push to `main`. Primary client: Table Rock Partners (UUID: `f3a69c31-8e40-4ea0-865a-d8bd9214376d`).
 
-> **2026-06-10 — Railway decommissioned.** The Express server (`taraform-server-production.up.railway.app`, repo jsteryous/taraform-server) and its features (Twilio SMS, email automation/OAuth, Reoon verification) were removed to get hosting cost to $0. All data access is now direct-to-Supabase: clients/members via the RLS policies + SECURITY DEFINER RPCs in `db/20260610_clients_rls.sql`, offers/contacts via membership-gated table policies. Those tables were later **dropped** — `sms_messages`, `email_messages` and `sms_settings` are all gone (verified 2026-08-27; this file claimed otherwise until then). Texting came back 2026-08-27 as a Supabase-only build — see **Texting** below. Do not add features that require an always-on server without flagging the cost.
+> **2026-06-10 — Railway decommissioned.** The Express server (`taraform-server-production.up.railway.app`, repo jsteryous/taraform-server) and its features (Twilio SMS, email automation/OAuth, Reoon verification) were removed to get hosting cost to $0. All data access is now direct-to-Supabase: clients/members via the RLS policies + SECURITY DEFINER RPCs in `db/20260610_clients_rls.sql`, offers/contacts via membership-gated table policies. Those tables were later **dropped** — `email_messages` and `sms_settings` are gone (verified 2026-08-27). Texting came back briefly as a Supabase-only build and was removed again 2026-11-13 — see **Texting** below. Do not add features that require an always-on server without flagging the cost.
 
 ## Routing
 
@@ -16,91 +16,25 @@ Enforced by RLS only (the anon key ships in the public bundle). `clients`/`conta
 
 **`updated_at` on `property_crm_contacts` is set by the client, not a trigger.** There is exactly one trigger in the whole `public` schema (`enriched_leads_updated_at`); `update_updated_at` is attached to nothing and is dead code. Since `upsertContact`'s optimistic-concurrency guard asserts the last-read `updated_at`, any write path that forgets to bump it silently degrades that guard — and a write made outside the app (psql, a script, the Supabase table editor) won't bump it at all.
 
-## Texting
+## Texting — removed 2026-11-13
 
-Manual, one-at-a-time SMS from the contact overlay (Messages tab). No cron, no blasting.
-Runbook + compliance model: `scripts/SMS.md`. Schema: `db/20260827_sms.sql` (applied).
+A manual-SMS build (Telnyx, DNC scrub, opt-out handling, inbox) existed from 2026-08-27 and
+was removed without ever sending a message: no client had a number, no DNC area code was
+loaded, and the provider keys were never set. The app is becoming a shared relationship CRM
+(`PLAN.md`) where texting has no place. Removal is `db/20261113_remove_texting.sql`; the
+earlier `db/20260827_sms*.sql`, `db/20260827_telnyx.sql` and `db/20260828_sms_inbox.sql`
+stay as the record of what was applied, and the app code is in git history before that date.
+Bringing it back is a decision, not a revert — re-read the compliance model in the old
+`scripts/SMS.md` first.
 
-**Every guard is SQL, in `sms_send_precheck()`.** Not React — the anon key is public, so a
-check there is decoration. Not the Edge Function — it runs as `service_role` and bypasses
-RLS, so it cannot be the tenancy boundary. Same precedent as `phone_sync_contacts_for()`.
-The function returns a *reason*, which the UI shows; a bare boolean would leave the operator
-unable to act on a block. Checks: membership → valid number → number is on that contact →
-not `bad_phones` → not opted out → DNC clear or consent recorded → 8am-9pm recipient local →
-under the daily cap. **All of them fail closed.**
-
-**Nothing sends until an area code is DNC-scrubbed** (`scripts/load-dnc.mjs`). This is
-deliberate: a number missing from `dnc_numbers` only means "unlisted" if we hold that area
-code's file, so `dnc_area_codes` tracks coverage separately. Without it a partial download
-silently reads as a clean bill of health for the whole country. 864 alone unblocks ~72% of
-the list and the registry is free for 5 area codes.
-
-**Provider is Telnyx**, switched from Twilio 2026-08-27 (`db/20260827_telnyx.sql`). Cost was
-not the reason — at ~600 msgs/month the two are ~$3 apart. The vendor surface is deliberately
-one `fetch` in `sms-send` and one signature check in `sms-inbound`; everything that decides
-whether a message *may* be sent is in SQL and would survive another switch. Telnyx signs
-webhooks with **Ed25519** over `${timestamp}|${rawBody}` (Twilio used HMAC-SHA1 over a URL),
-so `sms-inbound` must read the **raw** body — re-serializing the parsed JSON breaks the
-signature. Telnyx also does **not** auto-reply to STOP the way Twilio did.
-
-**Two traps.** (1) `clients.sms_number`, renamed from `twilio_number` — the old name outlived
-the vendor by two migrations. **No client has a number set**: the dead Twilio value on Table
-Rock was cleared 2026-08-27 (`db/20260827_clear_stale_sms_number.sql`, which is now the only
-record of what it was), and Personal List — the list actually worked out of — never had one.
-Nothing sends until that is set. (2) `sms-inbound` must deploy with `--no-verify-jwt`, making
-it the only publicly reachable function; its signature check is therefore load-bearing, not
-defence in depth.
-
-**Opt-outs key on the NUMBER, in `sms_opt_outs` — never on the contact row.** This was a
-real bug, caught 2026-08-27 before anything shipped: **295 numbers sit on more than one
-contact** (one on four), so the original per-contact flag would have honoured a STOP on one
-card and kept the duplicates textable at the same number. Enforced in `sms_send_precheck()`
-*above* the consent branch and again in `sms_record_outbound()` at write time, and written
-before contact matching so an unmatchable STOP still suppresses. Nothing in the app reverses
-it — not consent, not a later START (which unblocks at Twilio but not here).
-
-`sms_is_stop()` has three tiers — exact carrier keywords, a trailing-"stop" tier, and
-phrases — because people write "please stop texting me" and neither Twilio nor an exact
-matcher catches that. Widened 2026-08-28: the old version missed **"please stop."** (tier 1
-is anchored, and the phrase tier demanded an object like "stop texting"), bare **"remove
-me"**, and **"wrong number"**, which is a stop request in every way that matters. Tuned to
-over-match deliberately, but *not* with a bare `stop` — "you can stop by the property"
-is a sentence this business really receives. A 35-case corpus, false positives included,
-sits commented at the foot of `db/20260828_sms_inbox.sql`; re-run it after any edit.
-
-**The regex is no longer the last line of defence.** `sms_send_precheck()` blocks on
-`unread_reply`: a number with an unread inbound message cannot be texted until a human opens
-the thread, which is what marks it read. That converts "we hope the matcher caught it" into
-"a person saw it" — the property 47 CFR 64.1200(d) actually cares about — and it is why the
-inbox below is a compliance component, not a convenience. `sms_opt_out_number()` (Opt out
-button, in the thread and in the inbox) covers anyone who asks by phone or email.
-
-**Every reply is visible in one place** (`db/20260828_sms_inbox.sql`). Until 2026-08-28 the
-per-contact Messages tab was the *only* reader of `sms_messages`, so a reply announced itself
-by nothing at all, and a reply from a number matching no contact (`contact_id` null) could
-not be surfaced by any per-contact query. `sms_inbox()` + the header badge fix both;
-`sms_unread_count()` is polled every 60s while the tab is visible, because inbound arrives by
-webhook with nothing to push it to the browser. Un-attributable inbound now dead-letters to
-`sms_unrouted` instead of being discarded — a non-empty table means `clients.sms_number` is
-unset or stale, which the inbox says in as many words.
-
-**HELP is answered automatically**, once per number per day, never after a STOP. CTIA
-Messaging Principles require it on a 10DLC campaign and Telnyx sends nothing on its own. The
-decision is made in `sms_record_inbound()` (so it obeys the same suppression rules as
-everything else) and only carried out in `sms-inbound`. Text is `clients.sms_help_text`,
-falling back to the client name. This is the one outbound path with `sent_by` null, which is
-also how the once-a-day guard recognises its own messages.
+One lesson from that build outlives it:
 
 **Recreating a SECURITY DEFINER function drops its REVOKEs.** `CREATE OR REPLACE` keeps
-grants; `DROP` + `CREATE` resets EXECUTE to PUBLIC. Changing `sms_record_inbound`'s return
-type on 2026-08-28 therefore made it briefly callable by `anon` — i.e. forgeable replies and
-forged STOPs from anyone holding the public bundle's key. Caught by re-checking
-`has_function_privilege` after the migration; **do that check every time**. Same family as
-the "a policy named for a role is not scoped to that role" lesson in Tier 1.
-
-**There is no automated sending and adding one is a decision, not a refactor.** No cron job
-touches SMS (`cron.job` holds only `phone-sync-nightly`), and `sms-send` requires a user JWT
-per message. The manual-send property is what makes best-effort STOP detection acceptable.
+grants; `DROP` + `CREATE` resets EXECUTE to PUBLIC. Changing a function's return type or
+argument list therefore makes it briefly callable by `anon` — anyone holding the public
+bundle's key. Restate the grants in the same migration and re-check
+`has_function_privilege` afterwards, **every time**. Same family as the "a policy named for
+a role is not scoped to that role" lesson in Tier 1.
 
 ## Subdirectory docs
 
@@ -108,7 +42,7 @@ Scoped guidance lives next to the code:
 
 - `src/components/CLAUDE.md` — UI patterns (font tokens, Select, useConfirm, blur-to-save, check-css, CSV import)
 - `src/context/CLAUDE.md` — AppContext split, pagination, filter state, focus-refresh, saveContact, showToast
-- `src/lib/CLAUDE.md` — DB conventions (bigint id, sms_settings, contact_offers, custom fields, OAuth tokens)
+- `src/lib/CLAUDE.md` — DB conventions (bigint id, contact_offers, custom fields, follow-ups)
 
 ## Remediation backlog
 
@@ -154,32 +88,13 @@ Scoped guidance lives next to the code:
 - [x] **Stop synced leads from renaming personal contacts** — done 2026-08-06. The sync writes into the operator's **personal** Google account (the workflow comment claimed "a dedicated Google account"; it never was), so lead cards sit beside real contacts. Phones unify cards sharing a number — iOS links, Android aggregates — and the merged contact shows whichever name the OS picks, so a lead card renamed a real contact to "Nicholas Whitaker (Dead/Pass)" and swapped its photo. Five were shadowed. `withoutPersonalNumbers` (`src/lib/phoneSync.js`) now drops any lead whose number is already on a card the sync doesn't own: caller ID already worked for those, so the lead card added nothing but the collision. Self-healing — because `diffContacts` reconciles, dropping them from `desired` deletes the cards earlier runs created (verified live: 1327 → 1322, zero collisions, the 99 personal cards untouched). +6 tests. **Unrelated to this but worth knowing:** turning on Google Contacts sync on the phone also pulls down the operator's own pre-existing Google contacts, including 34 stale phone-less cards that then link to and shadow the real iCloud/device ones. That is not something the sync can fix — the cards predate it by years — and is the actual cause if a personal contact's name changes without a `taraform_id` on it.
 - [x] **Deep-link the synced phone contacts back into the app** — done 2026-08-04. `buildPerson` in `src/lib/phoneSync.js` now emits `urls: [{ value: contactUrl(id) }]`, added to `PERSON_FIELDS`, `UPDATE_MASK` and `personSignature` (the last one matters: without it the diff can't see the field, so contacts synced before the link existed would never gain one). Makes a synced contact tappable from the phone straight to its contact overlay — the closest free thing to a "call from X" popup, since no browser can see incoming call state. +3 tests.
 
-- [ ] **Finish wiring texting.** All code is written and applied — `db/20260827_sms.sql`,
-  `db/20260827_sms_optout_hardening.sql`, `db/20260827_telnyx.sql` and
-  `db/20260828_sms_inbox.sql` are live on the database, Messages tab + inbox are built, 179
-  tests green. **Inert until four external things exist**, none of them code:
-  1. ~~Deploy the two Edge Functions.~~ **Done 2026-08-28.** Both ACTIVE at v1:
-     `sms-inbound` with `verify_jwt: false` (it is now genuinely the only publicly reachable
-     function in the project), `sms-send` with `verify_jwt: true`. Probed live afterwards:
-     unsigned POST → 403, forged signature → 403, GET → 405, `sms-send` without a JWT → 401,
-     and **zero rows written** by the forgery attempts. The signature check is load-bearing
-     and it holds.
-  2. **Set the secrets** — `TELNYX_API_KEY` and `TELNYX_PUBLIC_KEY` (different keys, see
-     `scripts/SMS.md`). **Neither is set**, confirmed 2026-08-28 by probing `sms-send`, which
-     answers 503 "Texting is not configured". The consequence is the one that matters:
-     without `TELNYX_PUBLIC_KEY` every webhook fails the signature check, so `sms-inbound`
-     returns 403 to *real* Telnyx events and **inbound STOP is still not being received**.
-     Deployed-but-keyless is fail-closed, not finished. Easiest route is the dashboard
-     (Project Settings → Edge Functions → Secrets), no PAT needed. A Messaging Profile left
-     on webhook API **v1** fails the same way and just as silently. The cheapest proof either
-     way is to text yourself, reply STOP, and confirm a row in `sms_opt_outs`.
-  3. **Set `clients.sms_number` on Personal List.** All four clients are still null.
-  4. **Load a DNC area code** (`scripts/load-dnc.mjs`, start with 864). `dnc_area_codes` and
-     `dnc_numbers` are both empty, so every send is blocked by design — the feature, not a
-     bug.
-  Also worth setting `clients.sms_help_text` per client; it falls back to the client name.
-  Motivation: cold calling alone was taking ~5,000 dials per deal, which is not reachable
-  solo.
+- [ ] **Finish removing texting.** App code, docs and the two function sources were deleted
+  2026-11-13. Two things remain, in this order: (1) once that build is live, apply
+  `db/20261113_remove_texting.sql` — not before, the previous build selects `sms_status` and
+  calls `create_client` with two arguments; (2) delete the deployed `sms-send` and
+  `sms-inbound` Edge Functions (`npx supabase functions delete <name> --project-ref
+  ykuenmwfxecmmqichwit`, or the dashboard). Until (2), `sms-inbound` is still a publicly
+  reachable endpoint, though it rejects everything because its key was never set.
 
 ### Good as-is (don't "fix") 
 Context data/UI split, `loadingRef` concurrency guard, ref-synced `setContacts`, O(1) import dedup, `useDraftSave` optimistic-save/revert, PostgREST error classification, and the CLAUDE.md docs themselves. Preserve these when refactoring.
