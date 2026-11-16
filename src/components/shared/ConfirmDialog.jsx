@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export function useConfirm() {
   const [state, setState] = useState(null); // { message, resolve, danger, requireText }
@@ -30,7 +31,10 @@ export function useConfirm() {
     return () => window.removeEventListener('keydown', onKey);
   }, [state]); // eslint-disable-line
 
-  const dialog = state ? (
+  // Portalled to <body>: rendered in place, the dialog inherits whatever stacking
+  // context its caller sits in (e.g. the contact sidebar), and later siblings such as
+  // the notes column paint over it no matter how high its own z-index is.
+  const dialog = state ? createPortal(
     <div className="confirm-overlay" onClick={() => handleChoice(false)}>
       <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
         <p className="confirm-message">{state.message}</p>
@@ -55,7 +59,8 @@ export function useConfirm() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   ) : null;
 
   return [confirm, dialog];
