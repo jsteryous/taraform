@@ -54,6 +54,15 @@ export async function addConnection({ companyId, personId, title }) {
   return data.id;
 }
 
+// The title is the only part of a link that can change (contact_links_stamp pins the rest).
+export async function updateConnectionTitle(linkId, title) {
+  const { error } = await supabase
+    .from('contact_links')
+    .update({ title: title?.trim() || null })
+    .eq('id', linkId);
+  if (error) throw error;
+}
+
 export async function removeConnection(linkId) {
   const { error } = await supabase.from('contact_links').delete().eq('id', linkId);
   if (error) throw error;

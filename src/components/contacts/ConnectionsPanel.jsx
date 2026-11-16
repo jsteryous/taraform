@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, User, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useConfirm } from '../shared/ConfirmDialog';
-import { fetchConnections, addConnection, removeConnection, searchByKind } from '../../lib/links';
+import { fetchConnections, addConnection, updateConnectionTitle, removeConnection, searchByKind } from '../../lib/links';
 import { classifyError } from '../../lib/errors';
 import { resolveConfig } from '../../lib/clientConfig';
 
@@ -106,6 +106,20 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
     }
   }
 
+  // Blur-to-save, like every other field on the card. The input is uncontrolled and keyed
+  // by the saved title, so a failed save snaps it back to what is actually stored.
+  async function saveTitle(l, value) {
+    const next = value.trim();
+    if (next === l.title) return;
+    try {
+      await updateConnectionTitle(l.linkId, next);
+      apply(links.map(x => x.linkId === l.linkId ? { ...x, title: next } : x));
+    } catch (e) {
+      showToast(classifyError(e), 'error');
+      apply([...links]);
+    }
+  }
+
   async function unlink(l) {
     if (!await confirmRemove(`Remove the link to ${l.contact.name}? Neither contact is deleted.`)) return;
     try {
@@ -141,7 +155,18 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
         <div key={l.linkId} className="conn-row">
           <OtherIcon size={13} className="conn-icon" />
           <button type="button" className="conn-name" onClick={() => open(l.contact.id)}>{l.contact.name}</button>
-          {l.title && <span className="conn-title">{l.title}</span>}
+          <input
+            key={`${l.linkId}:${l.title}`}
+            className="inline-input conn-title"
+            defaultValue={l.title}
+            placeholder="Add title"
+            aria-label={`Title at ${isCompany ? 'this company' : l.contact.name}`}
+            onBlur={e => saveTitle(l, e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') { e.currentTarget.value = l.title; e.currentTarget.blur(); }
+            }}
+          />
           <button type="button" className="note-delete-btn" title="Remove link" onClick={() => unlink(l)}><X size={12} /></button>
         </div>
       ))}

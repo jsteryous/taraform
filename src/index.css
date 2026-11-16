@@ -1696,8 +1696,10 @@ input::placeholder { color: var(--text-muted); }
     text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .conn-name:hover { text-decoration: underline; }
-.conn-title { color: var(--text-muted); font-size: var(--text-xs); margin-right: auto; white-space: nowrap; }
-.conn-row .note-delete-btn { margin-left: auto; }
+.conn-name { flex-shrink: 0; max-width: 55%; }
+.conn-title.inline-input { color: var(--text-muted); font-size: var(--text-xs); flex: 1; min-width: 0; width: auto; }
+.conn-title.inline-input:hover, .conn-title.inline-input:focus { border-bottom-color: var(--border); }
+.conn-row .note-delete-btn { margin-left: auto; flex-shrink: 0; }
 .conn-add { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .conn-results { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.25rem; }
 .conn-result {
