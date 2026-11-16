@@ -1,6 +1,7 @@
 import { insertContact } from './contacts';
 import { addConnection } from './links';
 import { addNote } from './notes';
+import { scheduleAfterNote } from './followUpCadence';
 import { formatPhone } from './utils';
 
 // CSV import for workspaces with companies (the banking preset). The land importer maps
@@ -226,6 +227,15 @@ export function planBankingImport({ rows, mapping, existing = [], statuses, stat
   };
 }
 
+// follow_up_on for a contact the import creates: what scheduleAfterNote would have set
+// after logging its notes today. null when nothing is scheduled.
+export function importFollowUp(notes, target, key, status, followUp, now = new Date()) {
+  if (!followUp) return null;
+  const count = notes.filter(n => n.target === target && n.key === key).length;
+  if (!count) return null;
+  return scheduleAfterNote(count, status, null, followUp, now) ?? null;
+}
+
 function blankContact(fields) {
   const now = new Date().toISOString();
   return {
@@ -253,8 +263,13 @@ async function eachLimited(items, limit, fn) {
 // stopping halfway: a half-run import is safe to re-run for contacts and links (they
 // dedupe), but notes on the contacts it created would then be "already in Taraform" and
 // skipped — so it is better to finish everything that can finish and list what didn't.
-export async function runBankingImport(plan, { userId, clientId, onProgress } = {}) {
+export async function runBankingImport(plan, { userId, clientId, onProgress, followUp = null } = {}) {
   const ids = { company: new Map(), person: new Map() };
+  // Each imported note is a call, so a new contact starts out scheduled exactly as if
+  // those notes had been logged by hand. Without this, a status whose only way into the
+  // queue is a date (banking Target) would never come due. Pass followUp = null when the
+  // importer's own auto-schedule switch is off.
+  const followUpFor = (target, key, status) => importFollowUp(plan.notes, target, key, status, followUp);
   const created = [];
   const failures = [];
   const total = plan.companies.length + plan.people.length + plan.links.length + plan.notes.length;
@@ -264,7 +279,7 @@ export async function runBankingImport(plan, { userId, clientId, onProgress } = 
   await eachLimited(plan.companies, 4, async (c) => {
     try {
       if (c.existingId) { ids.company.set(c.key, c.existingId); return; }
-      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status }), userId, clientId);
+      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status, followUpOn: followUpFor('company', c.key, c.status) }), userId, clientId);
       ids.company.set(c.key, saved.id);
       created.push(saved);
     } catch (e) {
@@ -277,6 +292,7 @@ export async function runBankingImport(plan, { userId, clientId, onProgress } = 
       if (p.existingId) { ids.person.set(p.key, p.existingId); return; }
       const saved = await insertContact(blankContact({
         firstName: p.firstName, lastName: p.lastName, phones: p.phones, email: p.email, status: p.status,
+        followUpOn: followUpFor('person', p.key, p.status),
       }), userId, clientId);
       ids.person.set(p.key, saved.id);
       created.push(saved);

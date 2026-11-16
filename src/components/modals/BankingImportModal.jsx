@@ -100,6 +100,7 @@ export default function BankingImportModal({ open, onClose }) {
     try {
       const r = await runBankingImport(plan, {
         userId: user.id, clientId: currentClientId,
+        followUp: currentClient?.autoFollowUp !== false ? resolveConfig(currentClient).followUp : null,
         onProgress: (done, total) => setProgress([done, total]),
       });
       setResult(r);

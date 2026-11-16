@@ -47,6 +47,21 @@ export function isFollowUpDue(contact, followUp) {
   return !last || last < new Date(Date.now() - window * 86400000);
 }
 
+// When a contact with no follow_up_on comes due under the auto rule: its last note plus
+// its status's window, as YYYY-MM-DD. Lets the detail page show a real date instead of
+// an empty field for a contact the queue will resurface on its own. null when the auto
+// rule doesn't apply (status not eligible, excluded, or a manual date is set), and when
+// it has never been noted — that contact is due now, which the Due badge already says.
+export function autoFollowUpDate(contact, followUp) {
+  if (contact.followUpOn || !contact.lastNoteAt) return null;
+  if ((followUp?.excludeStatuses || []).includes(contact.status)) return null;
+  const window = followUpWindow(contact.status, followUp);
+  if (!window) return null;
+  const d = new Date(contact.lastNoteAt);
+  d.setDate(d.getDate() + window);
+  return todayStr(d);
+}
+
 // The follow-up facet for one person: the workspace's resolved follow-up config plus whose
 // queue it is. Every caller that turns the facet on goes through here, so the dashboard
 // count, "Work the queue" and the list's checkbox cannot disagree about whose calls show.

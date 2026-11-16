@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
-import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
+import { isFollowUpDue, todayStr, autoFollowUpDate, followUpWindow } from '../../lib/contactFilters';
 import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor, cadenceFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
 import { setAutoFollowUp } from '../../lib/api';
@@ -174,6 +174,19 @@ export default function ContactDetail({ onClose }) {
   const onCadence  = schedulesFor(draft.status, cadence);
   const nextGap    = onCadence ? attemptGap(attempts + 1, cadence) : null;
 
+  // The next call as a sentence, so the schedule is visible without decoding an empty date
+  // field. Three cases: a stored date; no date but the stale-note rule will resurface it
+  // (In Network, Contacted); and no date on a status only a date can queue — which means
+  // nothing will ever bring it back, so say so rather than leave a blank field.
+  const autoDate = autoFollowUpDate(draft, cfg.followUp);
+  const nextCall = draft.followUpOn
+    ? { text: `Next call ${longDate(draft.followUpOn)}`, sub: relativeDays(draft.followUpOn) }
+    : autoDate
+      ? { text: `Comes due ${longDate(autoDate)}`, sub: `${followUpWindow(draft.status, cfg.followUp)} days after the last note` }
+      : attempts > 0 && onCadence
+        ? { text: 'No call scheduled', sub: 'pick a date, or it won’t come back up', warn: true }
+        : null;
+
   // Marking a contact dead/closed/NFS retires its scheduled call, in the SAME save as the
   // status — two sequential saves would race through draftRef (see components/CLAUDE.md).
   function handleStatusChange(next) {
@@ -294,6 +307,11 @@ export default function ContactDetail({ onClose }) {
                 <button type="button" className="btn-small" onClick={() => update('followUpOn', null)}>Clear</button>
               )}
             </div>
+            {nextCall && (
+              <div className={`followup-next${nextCall.warn ? ' warn' : ''}`}>
+                {nextCall.text}{nextCall.sub && <span className="followup-next-sub"> · {nextCall.sub}</span>}
+              </div>
+            )}
             {cfg.followUp?.cadence && (
               <label className="followup-auto" title="When on, logging a note schedules your next call automatically. This is your own setting; teammates have theirs.">
                 <input type="checkbox" checked={autoFollowUp} onChange={toggleAutoFollowUp} />
@@ -555,4 +573,20 @@ export default function ContactDetail({ onClose }) {
       </div>
     </div>
   );
+}
+
+// "Mon, Feb 15, 2027" from a YYYY-MM-DD date column, read in the local calendar.
+function longDate(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function relativeDays(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const n = Math.round((new Date(y, m - 1, d) - t) / 86400000);
+  if (n === 0) return 'today';
+  if (n === 1) return 'tomorrow';
+  if (n > 0) return `in ${n} days`;
+  return n === -1 ? '1 day overdue' : `${-n} days overdue`;
 }

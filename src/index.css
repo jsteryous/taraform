@@ -446,6 +446,9 @@ textarea {
 
 /* "Due" pill next to the Follow-up field label (ContactDetail) */
 /* Cadence hint under the follow-up date: "Attempt 3 of 7 · next +16d". */
+.followup-next { margin-top: 0.45rem; font-size: var(--text-sm); color: var(--text); }
+.followup-next.warn { color: var(--warning); }
+.followup-next-sub { color: var(--text-muted); }
 .followup-cadence {
     margin-top: 0.35rem;
     font-size: var(--text-xs);
