@@ -230,6 +230,16 @@ export default function ContactList({ onView, onExport }) {
     followUp: filterFollowUp || null,
   };
 
+  // Infinite scroll. Read through a ref so the callback is stable: VirtualList
+  // re-fires onEndReached when its identity changes, and serverFilters is a new
+  // object every render, so an unstable callback would retry a failed page forever.
+  const nextPageRef = useRef();
+  nextPageRef.current = () => {
+    if (loadingContacts || contacts.length >= totalCount) return;
+    loadMoreContacts(currentClientId, serverFilters);
+  };
+  const loadNextPage = useCallback(() => nextPageRef.current(), []);
+
   const filterBtnClass = (active) => `filter-btn${active ? ' active' : ''}`;
 
   // Signed in but a member of nothing. Workspaces are not self-serve, so the only way in is
@@ -439,15 +449,17 @@ export default function ContactList({ onView, onExport }) {
           <>
             <VirtualList
               items={contacts}
+              onEndReached={loadNextPage}
               renderItem={(c) => (
                 <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView} />
               )}
             />
-            {/* Load more */}
+            {/* Pages load as you scroll; this only says so. A failed page leaves the
+                button as the way to retry, since scrolling at the bottom won't refire. */}
             {contacts.length < totalCount && (
               <div style={{ textAlign: 'center', padding: '1rem' }}>
                 <button
-                  onClick={() => loadMoreContacts(currentClientId, serverFilters)}
+                  onClick={loadNextPage}
                   disabled={loadingContacts}
                   style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 1.25rem', cursor: 'pointer' }}
                 >
