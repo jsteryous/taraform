@@ -448,7 +448,7 @@ textarea {
 /* Cadence hint under the follow-up date: "Attempt 3 of 7 · next +16d". */
 .followup-cadence {
     margin-top: 0.35rem;
-    font-size: var(--text-2xs);
+    font-size: var(--text-xs);
     font-family: var(--mono);
     color: var(--text-muted);
     letter-spacing: 0.3px;
@@ -1687,17 +1687,17 @@ input::placeholder { color: var(--text-muted); }
 
 /* ── Company / person links (ConnectionsPanel) ── */
 .company-icon { vertical-align: -2px; margin-right: 0.35rem; color: var(--text-muted); }
-.conn-empty { color: var(--text-muted); font-size: var(--text-sm); padding: 0.25rem 0; }
-.conn-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0; }
+.conn-empty { color: var(--text-muted); font-size: var(--text-base); padding: 0.25rem 0; }
+.conn-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; }
 .conn-icon { color: var(--text-muted); flex-shrink: 0; }
 .conn-name {
     background: none; border: none; padding: 0; cursor: pointer;
-    color: var(--accent); font-family: var(--sans); font-size: var(--text-sm); font-weight: 500;
+    color: var(--accent); font-family: var(--sans); font-size: var(--text-md); font-weight: 500;
     text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .conn-name:hover { text-decoration: underline; }
 .conn-name { flex-shrink: 0; max-width: 55%; }
-.conn-title.inline-input { color: var(--text-muted); font-size: var(--text-xs); flex: 1; min-width: 0; width: auto; }
+.conn-title.inline-input { color: var(--text-muted); font-size: var(--text-base); flex: 1; min-width: 0; width: auto; }
 .conn-title.inline-input:hover, .conn-title.inline-input:focus { border-bottom-color: var(--border); }
 .conn-row .note-delete-btn { margin-left: auto; flex-shrink: 0; }
 .conn-add { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -1706,12 +1706,12 @@ input::placeholder { color: var(--text-muted); }
     display: flex; align-items: center; gap: 0.4rem;
     background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
     padding: 0.3rem 0.5rem; cursor: pointer; text-align: left;
-    color: var(--text); font-family: var(--sans); font-size: var(--text-sm);
+    color: var(--text); font-family: var(--sans); font-size: var(--text-base);
 }
 .conn-result:hover { border-color: var(--accent); }
 .conn-create { color: var(--accent); border-style: dashed; }
 .note-about { margin-left: 0.5rem; margin-right: auto; color: var(--text-muted); font-size: var(--text-xs); }
 .followup-auto {
     display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem;
-    color: var(--text-muted); font-size: var(--text-xs); cursor: pointer;
+    color: var(--text-muted); font-size: var(--text-sm); cursor: pointer;
 }

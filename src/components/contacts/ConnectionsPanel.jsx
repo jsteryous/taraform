@@ -153,7 +153,7 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
         <div className="conn-empty">{isCompany ? 'Nobody linked yet.' : 'Not linked to a company.'}</div>
       ) : links.map(l => (
         <div key={l.linkId} className="conn-row">
-          <OtherIcon size={13} className="conn-icon" />
+          <OtherIcon size={16} className="conn-icon" />
           <button type="button" className="conn-name" onClick={() => open(l.contact.id)}>{l.contact.name}</button>
           <input
             key={`${l.linkId}:${l.title}`}
