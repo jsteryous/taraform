@@ -140,7 +140,9 @@ export const BANKING_CONFIG = {
   ],
   // In Network is in `statuses` but not in `cadence.statuses` on purpose: it resurfaces
   // after 90 days without a note (a keep-in-touch rhythm) instead of being chased on the
-  // 3/7/14-day sales cadence.
+  // 3/7/14-day sales cadence. Target IS on the cadence but at a flat 90 days per call
+  // (fixedGaps): a cold target gets a quarterly touch however many calls it has had;
+  // only once it becomes a Prospect does the 3/7/14 ramp apply.
   followUp: {
     days: 90, statuses: ['Prospect', 'In Network'],
     excludeStatuses: ['Not a Fit', 'Former Customer'],
@@ -148,6 +150,7 @@ export const BANKING_CONFIG = {
       attemptDays: [0, 3, 7, 14, 30, 60],
       repeatEvery: 60,
       statuses: ['Target', 'Prospect'],
+      fixedGaps: { Target: 90 },
       minAttempts: 7,
     },
   },

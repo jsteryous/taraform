@@ -15,6 +15,10 @@
 //   statuses     statuses a call schedules from. A call made outside them doesn't
 //                schedule — see scheduleAfterNote.
 //   minAttempts  display only ("attempt 3 of 7"); nothing enforces it.
+//   fixedGaps    { status: days } — a status that waits the same number of days after
+//                every call, however many have been made. Banking Targets use this: a
+//                cold target is touched quarterly, not chased on the 3/7/14-day ramp.
+//                Resolve through cadenceFor(status, cadence), never read it directly.
 //
 // Gaps are derived from attemptDays but applied from the day the call ACTUALLY happened,
 // not from a fixed day-0 anchor. The two agree when calls land on schedule and diverge
@@ -52,6 +56,17 @@ export function nextFollowUpDate(attempt, cadence, from = new Date()) {
   return todayStr(d);
 }
 
+// The cadence a contact in `status` is actually on. A fixedGaps status is reshaped into an
+// ordinary flat cadence (every step = its gap), so attemptGap/nextFollowUpDate need no
+// special case. minAttempts is dropped for it: "attempt 2 of 7" means nothing on a
+// quarterly touch. Returns the cadence unchanged for every other status.
+export function cadenceFor(status, cadence) {
+  const fixed = cadence?.fixedGaps?.[status];
+  if (fixed == null) return cadence;
+  const { minAttempts: _drop, ...rest } = cadence;
+  return { ...rest, attemptDays: [0, fixed], repeatEvery: fixed };
+}
+
 // Does a call on this status schedule the next one? Outside the configured statuses the
 // cadence is silent — an Offer Made contact is worked by its offer, not by a call clock.
 export function schedulesFor(status, cadence) {
@@ -81,7 +96,7 @@ export function scheduleAfterNote(attempts, status, followUpOn, followUp, now = 
   if (isExcluded(status, followUp)) return followUpOn ? null : undefined;
   if (followUpOn && followUpOn > todayStr(now)) return undefined;
   if (attempts >= 1 && schedulesFor(status, cadence)) {
-    return nextFollowUpDate(attempts, cadence, now);
+    return nextFollowUpDate(attempts, cadenceFor(status, cadence), now);
   }
   return followUpOn ? null : undefined;
 }

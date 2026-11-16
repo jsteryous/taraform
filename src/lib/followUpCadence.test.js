@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   attemptGap, nextFollowUpDate, schedulesFor, scheduleAfterNote, attemptLabel,
-  clearOnStatusChange, isExcluded,
+  clearOnStatusChange, isExcluded, cadenceFor,
 } from './followUpCadence';
 import { todayStr } from './contactFilters';
-import { LAND_CONFIG } from './clientConfig';
+import { LAND_CONFIG, BANKING_CONFIG } from './clientConfig';
 
 const CADENCE = LAND_CONFIG.followUp.cadence;
 const at = (offsetDays) => {
@@ -195,5 +195,30 @@ describe('scheduleAfterNote on a stopped lead', () => {
     const scheduled = scheduleAfterNote(1, 'Contacted', null, fu);
     expect(scheduled).toBe(at(3));
     expect(clearOnStatusChange('Dead/Pass', scheduled, fu)).toBe(null);
+  });
+});
+
+// Banking Targets are touched quarterly, whatever the attempt count — the 3/7/14 ramp is
+// for Prospects only.
+describe('fixedGaps (banking Target)', () => {
+  const fu = BANKING_CONFIG.followUp;
+
+  it('schedules every Target call 90 days out, from the first to the tenth', () => {
+    for (const n of [1, 2, 3, 6, 10]) expect(scheduleAfterNote(n, 'Target', null, fu)).toBe(at(90));
+  });
+
+  it('leaves Prospect on the ramp', () => {
+    expect(scheduleAfterNote(1, 'Prospect', null, fu)).toBe(at(3));
+    expect(scheduleAfterNote(2, 'Prospect', null, fu)).toBe(at(4));
+  });
+
+  it('drops the "of 7" from the label for a fixed-gap status', () => {
+    expect(attemptLabel(2, cadenceFor('Target', fu.cadence))).toBe('Attempt 2');
+    expect(attemptLabel(2, cadenceFor('Prospect', fu.cadence))).toBe('Attempt 2 of 7');
+  });
+
+  it('returns the cadence untouched for a status without a fixed gap', () => {
+    expect(cadenceFor('Prospect', fu.cadence)).toBe(fu.cadence);
+    expect(cadenceFor('Target', null)).toBe(null);
   });
 });

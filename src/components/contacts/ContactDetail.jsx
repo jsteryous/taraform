@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
 import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { isFollowUpDue, todayStr } from '../../lib/contactFilters';
-import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor } from '../../lib/followUpCadence';
+import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor, cadenceFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
 import { setAutoFollowUp } from '../../lib/api';
 import NotesTab from './NotesTab';
@@ -170,8 +170,9 @@ export default function ContactDetail({ onClose }) {
   // Attempts made, and the wait the NEXT one will earn (attempts+1, since logging it is
   // what schedules). Null off-cadence — an Offer Made contact isn't on a call clock.
   const attempts   = draft.noteCount || 0;
-  const onCadence  = schedulesFor(draft.status, cfg.followUp?.cadence);
-  const nextGap    = onCadence ? attemptGap(attempts + 1, cfg.followUp.cadence) : null;
+  const cadence    = cadenceFor(draft.status, cfg.followUp?.cadence);
+  const onCadence  = schedulesFor(draft.status, cadence);
+  const nextGap    = onCadence ? attemptGap(attempts + 1, cadence) : null;
 
   // Marking a contact dead/closed/NFS retires its scheduled call, in the SAME save as the
   // status — two sequential saves would race through draftRef (see components/CLAUDE.md).
@@ -303,7 +304,7 @@ export default function ContactDetail({ onClose }) {
               <div className="followup-cadence" title={onCadence
                 ? `Each note counts as a call attempt. Logging the next one schedules the following call ${nextGap} days out.`
                 : `Calls on "${draft.status}" don't auto-schedule — set a date by hand.`}>
-                {attemptLabel(attempts, cfg.followUp?.cadence)}
+                {attemptLabel(attempts, cadence)}
                 {nextGap != null && ` · next +${nextGap}d`}
               </div>
             )}
