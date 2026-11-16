@@ -7,6 +7,7 @@ import { normalizeCounty, mapDbContact, formatPhone, normalizePhone, parseCustom
 import { buildLookupMaps, findDuplicate } from '../../lib/dedup';
 import { fetchDedupIndex } from '../../lib/contacts';
 import { FileText } from 'lucide-react';
+import BankingImportModal from './BankingImportModal';
 
 const CORE_FIELDS = ['firstName','lastName','phone','email','county','ownerAddress','propertyAddress','taxMapId','acreage'];
 const FIELD_LABELS = {
@@ -53,7 +54,16 @@ function autoMapCustomFields(headers, fieldDefs) {
 
 // buildLookupMaps / findDuplicate live in src/lib/dedup.js so they can be unit-tested.
 
-export default function ImportModal({ open, onClose }) {
+// A workspace with companies (banking) imports relationship sheets — person, company,
+// note per row — which is a different shape from a land list, so it gets its own screen.
+export default function ImportModal(props) {
+  const { currentClient } = useApp();
+  return resolveConfig(currentClient).companies
+    ? <BankingImportModal {...props} />
+    : <LandImportModal {...props} />;
+}
+
+function LandImportModal({ open, onClose }) {
   const { setContacts, currentClientId, currentClient, user, showToast } = useApp();
   const [step, setStep]       = useState('upload'); // upload | map | preview | importing
   const [headers, setHeaders] = useState([]);

@@ -740,6 +740,29 @@ textarea.add-input { resize: vertical; min-height: 4.5rem; line-height: 1.5; }
     .add-field-row { grid-template-columns: 1fr; }
 }
 
+/* ── Banking CSV import (BankingImportModal) ── */
+.bi-upload { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1.5rem 0.5rem; text-align: center; font-size: var(--text-base); }
+.bi-upload p { margin: 0; max-width: 32rem; line-height: 1.5; }
+.bi-upload-icon { color: var(--text-muted); }
+.bi-hint { margin: 0; font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; }
+.bi-map { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.bi-sample { display: flex; flex-direction: column; gap: 0.25rem; }
+.bi-sample-row { display: grid; grid-template-columns: 9rem 1fr; gap: 0.5rem; font-size: var(--text-sm); }
+.bi-sample-row span:first-child { color: var(--text-muted); }
+.bi-sample-row span:last-child { overflow-wrap: anywhere; }
+.bi-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+.bi-stat { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.75rem 0.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.bi-stat b { font-size: var(--text-xl); }
+.bi-stat span { font-size: var(--text-xs); color: var(--text-muted); text-align: center; }
+.bi-alias { display: grid; grid-template-columns: 1fr 12rem; gap: 0.5rem; align-items: center; font-size: var(--text-base); }
+.bi-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--text-base); }
+.bi-more { font-size: var(--text-sm); color: var(--text-muted); }
+.bi-progress { width: 100%; max-width: 24rem; accent-color: var(--accent); }
+@media (max-width: 520px) {
+    .bi-map, .bi-alias { grid-template-columns: 1fr; }
+    .bi-stats { grid-template-columns: 1fr 1fr; }
+}
+
 .offer-item {
     background: var(--surface);
     border: 1px solid var(--border);
