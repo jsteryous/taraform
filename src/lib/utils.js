@@ -151,19 +151,34 @@ export function parseCSV(text) {
 
 // Like parseCSV but returns rows as arrays of values (indexed by column position).
 // Used by ImportModal's column-mapping UI.
+//
+// A real RFC 4180 reader, because Excel's "Save as CSV" produces all three things a
+// split-on-newline parser gets wrong: a byte-order mark ahead of the first header (so
+// "Customer Name" fails to auto-map), a line break inside a quoted cell (Alt+Enter in a
+// notes column, which split one row into two), and "" for a literal quote. Rows with no
+// values at all — Excel pads to the used range — are dropped.
 export function parseCSVRaw(text) {
-  const lines = text.trim().replace(/\r/g, '').split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const rows = lines.slice(1).map(line => {
-    const values = [];
-    let current = '', inQuotes = false;
-    for (const char of line) {
-      if (char === '"') { inQuotes = !inQuotes; }
-      else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
-      else { current += char; }
-    }
-    values.push(current.trim());
-    return values;
-  });
+  const src = String(text || '').replace(/^﻿/, '');
+  const records = [];
+  let row = [], cell = '', inQuotes = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { cell += '"'; i++; }
+        else inQuotes = false;
+      } else cell += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++;
+      row.push(cell); records.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); records.push(row); }
+  const clean = records
+    .map(r => r.map(v => v.trim()))
+    .filter(r => r.some(Boolean));
+  const [headers = [], ...rows] = clean;
   return { headers, rows };
 }

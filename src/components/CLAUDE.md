@@ -21,6 +21,12 @@ Render it, page it, select from it. To *ask a question* about the client's conta
 
 `parseCSVRaw` (`utils.js`) returns indexed rows for the column-mapping UI. `parseCSV` returns keyed objects. Duplicate detection uses Map-based lookups (O(n+m)) — do not revert to `.filter()` scan — over the corpus from `fetchDedupIndex(clientId)`, **not** over `contacts` (see above). Bulk inserts chunked at 500 rows.
 
+**Workspaces with companies (banking) get a different importer** — `ImportModal` hands off to `BankingImportModal` when `resolveConfig().companies` is true. A relationship sheet is one *conversation* per row, so a row can become a company, a person, the link between them and a note. The rules are pure and tested in `lib/bankingImport.js` (`planBankingImport`); `runBankingImport` carries the plan out through `insertContact`/`addConnection`/`addNote`, so RLS and the link/note triggers apply exactly as for hand-entered data. Three decisions worth knowing before changing it:
+- **Existing contacts are reused and never modified, and their notes are not re-added** — re-importing a sheet must not double every note. The preview lists the notes it is leaving out.
+- **A note can't be backdated** (`contact_notes_stamp` forces `created_at = now()`), so the sheet's date and method go at the front of the note text.
+- **Status values that aren't statuses are surfaced, not defaulted silently** — the preview asks what each one becomes (`statusAliases`).
+`parseCSVRaw` is a real RFC 4180 reader as of this change: Excel's CSVs carry a BOM, line breaks inside quoted cells and `""` escapes, all of which the old split-on-newline parser got wrong.
+
 ## Offers ↔ contact status (OffersTab)
 
 Contact status is auto-derived from the latest offer (by `createdAt`): `Pending`/`Countered` → "Offer Made", `Rejected` → "Offer Rejected/NFS", `Accepted` → "UC". Pre-offer (`New Lead`, `Contacted`) and terminal (`Closed`, `Dead/Pass`) states stay manual via the header dropdown.
