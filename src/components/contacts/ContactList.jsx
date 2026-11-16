@@ -31,7 +31,7 @@ export default function ContactList({ onView, onExport }) {
 
   const { search: filterSearch, statuses: filterStatuses, counties: filterCounties,
           phone: filterPhone, activity: filterActivity, email: filterEmail,
-          followUp: filterFollowUp } = filters;
+          followUp: filterFollowUp, companies: filterCompanies } = filters;
 
   const setFilterSearch    = useCallback((val) => setFilters(f => ({ ...f, search: val })),   [setFilters]);
   const setFilterStatuses  = useCallback((val) => setFilters(f => ({ ...f, statuses: val })), [setFilters]);
@@ -93,6 +93,7 @@ export default function ContactList({ onView, onExport }) {
       search:   search || null,
       activity: activityFilter || null,
       followUp: filterFollowUp || null,
+      companies: filterCompanies,
     };
     clearTimeout(searchTimer.current);
     if (search) {
@@ -139,6 +140,7 @@ export default function ContactList({ onView, onExport }) {
     emailFilter !== '' ||
     activityFilter !== '' ||
     !!filterFollowUp ||
+    (cfg.companies && filterCompanies === true) ||
     search !== '';
 
   function clearAllFilters() {
@@ -228,6 +230,7 @@ export default function ContactList({ onView, onExport }) {
     search:   search || null,
     activity: activityFilter || null,
     followUp: filterFollowUp || null,
+    companies: filterCompanies,
   };
 
   // Infinite scroll. Read through a ref so the callback is stable: VirtualList
@@ -266,7 +269,9 @@ export default function ContactList({ onView, onExport }) {
   return (
     <>
       {ConfirmUI}
-      <StatsBar onFilterStatus={handleStatPillFilter} />
+      <StatsBar onFilterStatus={handleStatPillFilter}
+        showCompanies={filterCompanies !== false}
+        onToggleCompanies={() => setFilters(f => ({ ...f, companies: f.companies === false }))} />
 
       {/* Filter bar */}
       <div className="filter-row">

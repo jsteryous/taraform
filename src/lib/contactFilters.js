@@ -77,6 +77,11 @@ export function myFollowUps(followUp, userId) {
 // jsonb columns (phones, tax_map_ids, property_addresses) use JSON-array containment
 // syntax `cs.["value"]` — see src/lib/CLAUDE.md for the rule.
 export function applyContactFilters(q, filters = {}) {
+  // Companies are hidden unless asked for (EMPTY_FILTERS.companies is false). Only an
+  // explicit false hides them, so callers that build their own filter object (the
+  // dashboard's queue count) see everyone. A search looks past it: hunting for a
+  // company by name shouldn't need the toggle first. kind is NOT NULL (db/20261113_companies.sql).
+  if (filters.companies === false && !filters.search?.trim()) q = q.eq('kind', 'person');
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
   if (filters.counties?.length) q = q.in('county', filters.counties);
   // has_good_phone (db/20260713_filter_columns.sql) is true iff a non-struck number

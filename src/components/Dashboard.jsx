@@ -52,7 +52,8 @@ export default function Dashboard({ onClose, onViewContact }) {
   }, [loadFollowUps]);
 
   function workTheQueue() {
-    setFilters({ ...EMPTY_FILTERS, followUp: myFollowUps(cfg.followUp, userId) });
+    // companies: true — the queue count above includes companies, so the list must too.
+    setFilters({ ...EMPTY_FILTERS, followUp: myFollowUps(cfg.followUp, userId), companies: true });
     onClose();
   }
 
