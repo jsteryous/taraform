@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { StickyNote, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useConfirm } from '../shared/ConfirmDialog';
@@ -18,7 +19,8 @@ import { classifyError } from '../../lib/errors';
 //   company's people). Their notes are shown tagged with the name and are read-only
 //   here in one respect: a new note always goes on `contact` itself.
 export default function NotesTab({ contact, onNotesChanged, quickNotes = [], related = [] }) {
-  const { user, currentClientId, showToast } = useApp();
+  const { user, currentClientId, showToast, loadFullContact, setCurrentContact } = useApp();
+  const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [authors, setAuthors] = useState(new Map());
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,13 @@ export default function NotesTab({ contact, onNotesChanged, quickNotes = [], rel
     }
   }
 
+  // Same route ConnectionsPanel uses to jump to a linked contact.
+  async function openRelated(id) {
+    navigate('/contact/' + id);
+    const full = await loadFullContact(id);
+    if (full) setCurrentContact(full);
+  }
+
   const authorOf = note => (note.authorId === user?.id ? 'You' : authors.get(note.authorId) || '');
 
   return (
@@ -160,7 +169,12 @@ export default function NotesTab({ contact, onNotesChanged, quickNotes = [], rel
                   <StickyNote size={10} /> {authorOf(note) || 'Note'}
                 </span>
                 {note.contactId !== contact.id && relatedNames.has(note.contactId) && (
-                  <span className="note-about">with {relatedNames.get(note.contactId)}</span>
+                  <span className="note-about">
+                    with{' '}
+                    <button type="button" className="note-about-name" onClick={() => openRelated(note.contactId)}>
+                      {relatedNames.get(note.contactId)}
+                    </button>
+                  </span>
                 )}
                 <div className="note-header-right">
                   <span className="note-timestamp">
