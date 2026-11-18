@@ -180,3 +180,17 @@ comes back:
 - Loan requests and stages on the dashboard, after compliance weighs in.
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
+
+## Next: connections between people (discussed 2026-11-18, not built)
+
+A banker's edge is knowing who knows whom: if A knows B well and B knows a prospect, that is
+an intro to ask for, or a name to mention on the call. Today the only links are person ↔
+company (`contact_links`), so two people who co-own a property with no LLC on file have no
+way to show it except a note.
+
+Leaning toward: a person ↔ person link with a short label ("Partner", "Spouse", "Referred
+by", or free text), shown on both people's pages alongside their company links. People on the
+same company count as connected without a direct link. The payoff is the one-hop view on a
+prospect: "you don't know them, but these contacts do". Same-workspace trigger and
+member-only RLS as `contact_links`. Labels are visible to every teammate, so they go on the
+compliance list with loan status.

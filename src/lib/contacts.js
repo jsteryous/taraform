@@ -131,7 +131,7 @@ export async function fetchContactsByIds(ids) {
 // These two functions fetch the corpus dedup actually needs. The matching rules stay in
 // dedup.js / AddContactModal — the server is used for *recall* (rows that could collide),
 // the pure functions for *precision* (the county|taxId rule, etc.).
-const DEDUP_FIELDS = 'id,kind,first_name,last_name,county,tax_map_ids,property_addresses,phones';
+const DEDUP_FIELDS = 'id,kind,first_name,last_name,email,county,tax_map_ids,property_addresses,phones';
 
 // Strip PostgREST filter-syntax + JSON control chars before interpolation, same rule as
 // the search filter in contactFilters.js.
@@ -171,6 +171,9 @@ export async function fetchDuplicateCandidates(clientId, contact) {
   if (first && last) ors.push(`and(first_name.ilike.${first},last_name.ilike.${last})`);
   // A company has one name, held in first_name.
   if (contact.kind === 'company' && first) ors.push(`and(kind.eq.company,first_name.ilike.${first})`);
+  // ilike treats _ and * as wildcards, so this can over-match; findDuplicates re-checks exactly.
+  const email = esc(contact.email || '');
+  if (email) ors.push(`email.ilike.${email}`);
   for (const t of contact.taxMapIds || []) { const v = esc(t); if (v) ors.push(`tax_map_ids.cs.["${v}"]`); }
   for (const a of contact.propertyAddresses || []) { const v = esc(a); if (v) ors.push(`property_addresses.cs.["${v}"]`); }
   if (!ors.length) return [];

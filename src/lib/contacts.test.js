@@ -106,6 +106,12 @@ describe('dedup corpus', () => {
     expect(methodArgs('eq')).toEqual([['client_id', 'client-1']]);
   });
 
+  it('fetchDuplicateCandidates probes email on its own', async () => {
+    reset([]);
+    await fetchDuplicateCandidates('client-1', { firstName: 'Ada', email: ' ada@example.com ' });
+    expect(methodArgs('or')[0][0]).toBe('email.ilike.ada@example.com');
+  });
+
   it('fetchDuplicateCandidates makes no query when there is nothing to match on', async () => {
     reset([]);
     await expect(fetchDuplicateCandidates('client-1', { firstName: 'Ada' })).resolves.toEqual([]);

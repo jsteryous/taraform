@@ -22,6 +22,7 @@ function findDuplicates(contact, existing) {
     const companyMatch = contact.kind === 'company' && c.kind === 'company' && contact.firstName &&
       c.firstName?.trim().toLowerCase() === contact.firstName.trim().toLowerCase();
     const nameMatch = personMatch || companyMatch;
+    const emailMatch = !!contact.email && c.email?.trim().toLowerCase() === contact.email.toLowerCase();
     const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
       contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
     // Tax map IDs are only unique within a county — same parcel ID in different counties is fine.
@@ -29,12 +30,12 @@ function findDuplicates(contact, existing) {
       contact.county && c.county &&
       contact.county.toLowerCase() === c.county.toLowerCase() &&
       contact.taxMapIds.some(t1 => c.taxMapIds.some(t2 => t1.toLowerCase() === t2.toLowerCase()));
-    return nameMatch || addressMatch || taxMatch;
+    return nameMatch || emailMatch || addressMatch || taxMatch;
   });
 }
 
 function defaultForm(statuses) {
-  return { kind: 'person', firstName:'', lastName:'', phones:[''], county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'' };
+  return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'' };
 }
 
 // A field that holds a list (phones, addresses, parcel ids): one input per value, a remove
@@ -106,6 +107,7 @@ export default function AddContactModal({ open, onClose }) {
       firstName: form.firstName.trim(),
       lastName: isCompany ? '' : form.lastName.trim(),
       phones: form.phones.map(p => p.trim()).filter(Boolean),
+      email: form.email.trim(),
       county: normalizeCounty(form.county),
       ownerAddress: form.ownerAddress.trim(),
       propertyAddresses: form.propertyAddresses.map(a => a.trim()).filter(Boolean),
@@ -191,6 +193,7 @@ export default function AddContactModal({ open, onClose }) {
             {dupes.map(d => (
               <div key={d.id} className="dupe-item">
                 <strong>{d.firstName} {d.lastName}</strong>
+                {d.email && <span className="dupe-meta">{d.email}</span>}
                 {d.county && <span className="dupe-meta">{d.county}</span>}
                 {d.taxMapIds?.[0] && <span className="dupe-meta dupe-mono">{d.taxMapIds[0]}</span>}
               </div>
@@ -235,6 +238,12 @@ export default function AddContactModal({ open, onClose }) {
         <MultiField label="Phone" values={form.phones} addLabel="Add phone"
           type="tel" inputMode="tel" placeholder="(864) 555-1234" autoComplete="off"
           onChange={(i, v) => updateArr('phones', i, v)} onAdd={() => addArr('phones')} onRemove={i => removeArr('phones', i)} />
+
+        <div className="add-field">
+          <label className="add-label" htmlFor="add-email">Email</label>
+          <input id="add-email" className="add-input" type="email" inputMode="email" value={form.email}
+            onChange={e => update('email', e.target.value)} placeholder="name@example.com" autoComplete="off" />
+        </div>
 
         <div className="add-field-row">
           <div className="add-field">
