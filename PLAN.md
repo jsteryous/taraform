@@ -174,6 +174,8 @@ comes back:
 3. **Phone sync for bank contacts:** should they go into your personal Google contacts for
    caller ID? Same compliance question.
 4. **Bank emails:** use them for joining at all, or keep adding teammates by hand?
+5. **Faith groups and connection descriptions** in the bank workspace: see "Questions for
+   compliance" under Connections & Ways In.
 
 ## Later
 
@@ -181,81 +183,157 @@ comes back:
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
 
-## Next: who knows whom (planning, 2026-11-18, not built)
+## Next: Connections & Ways In (designed 2026-11-18, not built)
+
+Bank workspace only for now. No AI. Mockup: a private canvas,
+https://claude.ai/artifact/2yRFHU7uW1uDLG15EypPqN (it uses real names, so it stays out of
+this public repo).
 
 ### Why
 
-A banker's edge is knowing who knows whom. If I know A well and A knows a prospect, that is
-an intro to ask for, or at least a name to mention on the call. Miss the link and the call is
-colder than it had to be. Today the only links are person ↔ company (`contact_links`), so
-two people who, say, bought a property together with no LLC on file can only be connected
-through a note that nobody will find at the right moment.
+A banker's edge is knowing who knows whom. All this is for: **make a lead as warm as
+possible, or find an excuse to reach out.** If I know A well and A knows B, that's an intro
+to ask for. If B and I are both members of the same club, that's a reason to call. Miss
+either and the call is colder than it had to be. Today the only links are person ↔ company
+(`contact_links`); anything else is buried in a note nobody will find at the right moment.
 
-### Two different facts
+### What you see
 
-Keep these apart. They have different owners and different answers.
+The contact page's third column (Offers in Personal List, empty in Bank) becomes
+**Connections & Ways In**, top to bottom:
 
-1. **How well do *I* know this contact?** Per teammate: my answer and a coworker's differ
-   for the same person. Only the teammate can say. Draft scale: *Know well* (could ask a
-   favor) · *Know* (would take my call) · *Met* (introduced) · *Haven't connected*
-   (the default).
-2. **Who knows whom, and how well?** Between two contacts, a fact about them and not about
-   us. Any teammate can record it and everyone sees the same thing. Needs a description in
-   words ("bought a triplex together"). "Referred by" is the only kind with a direction.
+1. **How warm is this contact.** A four-step meter, and one sentence naming the best way in.
+   - **Warm:** someone on the team knows them (*Know* or *Know well*).
+   - **1 intro away:** they're connected to someone a teammate knows.
+   - **Common ground:** they share a group with a teammate, or with someone a teammate
+     knows, or a teammate has *Met* them.
+   - **Cold:** none of the above.
 
-The payoff combines them: *I* know A well, A knows B, so ask A about B. That should be on B's
-contact page, where it's seen before the call, not in a tab someone has to remember to open.
+   Example sentences: "Best way in: ask A. You know him well, and he knows B through
+   college." · "Excuse to reach out: you're both members of the same country club."
+2. **How well do you know them?** Each teammate's own answer: *Haven't met* (the default,
+   stored as no row) · *Met* · *Know* (would take my call) · *Know well* (could ask a
+   favor). You set yours; you see everyone's.
+3. **Who they know.** Connections, warmest first. Each shows how they know each other, who
+   on the team knows *that* person, and "Not confirmed" when it was entered as a hunch.
+   A connection made from a note quotes the note as its reason.
+4. **Common ground.** The groups they're in, with the teammates and well-known contacts
+   who are in them too.
+
+Plus **Your groups** in settings: the clubs, schools, teams and boards a teammate belongs
+to. That's what produces "you're both at…". Teammates see each other's groups.
+
+### How it gets filled: the note is the input
+
+Writing notes is the main way in, and nothing new has to be learned to use it. After a note
+saves, a **"Taraform found"** strip appears under it:
+
+- **A full name matching exactly one contact** (other than the note's own): linked straight
+  away, with Undo. The name in the note becomes a link. The connection shows on both pages.
+- **A group Taraform already knows**, by its name or any other name it has been given
+  ("GCC" = the full club name): the contact is added straight away, with Undo.
+- **Everything else is one tap:**
+  - A capitalised phrase Taraform doesn't know ("Firstname Lastname", "Some Church"): offered
+    as **Add as contact & link**, **Make group** or **Ignore**. If the phrase contains a
+    group-ish word (Club, Church, University, CC…), Make group is listed first.
+  - A full name matching two or more contacts: asks which one.
+- **Ignore is remembered** for the workspace, so "LinkedIn" or "Monday" stops coming up.
+- **A lowercase interest** ("tennis", "golf") isn't spotted the first time. Select the word
+  in the note → Make a group. From then on it's matched like any other group.
+- First names alone ("talked with Matt") are not matched, on purpose.
+- Editing a note runs the finder again for anything new. It never removes links: that's
+  what Undo and the column's own remove buttons are for.
+
+**Add connection** stays as a fallback form on the column: who, how they know each other
+(quick picks: Work together, Family, Friends, Neighbors, Did a deal together, Referred),
+"I think so, but I'm not sure yet", and how well *you* know that person. It's for links
+you already know about that no note will ever mention.
 
 ### What not to infer
 
 - **Note count says nothing about a relationship.** Fifteen notes can be fifteen unanswered
-  voicemails, or emails, a coffee meeting and next steps. It isn't even a count of attempts.
-  How well I know someone is entered, or suggested and confirmed, never computed from a count.
-- **Sharing a company is not a connection.** A CPA linked to forty businesses would be
-  "connected" to everyone. Show it as a path ("both at Acme LLC"), don't treat it as a link.
-- **Duplicates break chains.** If someone exists twice, their connections split across the
-  copies. The email duplicate check on Add Contact (2026-11-18) helps; this raises the stakes.
+  voicemails. How well I know someone is entered, never computed.
+- **Sharing a company or a group is common ground, not a connection.** A CPA linked to forty
+  businesses, or everyone at a 2,000-member club, is not "connected" to the rest. Show it as
+  a path ("both at X"), never as a link.
+- **Duplicates break chains**, and now they also break the exact-name match: two copies of
+  one person means "which one?" every time. The email duplicate check on Add Contact
+  (2026-11-18) matters more after this.
 
-### Levels, each built on the last
+### Data
 
-1. **`[[Name]]` links in notes, no AI.** Typing `[[Name]]` in a note links that note to the
-   contact, and their page shows the backlink with the note's text as the reason. Fits how
-   notes are already written, so there's no separate form. Free and predictable. Records *that*
-   two people are connected and why, not how well. Needs an autocomplete on `[[`, a way to
-   link a name not yet in the CRM, and a link table written when a note is saved, guarded
-   like `contact_links` (same-workspace trigger, members-only RLS).
-2. **AI reads each note and suggests; a person confirms.** On save, a model proposes
-   one-tap actions: "mentions B, link as co-owners?", "sounds like you met in person, mark as
-   *Met*?", "next step Friday, set a follow-up?". Nothing is written without the tap; it will
-   sometimes be confidently wrong. Runs as a Supabase Edge Function, so still no server.
-3. **Ask questions.** "Who do I know that knows someone at Acme?", "Prep me for my call with
-   B": every note, the connections, the ways in. Depends on levels 1–2 having built up clean
-   links.
+Every table follows the `contact_notes` / `contact_links` pattern: `client_id` stamped by
+a trigger from the contact (never trusted from the client), a check that everything
+referenced is in that same workspace, policies `TO authenticated` gated on `client_users`,
+`revoke all … from anon, authenticated` then column-level grants, and the fields the
+client must not choose (author, timestamps) forced in the trigger.
 
-### Constraints
+- **`contact_connections`**: `client_id`, `a_id`, `b_id` (both `kind = 'person'`, `a_id <
+  b_id` so each pair exists once, unique), `description` text, `referred_by` (null, `a_id`
+  or `b_id`: the only kind with a direction), `unsure` boolean, `source_note_id`
+  (→ `contact_notes`, `on delete set null`, so deleting the note keeps the link but loses
+  the quote), `created_by` default `auth.uid()`, `created_at`. Any member may add, edit or
+  remove one; it's a shared fact, the same as `contact_links`.
+- **`contact_familiarity`**: `client_id`, `contact_id`, `user_id` (forced to `auth.uid()`),
+  `level` (`met` | `know` | `know_well`), `updated_at`. Primary key (`contact_id`,
+  `user_id`). Members read all rows; each user writes only their own.
+- **`contact_groups`**: `client_id`, `name`, `aliases` text[], `kind` (`club` | `school` |
+  `faith` | `interest` | `other`), `created_by`. Unique on lower(name) per workspace.
+- **`contact_group_members`**: `group_id`, then exactly one of `contact_id` or `user_id` (a
+  teammate in "Your groups"; must be a member of the workspace), `source_note_id`,
+  `created_by`. Teammates manage only their own `user_id` rows.
+- **`finder_ignored`**: `client_id`, `term` (lowercased). Any member may add or remove.
 
-- **Cost.** Levels 2–3 pay an AI provider per note. Small at this volume, but recurring,
-  which breaks the "$0 hosting" rule in `CLAUDE.md`. That's a decision, not a default.
-- **Compliance, Bank workspace.** Sending bank customers' notes to an outside AI provider
-  needs a clear yes from compliance first. It's a bigger question than loan status and goes
-  on the "Before any bank data goes in" list. Personal List has no such constraint and is
-  the place to try levels 2–3 first.
-- **Visibility.** In Bank every teammate sees connection descriptions. "Co-owner" and
-  "going through a divorce with" are not the same kind of information.
+Warmth and ways in come from one read, `contact_ways_in(contact_id)`: a `SECURITY INVOKER`
+SQL function, so RLS still decides what the caller sees. Bank is small enough that the
+finder's name index (every person's full name plus every group name and alias) loads once
+per session, the same way `fetchDedupIndex` does, and is refreshed after a contact or group
+is added.
+
+The finder itself is a pure function, `src/lib/noteFinder.js` (note text + name index +
+groups + ignored terms → found items), with tests for the cases above. Turned on by a
+`connections` flag in the banking preset in `clientConfig.js`.
+
+### Order of work
+
+1. **Database:** the five tables, triggers, policies and grants in one migration. Prove it
+   by role simulation the way `contact_notes` was: a member of another workspace sees 0
+   rows and cannot insert across; a teammate cannot write someone else's familiarity or
+   group membership; anon gets nothing. Re-check `has_function_privilege` on
+   `contact_ways_in`.
+2. **The column, read-only:** the warmth meter, who they know, common ground, and the "How
+   well do you know them?" control (the first thing people can write).
+3. **Add connection** form and **Your groups** settings.
+4. **The finder** and the "Taraform found" strip on saved notes.
+5. **Display names** (step 5 of the main plan) must land before the column shows
+   teammates: "Kim knows him well", not an email address.
+
+### Later, not now
+
+- **AI reading notes** (it would catch "tennis" the first time, tell an introduction from a
+  passing mention, and suggest *Met* after "had coffee with"). Cost per note, and for Bank,
+  a clear yes from compliance before any note leaves for an outside provider. The "found"
+  strip is designed so AI becomes a better source of suggestions without changing anything
+  else.
+- A page per group listing its members.
+- A graph view. Before a call, a ranked list is faster to read.
+- Matching first names, and connections two steps away (I know A, A knows C, C knows B).
+- Personal List.
+
+### Questions for compliance (add to "Before any bank data goes in")
+
+- **Faith groups.** Fair-lending rules (ECOA / Reg B) bar religion in credit decisions. A
+  bank system recording which church a prospect attends could look bad in an exam even if
+  it's only used for introductions. Until there's an answer, the finder offers no `faith`
+  groups in Bank and the kind can't be chosen.
+- **Visibility.** Every teammate sees every connection description. "Business partner" and
+  "going through a divorce with" are not the same kind of information. Guidance on what
+  belongs in a description, not only in a note, may be worth writing down.
 
 ### Related fix: a note is not a call
 
 `followUpCadence.js` assumes every note is a call and moves the follow-up schedule
 (+3, +4, +7…) by note count. A note about a coffee meeting, an email or next steps moves the
-contact along as if it were an unanswered dial. Worth fixing regardless of the above. Options:
-tag a note's kind (call / email / meeting / note) with quick notes setting it, and count only
-call attempts; or let level 2 classify it. Decide before building level 2, since they overlap.
-
-### Before designing
-
-Collect 5–10 real cases as they come up. For each: who I wanted to reach and who the bridge
-was; how I learned of the link; how well I knew the bridge and how well the bridge knew
-them; where I'd have wanted Taraform to tell me. These settle the scale (4 levels or 3),
-whether links mostly come from conversations (pointing to capture in notes) or from what I
-already know (pointing to an "add connection" button), and what level 2 should catch.
-Keep the cases themselves out of this file: the repo is public.
+contact along as if it were an unanswered dial. Worth fixing regardless of the above: tag a
+note's kind (call / email / meeting / note), with quick notes setting it, and count only
+call attempts.
