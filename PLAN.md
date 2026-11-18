@@ -222,7 +222,7 @@ contact page, where it's seen before the call, not in a tab someone has to remem
    contact, and their page shows the backlink with the note's text as the reason. Fits how
    notes are already written, so there's no separate form. Free and predictable. Records *that*
    two people are connected and why, not how well. Needs an autocomplete on `[[`, a way to
-   link a name not yet in the CRM, and a link table written when a note is saved (same
+   link a name not yet in the CRM, and a link table written when a note is saved (the
    same-workspace trigger and member-only RLS as `contact_links`).
 2. **AI reads each note and suggests; a person confirms.** On save, a model proposes
    one-tap actions: "mentions B, link as co-owners?", "sounds like you met in person, mark as
