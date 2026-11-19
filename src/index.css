@@ -1860,3 +1860,58 @@ input::placeholder { color: var(--text-muted); }
     gap: 0.25rem;
     flex-wrap: wrap;
 }
+
+/* ── Note finder: @-mentions, names as links, "Taraform found" ── */
+.mention-wrap { position: relative; }
+.mention-menu {
+    position: absolute; left: 0; right: 0; top: 100%; z-index: 30;
+    margin-top: 4px; list-style: none; padding: 4px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    max-height: 260px; overflow-y: auto;
+}
+.mention-option {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.4rem 0.5rem; border-radius: 4px; cursor: pointer;
+    font-size: var(--text-base); color: var(--text);
+}
+.mention-option svg { color: var(--text-muted); flex-shrink: 0; }
+.mention-option.active { background: var(--surface-hover); }
+.mention-option.create, .mention-option.create svg { color: var(--accent); }
+.mention-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-meta { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
+
+.note-mention {
+    background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+    color: var(--accent); text-decoration: underline; text-decoration-color: transparent;
+    text-underline-offset: 2px;
+}
+.note-mention:hover { text-decoration-color: currentColor; }
+.note-mention.group { cursor: default; color: var(--text); font-weight: 600; }
+
+.finder-strip {
+    margin-top: 0.6rem; padding: 0.5rem 0.65rem;
+    border: 1px dashed var(--border); border-radius: 6px; background: var(--bg);
+}
+.finder-head {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-family: var(--mono); font-size: var(--text-xs); letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 0.35rem;
+}
+.finder-close { margin-left: auto; }
+.finder-item {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    padding: 0.25rem 0; font-size: var(--text-sm); color: var(--text);
+}
+.finder-item > svg { color: var(--text-muted); flex-shrink: 0; }
+.finder-item.busy { opacity: 0.6; pointer-events: none; }
+.finder-text { flex: 1 1 auto; min-width: 0; }
+.finder-meta, .finder-muted { color: var(--text-muted); }
+.finder-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.2rem 0.55rem; font-size: var(--text-xs);
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--text-muted); cursor: pointer;
+}
+.finder-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.finder-btn.primary { color: var(--accent); border-color: var(--accent); }

@@ -112,10 +112,14 @@ export async function leaveGroup(groupId, userId) {
   if (error) throw error;
 }
 
-// Put a contact in a group, or take them out.
-export async function addContactToGroup(groupId, contactId) {
-  const { error } = await supabase.from('contact_group_members').insert({ group_id: groupId, contact_id: contactId });
-  if (error && error.code !== '23505') throw error;
+// Put a contact in a group, or take them out. Returns false when they were already in it.
+// sourceNoteId: the note that named the group (the note finder).
+export async function addContactToGroup(groupId, contactId, sourceNoteId = null) {
+  const { error } = await supabase.from('contact_group_members')
+    .insert({ group_id: groupId, contact_id: contactId, ...(sourceNoteId ? { source_note_id: sourceNoteId } : {}) });
+  if (error?.code === '23505') return false;
+  if (error) throw error;
+  return true;
 }
 
 export async function removeContactFromGroup(groupId, contactId) {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Link2, Quote, Pencil, X, Plus } from 'lucide-react';
+import { Users, Link2, Quote, Pencil, X, Plus, Building2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, LEVELS, WARMTH } from '../../lib/waysIn';
+import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, colleagueLine, LEVELS, WARMTH } from '../../lib/waysIn';
 import { removeContactFromGroup, kindLabel } from '../../lib/groups';
 import { displayName } from '../../lib/links';
 import { useConfirm } from '../shared/ConfirmDialog';
@@ -13,9 +13,10 @@ import { classifyError } from '../../lib/errors';
 
 // The contact page's third column in a workspace with `connections` on (PLAN.md,
 // "Connections & Ways In"). Everything here is entered by hand for now: your own "How well
-// do you know them?", connections (ConnectionForm) and groups (GroupPicker). Step 4 adds
-// the note finder as the main way these get filled.
-export default function WaysInColumn({ contact }) {
+// do you know them?", connections (ConnectionForm) and groups (GroupPicker). Notes fill
+// it too: the note finder (NotesTab) links names it recognises and bumps `refreshKey`.
+// Colleagues (people at the same company) are derived from company links, not stored.
+export default function WaysInColumn({ contact, refreshKey = 0 }) {
   const { user, currentClientId, loadFullContact, setCurrentContact, showToast } = useApp();
   const navigate = useNavigate();
   const me = user?.id;
@@ -46,6 +47,9 @@ export default function WaysInColumn({ contact }) {
     setLoading(true); setData(null); setForm(null);
     load();
   }, [contact.id]); // eslint-disable-line
+
+  // A note just linked someone: reload in place, without the loading flash.
+  useEffect(() => { if (refreshKey) load(); }, [refreshKey]); // eslint-disable-line
 
   useEffect(() => {
     fetchAuthorNames(currentClientId).then(setNames).catch(() => setNames(new Map()));
@@ -170,8 +174,8 @@ export default function WaysInColumn({ contact }) {
           {/* 3. Who they know */}
           <section className="ways-section">
             <div className="field-label">Who they know</div>
-            {data.connections.length === 0 ? (
-              <div className="conn-empty">No connections yet.</div>
+            {data.connections.length === 0 && data.colleagues.length === 0 ? (
+              <div className="conn-empty">No connections yet. Name someone in a note, or add one below.</div>
             ) : data.connections.map(c => (
               <div key={c.id} className="ways-item">
                 <div className="ways-item-top">
@@ -191,6 +195,16 @@ export default function WaysInColumn({ contact }) {
                 {c.noteBody && (
                   <blockquote className="ways-quote"><Quote size={12} /> {c.noteBody}</blockquote>
                 )}
+              </div>
+            ))}
+            {data.colleagues.map(c => (
+              <div key={`co-${c.contactId}`} className="ways-item">
+                <div className="ways-item-top">
+                  <Building2 size={14} className="conn-icon" />
+                  <button type="button" className="conn-name" onClick={() => open(c.contactId)}>{c.name}</button>
+                </div>
+                <div className="ways-item-line">{colleagueLine(c)}</div>
+                {c.knownBy.length > 0 && <div className="ways-item-line ways-known">{knownByLine(c.knownBy, c.name)}</div>}
               </div>
             ))}
             {form === 'connect' ? (

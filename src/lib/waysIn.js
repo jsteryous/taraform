@@ -51,6 +51,16 @@ export function normalizeWaysIn(d) {
       noteBody: c.note_body || '',
       knownBy: (c.known_by || []).map(k => ({ userId: k.user_id, level: k.level })),
     })),
+    // People at the same company. Derived from company links, never stored (PLAN.md:
+    // a shared company is a path, not a connection), so they have no id and no edit.
+    colleagues: (d.colleagues || []).map(c => ({
+      contactId: c.contact_id,
+      name: displayName({ firstName: c.first_name, lastName: c.last_name }),
+      companyId: c.company_id,
+      companyName: c.company_name || '',
+      title: c.title || '',
+      knownBy: (c.known_by || []).map(k => ({ userId: k.user_id, level: k.level })),
+    })),
     groups: (d.groups || []).map(g => ({
       id: g.id,
       name: g.name,
@@ -93,6 +103,16 @@ export function strongest(list, me) {
   )[0] || null;
 }
 
+// "Both at Gallo Company" (with the colleague's title when there is one).
+export function colleagueLine(c) {
+  return `Both at ${c.companyName || 'the same company'}${c.title ? ` · ${c.name} is ${c.title}` : ''}`;
+}
+
+// A colleague in the shape describeWaysIn reads a connection in.
+function asConnection(c) {
+  return { ...c, description: `Both at ${c.companyName || 'the same company'}`, referredBy: null, unsure: false };
+}
+
 // How two people know each other, as one line: the description, then who referred whom.
 // A bare "Referred" description with a direction set says nothing the direction doesn't.
 export function howTheyKnow(c) {
@@ -118,10 +138,12 @@ export function describeWaysIn(w, ctx) {
   }
 
   if (w.warmth === 'intro') {
-    // Connections arrive warmest first; prefer a confirmed one if it is just as warm.
-    const best = Math.max(...w.connections.map(c => RANK[strongest(c.knownBy, ctx.me)?.level] || 0));
-    const c = w.connections.find(x => !x.unsure && (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best)
-      || w.connections.find(x => (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best);
+    // Connections and colleagues alike; a stored connection wins a tie, being the more
+    // specific fact. Prefer a confirmed one if it is just as warm.
+    const pool = [...w.connections, ...(w.colleagues || []).map(asConnection)];
+    const best = Math.max(...pool.map(c => RANK[strongest(c.knownBy, ctx.me)?.level] || 0));
+    const c = pool.find(x => !x.unsure && (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best)
+      || pool.find(x => (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best);
     const k = strongest(c.knownBy, ctx.me);
     const how = howTheyKnow(c) ? ` How they know each other: ${howTheyKnow(c)}.` : '';
     const unsure = c.unsure ? ' Not confirmed.' : '';
@@ -172,10 +194,12 @@ function connectionError(error) {
 }
 
 // Connect two people. Either order: the trigger sorts the pair and stamps the rest.
-export async function connectPeople({ contactId, otherId, description, referredBy = null, unsure = false }) {
+// sourceNoteId: the note it was found in, quoted on the column as the reason.
+export async function connectPeople({ contactId, otherId, description, referredBy = null, unsure = false, sourceNoteId = null }) {
   const { data, error } = await supabase
     .from('contact_connections')
-    .insert({ a_id: contactId, b_id: otherId, description: description?.trim() || null, referred_by: referredBy, unsure })
+    .insert({ a_id: contactId, b_id: otherId, description: description?.trim() || null, referred_by: referredBy, unsure,
+      ...(sourceNoteId ? { source_note_id: sourceNoteId } : {}) })
     .select('id')
     .single();
   if (error) throw connectionError(error);

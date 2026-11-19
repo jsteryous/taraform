@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, whoLabel, howTheyKnow } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, whoLabel, howTheyKnow, colleagueLine } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -25,7 +25,7 @@ describe('normalizeWaysIn', () => {
   });
 
   it('tolerates missing arrays', () => {
-    expect(normalizeWaysIn({ warmth: 'cold' })).toEqual({ warmth: 'cold', familiarity: [], connections: [], groups: [] });
+    expect(normalizeWaysIn({ warmth: 'cold' })).toEqual({ warmth: 'cold', familiarity: [], connections: [], colleagues: [], groups: [] });
   });
 });
 
@@ -138,5 +138,33 @@ describe('howTheyKnow', () => {
   });
   it('keeps a description that says more', () => {
     expect(howTheyKnow(c({ description: 'Referred the farm loan', referredBy: 1 }))).toBe('Referred the farm loan · They referred Pat');
+  });
+});
+
+describe('colleagues', () => {
+  const tyler = { contact_id: 8, first_name: 'Tyler', last_name: 'H', company_id: 3, company_name: 'Gallo Company',
+    title: 'VP', known_by: [{ user_id: ME, level: 'know' }] };
+
+  it('maps colleagues from the RPC', () => {
+    expect(w({ colleagues: [tyler] }).colleagues[0]).toEqual({ contactId: 8, name: 'Tyler H', companyId: 3,
+      companyName: 'Gallo Company', title: 'VP', knownBy: [{ userId: ME, level: 'know' }] });
+  });
+
+  it('says where they work together', () => {
+    const c = w({ colleagues: [tyler] }).colleagues[0];
+    expect(colleagueLine(c)).toBe('Both at Gallo Company · Tyler H is VP');
+    expect(colleagueLine({ ...c, title: '' })).toBe('Both at Gallo Company');
+  });
+
+  it('intro through a colleague you know', () => {
+    const d = describeWaysIn(w({ warmth: 'intro', colleagues: [tyler] }), ctx);
+    expect(d).toEqual({ headline: 'Best way in: ask Tyler H.', detail: 'You know Tyler H. How they know each other: Both at Gallo Company.' });
+  });
+
+  it('a stored connection beats an equally warm colleague', () => {
+    const d = describeWaysIn(w({ warmth: 'intro', colleagues: [tyler], connections: [
+      { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', known_by: [{ user_id: ME, level: 'know' }] },
+    ] }), ctx);
+    expect(d.headline).toBe('Best way in: ask Pat.');
   });
 });

@@ -183,7 +183,7 @@ comes back:
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
 
-## Next: Connections & Ways In (designed 2026-11-18; database, column and hand entry built 2026-11-19; the note finder is next)
+## Next: Connections & Ways In (designed 2026-11-18; database, column, hand entry and the note finder built 2026-11-19; display names next)
 
 Bank workspace only for now. No AI. Mockup: a private canvas,
 https://claude.ai/artifact/2yRFHU7uW1uDLG15EypPqN (it uses real names, so it stays out of
@@ -319,6 +319,20 @@ groups + ignored terms → found items), with tests for the cases above. Turned 
    Faith is not offered as a kind in Bank. Data calls: `lib/groups.js`, and the connection
    writes in `lib/waysIn.js`.
 4. **The finder** and the "Taraform found" strip on saved notes.
+   **Built 2026-11-19:** `lib/noteFinder.js` (pure, tested), `lib/finderIndex.js` (the
+   name index, read fresh when a contact opens and before each note is checked, so a
+   contact added a minute ago is recognised), `lib/noteActions.js` (what a save does) and
+   `FinderStrip.jsx`. Beyond the design: **@-mentions** in the note box
+   (`MentionTextarea.jsx`) insert a full name, settle "which one?", and can create the
+   contact on the spot; a **known company** in a note is offered as "Works there" (a
+   company link); an unknown phrase can become a person, a company or a group, ordered by
+   a guess from its words (Associates/LLC → company, Club/Church → group). Created contacts
+   take the first status, as Add Contact does, and get no follow-up date: being named in a
+   note is not a reason to be called. Existing notes are not scanned; editing one runs it.
+   **Colleagues:** `contact_ways_in` also returns people linked to the same company
+   (`db/20261119_ways_in_colleagues.sql`), shown under "Who they know" and counted as
+   "1 intro away" when a teammate knows them. Derived from `contact_links`, never stored,
+   per "What not to infer" below.
 5. **Display names** (step 5 of the main plan) must land before the column shows
    teammates: "Kim knows him well", not an email address.
 
