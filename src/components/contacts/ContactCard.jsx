@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Building2 } from 'lucide-react';
 import { useAppData } from '../../context/AppContext';
-import { getStatusClass } from '../../lib/utils';
+import StatusBadge from './StatusBadge';
 import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
 
 const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onClick }) {
@@ -41,10 +41,7 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
       {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', gridColumn: showCounty ? 'auto' : 'span 1' }}>
-        <span className={`status-badge ${getStatusClass(contact.status)}`}
-          style={{ background: `${barColor}22`, color: barColor, borderColor: `${barColor}44` }}>
-          {contact.status}
-        </span>
+        <StatusBadge cfg={cfg} status={contact.status} />
       </div>
     </div>
   );

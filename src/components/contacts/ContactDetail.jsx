@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useDraftSave } from '../../hooks/useDraftSave';
-import { getStatusClass, formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
+import { formatPhone, normalizePhone, parseCustomFieldDefs } from '../../lib/utils';
 import { isFollowUpDue, todayStr, autoFollowUpDate, followUpWindow } from '../../lib/contactFilters';
 import { scheduleAfterNote, clearOnStatusChange, attemptGap, attemptLabel, schedulesFor, cadenceFor } from '../../lib/followUpCadence';
 import { resolveConfig } from '../../lib/clientConfig';
+import StatusBadge from './StatusBadge';
 import { setAutoFollowUp } from '../../lib/api';
 import NotesTab from './NotesTab';
 import ConnectionsPanel from './ConnectionsPanel';
@@ -239,7 +240,7 @@ export default function ContactDetail({ onClose }) {
       {/* Header */}
       <div className="detail-page-header">
         <button className="back-button" onClick={onClose}><ArrowLeft size={15} /> Back <kbd className="kbd-hint">esc</kbd></button>
-        <span className={`status-badge ${getStatusClass(draft.status)}`}>{draft.status}</span>
+        <StatusBadge cfg={cfg} status={draft.status} />
         {saveStatus === 'saving' && <span className="save-indicator">Saving…</span>}
         {saveStatus === 'saved' && <span className="save-indicator saved"><Check size={12} /> Saved</span>}
         <button className="btn-danger-ghost" onClick={handleDelete}><Trash2 size={13} /> Delete</button>
