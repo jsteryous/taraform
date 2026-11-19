@@ -1,0 +1,152 @@
+import { supabase } from './supabase';
+import { displayName } from './links';
+
+// Connections & Ways In (PLAN.md; db/20261118_connections.sql).
+//
+// The column reads everything in one call, contact_ways_in(contact_id): a SECURITY
+// INVOKER function, so RLS still decides what comes back. The only write in this step is
+// the caller's own "how well do you know them", through set_familiarity — the grants
+// leave no other way to write that table. The wording below is pure so it can be tested.
+
+export const LEVELS = [
+  { value: null,        label: "Haven't met", hint: "We haven't met" },
+  { value: 'met',       label: 'Met',         hint: "We've met" },
+  { value: 'know',      label: 'Know',        hint: 'Would take my call' },
+  { value: 'know_well', label: 'Know well',   hint: 'Could ask a favor' },
+];
+
+export const WARMTH = [
+  { value: 'cold',   label: 'Cold' },
+  { value: 'common', label: 'Common ground' },
+  { value: 'intro',  label: '1 intro away' },
+  { value: 'warm',   label: 'Warm' },
+];
+
+const RANK = { met: 1, know: 2, know_well: 3 };
+
+export async function fetchWaysIn(contactId) {
+  const { data, error } = await supabase.rpc('contact_ways_in', { p_contact_id: contactId });
+  if (error) throw error;
+  return data ? normalizeWaysIn(data) : null;
+}
+
+// level: 'met' | 'know' | 'know_well', or null for "Haven't met" (deletes the row).
+export async function setFamiliarity(contactId, level) {
+  const { error } = await supabase.rpc('set_familiarity', { p_contact_id: contactId, p_level: level });
+  if (error) throw error;
+}
+
+// The RPC returns snake_case jsonb; give the UI one camelCase shape with names joined.
+export function normalizeWaysIn(d) {
+  return {
+    warmth: d.warmth || 'cold',
+    familiarity: (d.familiarity || []).map(f => ({ userId: f.user_id, level: f.level })),
+    connections: (d.connections || []).map(c => ({
+      id: c.id,
+      contactId: c.contact_id,
+      name: displayName({ firstName: c.first_name, lastName: c.last_name }),
+      description: c.description || '',
+      referredBy: c.referred_by,
+      unsure: !!c.unsure,
+      noteBody: c.note_body || '',
+      knownBy: (c.known_by || []).map(k => ({ userId: k.user_id, level: k.level })),
+    })),
+    groups: (d.groups || []).map(g => ({
+      id: g.id,
+      name: g.name,
+      kind: g.kind,
+      teammates: g.teammates || [],
+      knownContacts: (g.known_contacts || []).map(k => ({
+        contactId: k.contact_id,
+        name: displayName({ firstName: k.first_name, lastName: k.last_name }),
+        knownBy: (k.known_by || []).map(x => ({ userId: x.user_id, level: x.level })),
+      })),
+    })),
+  };
+}
+
+// "You" for the signed-in user, otherwise the teammate's label. Labels come from
+// fetchAuthorNames (email before the @) until display names exist (PLAN.md step 5);
+// this is the one place to change when they do.
+export function whoLabel(userId, { me, names }) {
+  if (userId && userId === me) return 'You';
+  return names?.get(userId) || 'A former teammate';
+}
+
+// "You know Pat well" / "Kim has met Pat". `who` is the output of whoLabel.
+export function knowsPhrase(who, level, object) {
+  const you = who === 'You';
+  switch (level) {
+    case 'know_well': return `${who} ${you ? 'know' : 'knows'} ${object} well`;
+    case 'know':      return `${who} ${you ? 'know' : 'knows'} ${object}`;
+    case 'met':       return `${who} ${you ? 'have' : 'has'} met ${object}`;
+    default:          return '';
+  }
+}
+
+// The strongest familiarity in a list, the signed-in user first among equals: "you know
+// them well" is a better way in than "a teammate does", because it needs no one else.
+export function strongest(list, me) {
+  return [...(list || [])].sort((a, b) =>
+    (RANK[b.level] || 0) - (RANK[a.level] || 0) ||
+    (b.userId === me) - (a.userId === me)
+  )[0] || null;
+}
+
+// The one sentence under the meter: the best way in, or an excuse to reach out.
+// Follows the same order as the warmth rule in contact_ways_in, so the sentence always
+// explains the step the meter shows.
+export function describeWaysIn(w, ctx) {
+  if (!w) return { headline: '', detail: '' };
+  const label = id => whoLabel(id, ctx);
+
+  if (w.warmth === 'warm') {
+    const f = strongest(w.familiarity.filter(x => RANK[x.level] >= 2), ctx.me);
+    if (f.userId === ctx.me) {
+      return { headline: 'Call them yourself.', detail: `${knowsPhrase('You', f.level, 'them')}.` };
+    }
+    return { headline: `Best way in: ask ${label(f.userId)}.`, detail: `${knowsPhrase(label(f.userId), f.level, 'them')}.` };
+  }
+
+  if (w.warmth === 'intro') {
+    // Connections arrive warmest first; prefer a confirmed one if it is just as warm.
+    const best = Math.max(...w.connections.map(c => RANK[strongest(c.knownBy, ctx.me)?.level] || 0));
+    const c = w.connections.find(x => !x.unsure && (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best)
+      || w.connections.find(x => (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best);
+    const k = strongest(c.knownBy, ctx.me);
+    const how = c.description ? ` How they know each other: ${c.description.replace(/[.\s]+$/, '')}.` : '';
+    const unsure = c.unsure ? ' Not confirmed.' : '';
+    const ask = k.userId === ctx.me ? `ask ${c.name}` : `${label(k.userId)} can ask ${c.name}`;
+    return {
+      headline: `Best way in: ${ask}.`,
+      detail: `${knowsPhrase(label(k.userId), k.level, c.name)}.${how}${unsure}`,
+    };
+  }
+
+  if (w.warmth === 'common') {
+    const mine = w.groups.find(g => g.teammates.includes(ctx.me));
+    if (mine) return { headline: `Excuse to reach out: you're both in ${mine.name}.`, detail: '' };
+    const team = w.groups.find(g => g.teammates.length);
+    if (team) {
+      return { headline: `Excuse to reach out: ${label(team.teammates[0])} is in ${team.name} too.`, detail: '' };
+    }
+    const viaContact = w.groups.find(g => g.knownContacts.length);
+    if (viaContact) {
+      const kc = viaContact.knownContacts[0];
+      const k = strongest(kc.knownBy, ctx.me);
+      return {
+        headline: `Excuse to reach out: ${kc.name} is in ${viaContact.name} too.`,
+        detail: `${knowsPhrase(label(k.userId), k.level, kc.name)}.`,
+      };
+    }
+    const met = strongest(w.familiarity, ctx.me);
+    if (met) {
+      return {
+        headline: met.userId === ctx.me ? "You've met them." : `${label(met.userId)} has met them.`,
+        detail: 'Having met is a reason to call.',
+      };
+    }
+  }
+
+  return { headline: 'No way in yet.', detail: 'Say how well you know them, below.' };
+}

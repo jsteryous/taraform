@@ -1723,3 +1723,77 @@ input::placeholder { color: var(--text-muted); }
     display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem;
     color: var(--text-muted); font-size: var(--text-sm); cursor: pointer;
 }
+
+/* ── Connections & Ways In column (WaysInColumn.jsx) ── */
+.ways-column {
+    border-left: 1px solid var(--border);
+    padding-left: 1.5rem;
+    min-width: 0;
+}
+.ways-section { margin-bottom: 1.5rem; }
+.ways-section .field-label { margin-bottom: 0.5rem; }
+.ways-meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 0.5rem; }
+.ways-step { height: 6px; border-radius: 3px; background: var(--border); }
+.ways-meter.warmth-common .ways-step.on { background: #60a5fa; }
+.ways-meter.warmth-intro .ways-step.on { background: var(--warning); }
+.ways-meter.warmth-warm .ways-step.on { background: var(--success); }
+.ways-warmth-label {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+}
+.ways-headline { font-size: var(--text-md); font-weight: 600; color: var(--text); line-height: 1.4; }
+.ways-detail { font-size: var(--text-base); color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4; }
+.ways-levels { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.ways-level {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: none;
+    border-left: 1px solid var(--border);
+    padding: 0.45rem 0.25rem;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.ways-level:first-child { border-left: none; }
+.ways-level:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.ways-level.active { background: var(--accent); color: #fff; }
+.ways-level:disabled { cursor: wait; }
+.ways-hint { font-size: var(--text-sm); color: var(--text-muted); margin-top: 0.35rem; }
+.ways-team { list-style: none; margin-top: 0.5rem; font-size: var(--text-base); color: var(--text-muted); }
+.ways-team li { padding: 0.15rem 0; }
+.ways-item { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.ways-item:last-child { border-bottom: none; }
+.ways-item-top { display: flex; align-items: center; gap: 0.5rem; }
+.ways-item-top .conn-name { max-width: none; }
+.ways-item-line { font-size: var(--text-base); color: var(--text-muted); margin: 0.2rem 0 0 1.4rem; }
+.ways-known .conn-name { font-size: var(--text-base); }
+.ways-group-name { font-size: var(--text-base); color: var(--text); }
+.ways-kind, .ways-badge {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.35rem;
+    text-transform: capitalize;
+}
+.ways-badge { color: var(--warning); border-color: rgba(245, 158, 11, 0.4); text-transform: none; }
+.ways-quote {
+    margin: 0.35rem 0 0 1.4rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid var(--border);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.ways-retry { background: none; border: none; color: var(--accent); cursor: pointer; font-size: inherit; padding: 0; }
+@media (max-width: 968px) {
+    .ways-column { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 1rem; }
+}

@@ -183,7 +183,7 @@ comes back:
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
 
-## Next: Connections & Ways In (designed 2026-11-18; database live 2026-11-19, no UI yet)
+## Next: Connections & Ways In (designed 2026-11-18; database live and read-only column built 2026-11-19)
 
 Bank workspace only for now. No AI. Mockup: a private canvas,
 https://claude.ai/artifact/2yRFHU7uW1uDLG15EypPqN (it uses real names, so it stays out of
@@ -307,6 +307,10 @@ groups + ignored terms → found items), with tests for the cases above. Turned 
    clears). Leaving a workspace deletes that user's familiarity and "Your groups" rows.
 2. **The column, read-only:** the warmth meter, who they know, common ground, and the "How
    well do you know them?" control (the first thing people can write).
+   **Built 2026-11-19** (`WaysInColumn.jsx`, `lib/waysIn.js`), behind `connections: true`
+   in the banking preset; companies get a pointer to their people instead. Teammates are
+   labelled "You" or the part of their email before the @ until display names exist; that
+   label comes from one function, `whoLabel`.
 3. **Add connection** form and **Your groups** settings.
 4. **The finder** and the "Taraform found" strip on saved notes.
 5. **Display names** (step 5 of the main plan) must land before the column shows

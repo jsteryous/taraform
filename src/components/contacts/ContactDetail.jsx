@@ -9,6 +9,7 @@ import { setAutoFollowUp } from '../../lib/api';
 import NotesTab from './NotesTab';
 import ConnectionsPanel from './ConnectionsPanel';
 import OffersTab from './OffersTab';
+import WaysInColumn from './WaysInColumn';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
@@ -568,6 +569,11 @@ export default function ContactDetail({ onClose }) {
             <OffersTab contact={draft} onChangeMultiple={updateMultiple}
               onOffersChange={offers => setDraft(prev => ({ ...prev, offers }))} />
           </div>
+        )}
+
+        {/* ── Connections & Ways In — the same right column, in workspaces without offers ── */}
+        {cfg.connections && !cfg.tabs.includes('offers') && (
+          <WaysInColumn key={draft.id} contact={draft} />
         )}
 
       </div>

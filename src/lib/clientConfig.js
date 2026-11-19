@@ -117,6 +117,8 @@ export const GENERIC_CONFIG = {
 export const BANKING_CONFIG = {
   type: 'banking',
   companies: true,
+  // Connections & Ways In: the contact page's third column (PLAN.md). Banking only for now.
+  connections: true,
   terminology: { contact: 'Contact', contacts: 'Contacts' },
   leadSourceOptions: [],
   contactMethodOptions: [],
