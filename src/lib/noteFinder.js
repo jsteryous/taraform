@@ -63,6 +63,8 @@ export function buildNameIndex({ people = [], companies = [], groups = [] } = {}
 // Parker" is about Drew Parker. Stripped from the front of an unknown phrase.
 const LEAD_WORDS = new Set(`a an the i we he she they it his her their our my your this that these those
   called call met meet talked talk spoke speak left sent send emailed email texted text saw see had have got get
+  knows know knew works work worked friends friend good great best close old new
+  brother sister wife husband son daughter dad mom father mother cousin uncle aunt partner boss
   lunch coffee dinner drinks breakfast introduced intro asked ask told tell heard hear went go
   and but or so if when then also just per re fyi via with from to at for on in by of about after before
   mr mrs ms dr
@@ -71,7 +73,8 @@ const LEAD_WORDS = new Set(`a an the i we he she they it his her their our my yo
   jan feb mar apr jun jul aug sep sept oct nov dec`.split(/\s+/).filter(Boolean));
 
 // Joining words allowed inside a capitalised phrase ("Bank of America", "Lee & Associates").
-const JOINERS = new Set(['&', 'of', 'and', 'the', 'de', 'la', 'van', 'von']);
+// Not "and": "The Commons and Pickle Yard" is two places, "Steve and Kim" two people.
+const JOINERS = new Set(['&', 'of', 'the', 'de', 'la', 'van', 'von']);
 
 const GROUPISH = /\b(club|cc|country club|church|parish|chapel|synagogue|temple|ministry|university|college|school|academy|alumni|rotary|lions|kiwanis|association|society|chamber|league|board|foundation|lodge|fellowship|team)\b/i;
 const COMPANYISH = /\b(associates|llc|inc|corp|corporation|company|co|partners|group|holdings|properties|realty|construction|capital|industries|enterprises|services|bank|trust|law|firm|ltd|lp|llp|pllc|pa|development|investments|management|solutions|consulting|builders|homes|farms)\b/i;

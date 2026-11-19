@@ -87,6 +87,15 @@ describe('findInNote: unknown phrases', () => {
     expect(find('Met Sarah Jones Monday').unknown.map(u => u.phrase)).toEqual(['Sarah Jones']);
   });
 
+  it('relationship words at the front are not part of a name', () => {
+    expect(find('Knows Barrett').unknown).toEqual([]);
+    expect(find('Good friends with Sarah Jones').unknown.map(u => u.phrase)).toEqual(['Sarah Jones']);
+  });
+
+  it('"and" separates two names', () => {
+    expect(find('developer of The Commons and Pickle Yard').unknown.map(u => u.phrase)).toEqual(['Pickle Yard']);
+  });
+
   it('keeps joining words inside a name', () => {
     expect(find('banks with Bank of America').unknown.map(u => u.phrase)).toEqual(['Bank of America']);
   });
