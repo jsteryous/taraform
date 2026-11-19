@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, whoLabel } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, whoLabel, howTheyKnow } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -120,5 +120,23 @@ describe('describeWaysIn', () => {
   it('cold', () => {
     expect(describeWaysIn(w({}), ctx).headline).toBe('No way in yet.');
     expect(describeWaysIn(null, ctx)).toEqual({ headline: '', detail: '' });
+  });
+});
+
+describe('howTheyKnow', () => {
+  const c = (over) => ({ contactId: 7, name: 'Pat', description: '', referredBy: null, ...over });
+  it('is the description alone when nobody referred anybody', () => {
+    expect(howTheyKnow(c({ description: 'College roommates.' }))).toBe('College roommates');
+  });
+  it('says who referred whom', () => {
+    expect(howTheyKnow(c({ referredBy: 7 }))).toBe('Pat referred them');
+    expect(howTheyKnow(c({ referredBy: 1 }))).toBe('They referred Pat');
+  });
+  it('drops a bare "Referred" once the direction says it', () => {
+    expect(howTheyKnow(c({ description: 'Referred', referredBy: 7 }))).toBe('Pat referred them');
+    expect(howTheyKnow(c({ description: 'Referred' }))).toBe('Referred');
+  });
+  it('keeps a description that says more', () => {
+    expect(howTheyKnow(c({ description: 'Referred the farm loan', referredBy: 1 }))).toBe('Referred the farm loan · They referred Pat');
   });
 });

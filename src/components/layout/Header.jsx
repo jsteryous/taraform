@@ -4,8 +4,10 @@ import { supabase } from '../../lib/supabase';
 import { getClients } from '../../lib/api';
 import ManageClientsModal from '../modals/ManageClientsModal';
 import PhoneSyncModal from '../modals/PhoneSyncModal';
+import YourGroupsModal from '../modals/YourGroupsModal';
+import { resolveConfig } from '../../lib/clientConfig';
 import {
-  Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut, Smartphone,
+  Settings, LayoutDashboard, ChevronDown, Moon, SunMoon, Sun, Plus, LogOut, Smartphone, Users,
 } from 'lucide-react';
 
 function hasActiveFilters(f) {
@@ -20,6 +22,8 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
   const [themeOpen, setThemeOpen]         = useState(false);
   const [showClients, setShowClients]     = useState(false);
   const [showPhoneSync, setShowPhoneSync] = useState(false);
+  const [showGroups, setShowGroups]       = useState(false);
+  const connections = !!currentClient && resolveConfig(currentClient).connections;
   const themeRef = useRef(null);
   const clientDropRef = useRef(null);
 
@@ -112,6 +116,11 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
           </div>
           <div className="user-info">
             <span>{user?.email}</span>
+            {connections && (
+              <button className="logout-btn" onClick={() => setShowGroups(true)} title="Your groups: clubs, schools and boards you're in">
+                <Users size={14} />
+              </button>
+            )}
             <button className="logout-btn" onClick={() => setShowPhoneSync(true)} title="Caller ID on your phone">
               <Smartphone size={14} />
             </button>
@@ -162,6 +171,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
       />
 
       <PhoneSyncModal open={showPhoneSync} onClose={() => setShowPhoneSync(false)} />
+      {connections && <YourGroupsModal open={showGroups} onClose={() => setShowGroups(false)} />}
     </>
   );
 }

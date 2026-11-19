@@ -1,14 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Link2, Quote } from 'lucide-react';
+import { Users, Link2, Quote, Pencil, X, Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, LEVELS, WARMTH } from '../../lib/waysIn';
+import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, LEVELS, WARMTH } from '../../lib/waysIn';
+import { removeContactFromGroup, kindLabel } from '../../lib/groups';
+import { displayName } from '../../lib/links';
+import { useConfirm } from '../shared/ConfirmDialog';
+import ConnectionForm from './ConnectionForm';
+import GroupPicker from './GroupPicker';
 import { fetchAuthorNames } from '../../lib/notes';
 import { classifyError } from '../../lib/errors';
 
 // The contact page's third column in a workspace with `connections` on (PLAN.md,
-// "Connections & Ways In"). Read-only apart from the signed-in user's own "How well do
-// you know them?" — adding connections and groups comes with the next step.
+// "Connections & Ways In"). Everything here is entered by hand for now: your own "How well
+// do you know them?", connections (ConnectionForm) and groups (GroupPicker). Step 4 adds
+// the note finder as the main way these get filled.
 export default function WaysInColumn({ contact }) {
   const { user, currentClientId, loadFullContact, setCurrentContact, showToast } = useApp();
   const navigate = useNavigate();
@@ -18,6 +24,9 @@ export default function WaysInColumn({ contact }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Which inline form is open: 'connect', 'group', or { edit: connection }.
+  const [form, setForm] = useState(null);
+  const [confirm, ConfirmUI] = useConfirm();
   const seq = useRef(0);
 
   async function load() {
@@ -34,7 +43,7 @@ export default function WaysInColumn({ contact }) {
   }
 
   useEffect(() => {
-    setLoading(true); setData(null);
+    setLoading(true); setData(null); setForm(null);
     load();
   }, [contact.id]); // eslint-disable-line
 
@@ -66,6 +75,31 @@ export default function WaysInColumn({ contact }) {
     }
   }
 
+  async function formDone() {
+    setForm(null);
+    await load();
+  }
+
+  async function disconnect(c) {
+    if (!await confirm(`Remove the connection between ${displayName(contact)} and ${c.name}? Neither contact is deleted.`)) return;
+    try {
+      await disconnectPeople(c.id);
+      await load();
+    } catch (e) {
+      showToast(classifyError(e), 'error');
+    }
+  }
+
+  async function leaveGroup(g) {
+    if (!await confirm(`Take ${displayName(contact)} out of ${g.name}? The group itself stays.`)) return;
+    try {
+      await removeContactFromGroup(g.id, contact.id);
+      await load();
+    } catch (e) {
+      showToast(classifyError(e), 'error');
+    }
+  }
+
   async function open(id) {
     navigate('/contact/' + id);
     const full = await loadFullContact(id);
@@ -88,6 +122,7 @@ export default function WaysInColumn({ contact }) {
 
   return (
     <div className="ways-column">
+      {ConfirmUI}
       <div className="offers-column-header"><span className="field-label">Connections &amp; Ways In</span></div>
 
       {loading ? (
@@ -143,19 +178,27 @@ export default function WaysInColumn({ contact }) {
                   <Link2 size={14} className="conn-icon" />
                   <button type="button" className="conn-name" onClick={() => open(c.contactId)}>{c.name}</button>
                   {c.unsure && <span className="ways-badge">Not confirmed</span>}
+                  <span className="ways-actions">
+                    <button type="button" className="note-delete-btn" title="Edit" onClick={() => setForm({ edit: c })}><Pencil size={12} /></button>
+                    <button type="button" className="note-delete-btn" title="Remove connection" onClick={() => disconnect(c)}><X size={12} /></button>
+                  </span>
                 </div>
-                {(c.description || c.referredBy) && (
-                  <div className="ways-item-line">
-                    {c.description}
-                    {c.referredBy && <>{c.description ? ' · ' : ''}{c.referredBy === c.contactId ? `${c.name} referred them` : `They referred ${c.name}`}</>}
-                  </div>
+                {form?.edit?.id === c.id && (
+                  <ConnectionForm contact={contact} connection={c} onDone={formDone} onCancel={() => setForm(null)} />
                 )}
+                {howTheyKnow(c) && <div className="ways-item-line">{howTheyKnow(c)}</div>}
                 {c.knownBy.length > 0 && <div className="ways-item-line ways-known">{knownByLine(c.knownBy, c.name)}</div>}
                 {c.noteBody && (
                   <blockquote className="ways-quote"><Quote size={12} /> {c.noteBody}</blockquote>
                 )}
               </div>
             ))}
+            {form === 'connect' ? (
+              <ConnectionForm contact={contact} excludeIds={data.connections.map(c => c.contactId)}
+                onDone={formDone} onCancel={() => setForm(null)} />
+            ) : (
+              <button type="button" className="add-field-btn" onClick={() => setForm('connect')}><Plus size={12} /> Add connection</button>
+            )}
           </section>
 
           {/* 4. Common ground */}
@@ -168,7 +211,10 @@ export default function WaysInColumn({ contact }) {
                 <div className="ways-item-top">
                   <Users size={14} className="conn-icon" />
                   <span className="ways-group-name">{g.name}</span>
-                  {g.kind !== 'other' && <span className="ways-kind">{g.kind}</span>}
+                  {g.kind !== 'other' && <span className="ways-kind">{kindLabel(g.kind)}</span>}
+                  <span className="ways-actions">
+                    <button type="button" className="note-delete-btn" title="Take them out of this group" onClick={() => leaveGroup(g)}><X size={12} /></button>
+                  </span>
                 </div>
                 {g.teammates.length > 0 && (
                   <div className="ways-item-line">
@@ -183,6 +229,12 @@ export default function WaysInColumn({ contact }) {
                 ))}
               </div>
             ))}
+            {form === 'group' ? (
+              <GroupPicker contact={contact} inGroupIds={data.groups.map(g => g.id)}
+                onDone={formDone} onCancel={() => setForm(null)} />
+            ) : (
+              <button type="button" className="add-field-btn" onClick={() => setForm('group')}><Plus size={12} /> Add to a group</button>
+            )}
           </section>
         </>
       )}

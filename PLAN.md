@@ -183,7 +183,7 @@ comes back:
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
 
-## Next: Connections & Ways In (designed 2026-11-18; database live and read-only column built 2026-11-19)
+## Next: Connections & Ways In (designed 2026-11-18; database, column and hand entry built 2026-11-19; the note finder is next)
 
 Bank workspace only for now. No AI. Mockup: a private canvas,
 https://claude.ai/artifact/2yRFHU7uW1uDLG15EypPqN (it uses real names, so it stays out of
@@ -312,6 +312,12 @@ groups + ignored terms → found items), with tests for the cases above. Turned 
    labelled "You" or the part of their email before the @ until display names exist; that
    label comes from one function, `whoLabel`.
 3. **Add connection** form and **Your groups** settings.
+   **Built 2026-11-19:** `ConnectionForm.jsx` (add/edit/remove on the column; adding can
+   also set how well *you* know the other person), `GroupPicker.jsx` (put a contact in a
+   group, or create one; the kind is guessed from the name), and `YourGroupsModal.jsx`
+   from the header (tick the groups you're in; create, rename, give other names, delete).
+   Faith is not offered as a kind in Bank. Data calls: `lib/groups.js`, and the connection
+   writes in `lib/waysIn.js`.
 4. **The finder** and the "Taraform found" strip on saved notes.
 5. **Display names** (step 5 of the main plan) must land before the column shows
    teammates: "Kim knows him well", not an email address.

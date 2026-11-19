@@ -93,6 +93,15 @@ export function strongest(list, me) {
   )[0] || null;
 }
 
+// How two people know each other, as one line: the description, then who referred whom.
+// A bare "Referred" description with a direction set says nothing the direction doesn't.
+export function howTheyKnow(c) {
+  const direction = c.referredBy == null ? ''
+    : c.referredBy === c.contactId ? `${c.name} referred them` : `They referred ${c.name}`;
+  const desc = direction && /^referred\.?$/i.test(c.description.trim()) ? '' : c.description.trim().replace(/[.\s]+$/, '');
+  return [desc, direction].filter(Boolean).join(' · ');
+}
+
 // The one sentence under the meter: the best way in, or an excuse to reach out.
 // Follows the same order as the warmth rule in contact_ways_in, so the sentence always
 // explains the step the meter shows.
@@ -114,7 +123,7 @@ export function describeWaysIn(w, ctx) {
     const c = w.connections.find(x => !x.unsure && (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best)
       || w.connections.find(x => (RANK[strongest(x.knownBy, ctx.me)?.level] || 0) === best);
     const k = strongest(c.knownBy, ctx.me);
-    const how = c.description ? ` How they know each other: ${c.description.replace(/[.\s]+$/, '')}.` : '';
+    const how = howTheyKnow(c) ? ` How they know each other: ${howTheyKnow(c)}.` : '';
     const unsure = c.unsure ? ' Not confirmed.' : '';
     const ask = k.userId === ctx.me ? `ask ${c.name}` : `${label(k.userId)} can ask ${c.name}`;
     return {
@@ -149,4 +158,41 @@ export function describeWaysIn(w, ctx) {
   }
 
   return { headline: 'No way in yet.', detail: 'Say how well you know them, below.' };
+}
+
+// ── Writing connections (step 3: the Add connection form) ──────────────────────────────
+
+// Quick picks for "how they know each other". Plain text in `description`; "Referred"
+// also asks which of the two did the referring (referred_by).
+export const HOW_PICKS = ['Work together', 'Family', 'Friends', 'Neighbors', 'Did a deal together', 'Referred'];
+
+function connectionError(error) {
+  if (error?.code === '23505') return new Error('They are already connected.');
+  return error;
+}
+
+// Connect two people. Either order: the trigger sorts the pair and stamps the rest.
+export async function connectPeople({ contactId, otherId, description, referredBy = null, unsure = false }) {
+  const { data, error } = await supabase
+    .from('contact_connections')
+    .insert({ a_id: contactId, b_id: otherId, description: description?.trim() || null, referred_by: referredBy, unsure })
+    .select('id')
+    .single();
+  if (error) throw connectionError(error);
+  return data.id;
+}
+
+// Only how they know each other, who referred whom and "not confirmed" can change. To
+// connect someone else, remove this one and add another.
+export async function updatePeopleConnection(id, { description, referredBy = null, unsure = false }) {
+  const { error } = await supabase
+    .from('contact_connections')
+    .update({ description: description?.trim() || null, referred_by: referredBy, unsure })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function disconnectPeople(id) {
+  const { error } = await supabase.from('contact_connections').delete().eq('id', id);
+  if (error) throw error;
 }
