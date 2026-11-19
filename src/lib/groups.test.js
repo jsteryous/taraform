@@ -66,3 +66,11 @@ describe('guessKind', () => {
     expect(guessKind('Clubhouse Farms')).toBe('other');
   });
 });
+
+describe('isFaithName', () => {
+  it('spots a church by name, not other groups', async () => {
+    const { isFaithName } = await import('./groups');
+    expect(isFaithName('Resurrection Church')).toBe(true);
+    expect(isFaithName('Greenville Country Club')).toBe(false);
+  });
+});

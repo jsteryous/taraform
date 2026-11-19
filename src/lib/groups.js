@@ -136,6 +136,12 @@ const KIND_WORDS = [
   ['faith',    /\b(church|parish|chapel|synagogue|temple|mosque|ministry|congregation|fellowship)\b/i],
 ];
 
+// A name that reads as a church, synagogue, etc. In a banking workspace the note finder
+// must not offer to make a group of it under another kind (PLAN.md, compliance questions).
+export function isFaithName(name) {
+  return KIND_WORDS.find(([k]) => k === 'faith')[1].test(name || '');
+}
+
 export function guessKind(name, cfg) {
   const allowed = new Set(kindOptions(cfg).map(k => k.value));
   for (const [kind, re] of KIND_WORDS) {

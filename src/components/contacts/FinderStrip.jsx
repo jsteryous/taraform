@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, X, Link2, Users, Building2, UserPlus, Undo2 } from 'lucide-react';
 import { connectPeople, disconnectPeople } from '../../lib/waysIn';
-import { createGroup, addContactToGroup, removeContactFromGroup, guessKind } from '../../lib/groups';
+import { createGroup, addContactToGroup, removeContactFromGroup, guessKind, isFaithName } from '../../lib/groups';
 import { addConnection, removeConnection } from '../../lib/links';
 import { ignoreTerm, invalidateFinderIndex } from '../../lib/finderIndex';
 import { classifyError } from '../../lib/errors';
@@ -72,6 +72,9 @@ export default function FinderStrip({ items: initial, contact, noteId, clientId,
     }),
   };
 
+  // Faith groups stay off in Bank until compliance answers (PLAN.md), under any kind.
+  const noGroup = (it) => cfg?.type === 'banking' && isFaithName(it.phrase);
+
   const shown = items.map((it, i) => [it, i]).filter(([it]) => it.state !== 'ignored');
   if (!shown.length) return null;
 
@@ -122,8 +125,8 @@ export default function FinderStrip({ items: initial, contact, noteId, clientId,
             <>
               <UserPlus size={13} />
               <span className="finder-text"><b>{it.phrase}</b></span>
-              {orderFor(it.guess).map(kind => (
-                <button key={kind} type="button" className={`finder-btn${kind === orderFor(it.guess)[0] ? ' primary' : ''}`}
+              {orderFor(it.guess, noGroup(it)).map((kind, k) => (
+                <button key={kind} type="button" className={`finder-btn${k === 0 ? ' primary' : ''}`}
                   onClick={() => (kind === 'person' ? actions.addPerson : kind === 'company' ? actions.addCompany : actions.makeGroup)(i, it)}>
                   {kind === 'person' ? 'Add person & connect' : kind === 'company' ? 'Add company' : 'Make group'}
                 </button>
@@ -137,7 +140,7 @@ export default function FinderStrip({ items: initial, contact, noteId, clientId,
   );
 }
 
-function orderFor(guess) {
-  const all = ['person', 'company', 'group'];
-  return [guess, ...all.filter(k => k !== guess)];
+function orderFor(guess, withoutGroup) {
+  const all = ['person', 'company', 'group'].filter(k => !(withoutGroup && k === 'group'));
+  return all.includes(guess) ? [guess, ...all.filter(k => k !== guess)] : all;
 }
