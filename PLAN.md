@@ -183,7 +183,7 @@ comes back:
 - Single sign-on.
 - Searching inside note text ("who's talked about equipment financing?").
 
-## Next: Connections & Ways In (designed 2026-11-18, not built)
+## Next: Connections & Ways In (designed 2026-11-18; database live 2026-11-19, no UI yet)
 
 Bank workspace only for now. No AI. Mockup: a private canvas,
 https://claude.ai/artifact/2yRFHU7uW1uDLG15EypPqN (it uses real names, so it stays out of
@@ -301,6 +301,10 @@ groups + ignored terms → found items), with tests for the cases above. Turned 
    rows and cannot insert across; a teammate cannot write someone else's familiarity or
    group membership; anon gets nothing. Re-check `has_function_privilege` on
    `contact_ways_in`.
+   **Done 2026-11-19:** `db/20261118_connections.sql`, applied; proven by
+   `db/proofs/20261118_connections_proof.sql` (73/73 against the live tables, rolled
+   back). Writes to familiarity go through `set_familiarity(contact_id, level)` (NULL
+   clears). Leaving a workspace deletes that user's familiarity and "Your groups" rows.
 2. **The column, read-only:** the warmth meter, who they know, common ground, and the "How
    well do you know them?" control (the first thing people can write).
 3. **Add connection** form and **Your groups** settings.

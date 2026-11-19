@@ -371,8 +371,10 @@ begin
       raise exception 'the contact and the group must be in the same workspace';
     end if;
   else
-    -- A teammate must belong to the workspace. (The insert policy also requires
-    -- user_id = auth.uid(); this covers writes made outside the app.)
+    -- A teammate must belong to the workspace. This lookup runs as the caller, and a
+    -- member can see only their own client_users row, so from the app it also refuses
+    -- adding anyone but yourself (proven: it fires before the insert policy, which
+    -- requires user_id = auth.uid() as well).
     if not exists (select 1 from public.client_users cu
                     where cu.client_id = v_group and cu.user_id = new.user_id) then
       raise exception 'that user is not a member of this workspace';

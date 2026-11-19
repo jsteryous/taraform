@@ -33,7 +33,7 @@ declare
     ['u1','group: not in a workspace you are not in','insert into public.contact_groups (client_id,name) values (''{W2}'',''X'')', 'err:row-level security'],
     ['u1','group member: add a contact',            'insert into public.contact_group_members (group_id,contact_id) values ({G1},{P3})', 'rows:1'],
     ['u1','group member: add yourself',             'insert into public.contact_group_members (group_id,user_id) values ({G1},''{U1}'')', 'rows:1'],
-    ['u1','group member: not a teammate',           'insert into public.contact_group_members (group_id,user_id) values ({G1},''{U2}'')', 'err:row-level security'],
+    ['u1','group member: not a teammate',           'insert into public.contact_group_members (group_id,user_id) values ({G1},''{U2}'')', 'err:not a member'],
     ['u1','ignored: add',                           'insert into public.finder_ignored (client_id,term) values (''{W1}'',''  LinkedIn '')', 'rows:1'],
     ['u1','ignored: lowercased and trimmed',        'select term from public.finder_ignored where client_id=''{W1}''', 'val:linkedin'],
     ['u1','note: write one',                        'insert into public.contact_notes (contact_id,body) values ({P1},''Lunch with P3'')', 'rows:1'],
