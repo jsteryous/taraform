@@ -30,6 +30,9 @@ export default function ContactDetail({ onClose }) {
   const [connections, setConnections] = useState([]);
   // Bumped when a note links someone, so the column and the company links reload.
   const [linksVersion, setLinksVersion] = useState(0);
+  // Bumped when the People/Companies panel adds or removes a link. Only the Ways In column
+  // reloads (colleagues come from company links); the panel already shows its own change.
+  const [panelVersion, setPanelVersion] = useState(0);
   const [confirmDelete, ConfirmUI] = useConfirm();
 
   // Browsers can't tell us whether a tel: click reached a handler, so after
@@ -457,7 +460,8 @@ export default function ContactDetail({ onClose }) {
 
           {/* People at a company / companies a person belongs to */}
           {cfg.companies && (
-            <ConnectionsPanel key={`${draft.id}-${linksVersion}`} contact={draft} onLoaded={setConnections} />
+            <ConnectionsPanel key={`${draft.id}-${linksVersion}`} contact={draft} onLoaded={setConnections}
+              onChanged={() => setPanelVersion(v => v + 1)} />
           )}
 
           {/* Addresses section */}
@@ -577,7 +581,7 @@ export default function ContactDetail({ onClose }) {
 
         {/* ── Connections & Ways In — the same right column, in workspaces without offers ── */}
         {cfg.connections && !cfg.tabs.includes('offers') && (
-          <WaysInColumn key={draft.id} contact={draft} refreshKey={linksVersion} />
+          <WaysInColumn key={draft.id} contact={draft} refreshKey={linksVersion + panelVersion} />
         )}
 
       </div>

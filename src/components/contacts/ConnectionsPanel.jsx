@@ -6,11 +6,13 @@ import { useConfirm } from '../shared/ConfirmDialog';
 import { fetchConnections, addConnection, updateConnectionTitle, removeConnection, searchByKind } from '../../lib/links';
 import { classifyError } from '../../lib/errors';
 import { resolveConfig } from '../../lib/clientConfig';
+import { splitName } from '../../lib/noteFinder';
 
 // Who this contact is connected to: a company's people, or a person's companies.
 // Loads and edits the links itself; `onLoaded` tells the parent who is connected so a
-// company's Notes tab can pull in the notes written on its people.
-export default function ConnectionsPanel({ contact, onLoaded }) {
+// company's Notes tab can pull in the notes written on its people. `onChanged` fires after
+// this panel adds or removes a link, so the Ways In column can reload its colleagues.
+export default function ConnectionsPanel({ contact, onLoaded, onChanged }) {
   const { currentClientId, currentClient, loadFullContact, setCurrentContact, saveContact, showToast } = useApp();
   const navigate = useNavigate();
   const [confirmRemove, ConfirmUI] = useConfirm();
@@ -67,37 +69,46 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
       });
       apply([...links, { linkId, title: title.trim(), contact: other }]);
       setQuery(''); setTitle(''); setResults([]);
+      onChanged?.();
     } catch (e) {
       showToast(e.message || classifyError(e), 'error');
     }
   }
 
-  // Typing a company that does not exist yet offers to create it. It is a deliberate,
-  // confirmed step rather than something that happens on blur: a typo here would
-  // otherwise become a permanent second company in a book other people share.
+  // Typing a name that does not exist yet offers to create it — a company from a person's
+  // page, a person from a company's. It is a deliberate, confirmed step rather than
+  // something that happens on blur: a typo here would otherwise become a permanent
+  // duplicate in a book other people share.
   async function createAndLink() {
     const name = query.trim().replace(/\s+/g, ' ');
     if (!name || creating) return;
-    if (!await confirmRemove(`Create “${name}” as a new company and link it to this contact?`, { danger: false })) return;
+    const what = otherKind === 'company' ? 'company' : 'person';
+    if (!await confirmRemove(`Create “${name}” as a new ${what} and link ${isCompany ? 'them to this company' : 'it to this contact'}?`, { danger: false })) return;
     setCreating(true);
-    let company;
+    let made;
     try {
       const now = new Date().toISOString();
-      company = await saveContact({
-        kind: 'company', firstName: name, lastName: '', phones: [], county: '', ownerAddress: '',
+      const names = otherKind === 'company' ? { firstName: name, lastName: '' } : splitName(name);
+      made = await saveContact({
+        kind: otherKind, ...names, phones: [], email: '', county: '', ownerAddress: '',
         propertyAddresses: [], taxMapIds: [], status: resolveConfig(currentClient).statuses[0].value,
         notes: '', customFields: {}, createdAt: now, updatedAt: now,
       });
-      if (!company) throw new Error('The company could not be created.');
+      if (!made) throw new Error(`The ${what} could not be created.`);
     } catch (e) {
       setCreating(false);
       showToast(e.message || classifyError(e), 'error');
       return;
     }
     try {
-      const linkId = await addConnection({ companyId: company.id, personId: contact.id, title });
-      apply([...links, { linkId, title: title.trim(), contact: { id: company.id, name, phone: '', status: company.status, kind: 'company' } }]);
+      const linkId = await addConnection({
+        companyId: isCompany ? contact.id : made.id,
+        personId:  isCompany ? made.id : contact.id,
+        title,
+      });
+      apply([...links, { linkId, title: title.trim(), contact: { id: made.id, name, phone: '', status: made.status, kind: otherKind } }]);
       setQuery(''); setTitle(''); setResults([]);
+      onChanged?.();
     } catch (e) {
       console.error('link after create failed:', e);
       showToast(`“${name}” was created but not linked — search for it and link it.`, 'warning');
@@ -125,6 +136,7 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
     try {
       await removeConnection(l.linkId);
       apply(links.filter(x => x.linkId !== l.linkId));
+      onChanged?.();
     } catch (e) {
       showToast(classifyError(e), 'error');
     }
@@ -141,7 +153,7 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
   const typed = query.trim().replace(/\s+/g, ' ');
   const exactExists = [...results, ...links.map(l => l.contact)]
     .some(r => r.name.trim().toLowerCase() === typed.toLowerCase());
-  const canCreate = !isCompany && typed.length >= 2 && searched === query && !exactExists;
+  const canCreate = typed.length >= 2 && searched === query && !exactExists;
 
   return (
     <div className="sidebar-section">
@@ -192,12 +204,10 @@ export default function ConnectionsPanel({ contact, onLoaded }) {
                   <OtherIcon size={12} /> {r.name}
                 </button>
               ))}
-              {canCreate ? (
+              {canCreate && (
                 <button type="button" className="conn-result conn-create" onClick={createAndLink} disabled={creating}>
-                  <Plus size={12} /> {creating ? 'Creating…' : `Create company “${typed}”`}
+                  <Plus size={12} /> {creating ? 'Creating…' : `${isCompany ? 'Add person' : 'Create company'} “${typed}”`}
                 </button>
-              ) : isCompany && choices.length === 0 && (
-                <div className="conn-empty">No person by that name. Add them with “Add Contact” first, then link.</div>
               )}
             </div>
           </>

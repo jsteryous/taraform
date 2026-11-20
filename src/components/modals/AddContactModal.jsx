@@ -6,7 +6,10 @@ import { normalizeCounty } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import { fetchDuplicateCandidates } from '../../lib/contacts';
 import { addNote } from '../../lib/notes';
+import { addConnection, searchByKind } from '../../lib/links';
 import { AlertTriangle, Building2, Plus, User, X } from 'lucide-react';
+
+const cleanName = s => s.trim().replace(/\s+/g, ' ');
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
 const FORM_ID = 'add-contact-form';
@@ -35,7 +38,10 @@ function findDuplicates(contact, existing) {
 }
 
 function defaultForm(statuses) {
-  return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'' };
+  return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'',
+    // The company a new person works at: { id, name } for an existing one, { id: null, name }
+    // for one to create on save. Null when none.
+    company: null, companyTitle: '' };
 }
 
 // A field that holds a list (phones, addresses, parcel ids): one input per value, a remove
@@ -56,6 +62,82 @@ function MultiField({ label, values, onChange, onAdd, onRemove, addLabel, ...inp
         </div>
       ))}
       <button type="button" className="add-more" onClick={onAdd}><Plus size={13} /> {addLabel}</button>
+    </div>
+  );
+}
+
+// "Works at": search the workspace's companies as you type, pick one, or keep the typed name
+// as a new company that is created when the person is saved. Same search as the contact
+// page's Companies panel, so the two can't disagree about what already exists.
+function CompanyField({ clientId, value, onChange, title, onTitle }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState('');
+  const seq = useRef(0);
+
+  useEffect(() => {
+    const n = ++seq.current;
+    if (query.trim().length < 2) { setResults([]); return undefined; }
+    const t = setTimeout(() => {
+      searchByKind(clientId, 'company', query)
+        .then(rows => { if (n === seq.current) { setResults(rows); setSearched(query); } })
+        .catch(e => console.error('company search failed:', e));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query, clientId]);
+
+  const typed = cleanName(query);
+  const exact = results.find(r => r.name.trim().toLowerCase() === typed.toLowerCase());
+  // "New company" only once the search for exactly this text has answered — before that,
+  // "there's no company by that name" isn't known yet and would invite a duplicate.
+  const canCreate = typed.length >= 2 && searched === query && !exact;
+
+  function pick(c) {
+    onChange(c);
+    setQuery(''); setResults([]);
+  }
+
+  return (
+    <div className="add-field">
+      <label className="add-label" htmlFor="add-company-link">Company <span className="add-optional">optional</span></label>
+      {value ? (
+        <div className="add-company-chosen">
+          <Building2 size={14} />
+          <span className="add-company-name">{value.name}</span>
+          {!value.id && <span className="add-optional">new</span>}
+          <button type="button" className="multi-remove" onClick={() => onChange(null)} aria-label="Remove company"><X size={14} /></button>
+        </div>
+      ) : (
+        <>
+          <input id="add-company-link" className="add-input" value={query} autoComplete="off"
+            onChange={e => setQuery(e.target.value)} placeholder="Where they work — type a company name"
+            onKeyDown={e => {
+              // Enter picks the exact match or the new company, rather than submitting the form.
+              if (e.key !== 'Enter' || typed.length < 2) return;
+              e.preventDefault();
+              if (exact) pick(exact);
+              else if (canCreate) pick({ id: null, name: typed });
+            }} />
+          {typed.length >= 2 && (
+            <div className="conn-results">
+              {results.map(r => (
+                <button key={r.id} type="button" className="conn-result" onClick={() => pick(r)}>
+                  <Building2 size={12} /> {r.name}
+                </button>
+              ))}
+              {canCreate && (
+                <button type="button" className="conn-result conn-create" onClick={() => pick({ id: null, name: typed })}>
+                  <Plus size={12} /> New company “{typed}”
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {value && (
+        <input className="add-input add-company-title" value={title} onChange={e => onTitle(e.target.value)}
+          placeholder="Their title there (optional)" autoComplete="off" aria-label="Title at the company" />
+      )}
     </div>
   );
 }
@@ -158,6 +240,7 @@ export default function AddContactModal({ open, onClose }) {
   // no note, and says so rather than pretending the whole thing failed.
   async function createWithNote(contact) {
     const saved = await saveContact(contact);
+    if (saved && !isCompany && form.company) await linkCompany(saved, form.company, form.companyTitle);
     const text = (contact.notes || '').trim();
     if (!saved || !text) return saved;
     try {
@@ -168,6 +251,28 @@ export default function AddContactModal({ open, onClose }) {
       showToast('Contact saved, but the note was not — add it from the contact.', 'warning');
     }
     return saved;
+  }
+
+  // The person is already saved by now, so a failure here leaves them in the book without
+  // the company link — said plainly, with how to finish it, rather than as a failed save.
+  async function linkCompany(person, company, title) {
+    try {
+      let companyId = company.id;
+      if (!companyId) {
+        const now = new Date().toISOString();
+        const made = await saveContact({
+          kind: 'company', firstName: company.name, lastName: '', phones: [], email: '', county: '',
+          ownerAddress: '', propertyAddresses: [], taxMapIds: [], status: statuses[0],
+          notes: '', customFields: {}, createdAt: now, updatedAt: now,
+        });
+        if (!made) throw new Error('company not created');
+        companyId = made.id;
+      }
+      await addConnection({ companyId, personId: person.id, title });
+    } catch (err) {
+      console.error('Company link failed:', err);
+      showToast(`Contact saved, but not linked to ${company.name} — link it from their page.`, 'warning');
+    }
   }
 
   function close() {
@@ -234,6 +339,11 @@ export default function AddContactModal({ open, onClose }) {
           </div>
         )}
         {nameError && <div className="add-error" role="alert">{nameError}</div>}
+
+        {cfg.companies && !isCompany && (
+          <CompanyField clientId={currentClientId} value={form.company} onChange={c => setForm(f => ({ ...f, company: c }))}
+            title={form.companyTitle} onTitle={t => setForm(f => ({ ...f, companyTitle: t }))} />
+        )}
 
         <MultiField label="Phone" values={form.phones} addLabel="Add phone"
           type="tel" inputMode="tel" placeholder="(864) 555-1234" autoComplete="off"

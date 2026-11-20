@@ -1979,3 +1979,10 @@ input::placeholder { color: var(--text-muted); }
 
 /* Banking import: calls-per-weekday input in the First calls banner. */
 .bi-perday { width: 4.5rem; }
+
+/* ── Add Contact: the company a new person works at ── */
+.add-company-chosen { display: flex; align-items: center; gap: 0.4rem; color: var(--text); font-size: var(--text-md); padding: 0.25rem 0; }
+.add-company-chosen svg { color: var(--text-muted); flex-shrink: 0; }
+.add-company-name { font-weight: 500; }
+.add-company-chosen .multi-remove { margin-left: auto; }
+.add-company-title { margin-top: 0.35rem; }
