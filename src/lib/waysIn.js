@@ -215,7 +215,7 @@ export function describeWaysIn(w, ctx) {
     }
   }
 
-  return { headline: 'No way in yet.', detail: 'Say how well you know them, below.' };
+  return { headline: 'Way in: the front door.', detail: 'Reach out directly. If someone does know them, say so below.' };
 }
 
 // ── Writing connections (step 3: the Add connection form) ──────────────────────────────
@@ -327,7 +327,7 @@ export function companyWaysIn(people, waysById, me) {
 export function describeCompanyWaysIn(cw, ctx) {
   if (!cw.people.length) return { headline: 'Nobody linked yet.', detail: 'Link the people who work here, in the People panel.' };
   const p = cw.best;
-  if (!p.ways) return { headline: 'No way in yet.', detail: '' };
+  if (!p.ways) return { headline: 'Way in: the front door.', detail: 'Reach out directly.' };
   if (p.warmth === 'warm') {
     const f = strongest(p.familiarity.filter(x => RANK[x.level] >= 2), ctx.me);
     const title = p.title ? `, ${p.title}` : '';
@@ -335,7 +335,7 @@ export function describeCompanyWaysIn(cw, ctx) {
     const who = whoLabel(f.userId, ctx);
     return { headline: `Best way in: ask ${who} about ${p.name}${title}.`, detail: `${knowsPhrase(who, f.level, p.name)}.` };
   }
-  if (p.warmth === 'cold') return { headline: 'No way in yet.', detail: 'Nobody on the team knows anyone here.' };
+  if (p.warmth === 'cold') return { headline: 'Way in: the front door.', detail: 'Nobody on the team knows anyone here, so reach out directly.' };
   // Name the person in the person-level sentence ("Best way in to Pat Smith: …").
   const inner = describeWaysIn(p.ways, ctx);
   const headline = inner.headline

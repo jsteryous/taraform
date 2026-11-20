@@ -137,7 +137,7 @@ describe('describeWaysIn', () => {
   });
 
   it('cold', () => {
-    expect(describeWaysIn(w({}), ctx).headline).toBe('No way in yet.');
+    expect(describeWaysIn(w({}), ctx).headline).toBe('Way in: the front door.');
     expect(describeWaysIn(null, ctx)).toEqual({ headline: '', detail: '' });
   });
 });
@@ -217,6 +217,6 @@ describe('companyWaysIn', () => {
     expect(describeCompanyWaysIn(companyWaysIn([], new Map(), ME), ctx).headline).toBe('Nobody linked yet.');
     const cold = companyWaysIn([people[0]], ways, ME);
     expect(cold.warmth).toBe('cold');
-    expect(describeCompanyWaysIn(cold, ctx).headline).toBe('No way in yet.');
+    expect(describeCompanyWaysIn(cold, ctx).headline).toBe('Way in: the front door.');
   });
 });
