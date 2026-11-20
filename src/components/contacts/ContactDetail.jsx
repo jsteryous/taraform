@@ -15,7 +15,8 @@ import CompanyWaysInColumn from './CompanyWaysInColumn';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
-import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, Pencil, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Trash2, Phone, PhoneOff, Pencil, HelpCircle, MapPin } from 'lucide-react';
+import { mapsSearchUrl } from '../../lib/geo';
 
 
 export default function ContactDetail({ onClose }) {
@@ -85,6 +86,15 @@ export default function ContactDetail({ onClose }) {
 
   const { saveStatus, update, updateMultiple, updateCustomField } =
     useDraftSave(draft, setDraft, setCurrentContact, saveContact, showToast);
+
+  // A changed address sends the pin back to "finding it", which is what the server's
+  // trigger does too; mirrored here so the line under the field is right without a reload.
+  // An unchanged blur saves nothing (it would also reset nothing on the server).
+  function saveAddress(value) {
+    const next = value.trim();
+    if (next === (currentContact?.address || '').trim()) return;
+    updateMultiple({ address: next, geoStatus: next ? 'pending' : null, geoLat: null, geoLng: null, geoMatched: null });
+  }
 
   // Esc closes the overlay — but inner layers win: a focused field just
   // blurs (which also triggers blur-to-save), and an open confirm dialog
@@ -459,6 +469,20 @@ export default function ContactDetail({ onClose }) {
             </div>
           )}
 
+          {/* A company's street address. Coordinates for the map are derived from it on the
+              server; this only says where that stands. */}
+          {cfg.companies && draft.kind === 'company' && (
+            <div style={{ marginBottom: '1rem' }}>
+              <div className="field-label">Address</div>
+              <input value={draft.address || ''} className="inline-input"
+                placeholder="Street, city, state ZIP"
+                onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
+                onBlur={e => saveAddress(e.target.value)}
+              />
+              <AddressStatus contact={draft} />
+            </div>
+          )}
+
           {/* People at a company / companies a person belongs to */}
           {cfg.companies && (
             <ConnectionsPanel key={`${draft.id}-${linksVersion}`} contact={draft} onLoaded={setConnections}
@@ -606,4 +630,26 @@ function relativeDays(ymd) {
   if (n === 1) return 'tomorrow';
   if (n > 0) return `in ${n} days`;
   return n === -1 ? '1 day overdue' : `${-n} days overdue`;
+}
+
+// One line under a company's address: whether it is on the map, plus a link that opens it
+// in Google Maps (a plain search link — no API key, nothing stored).
+function AddressStatus({ contact }) {
+  if (!contact.address) return null;
+  const open = (
+    <a className="address-maps-link" href={mapsSearchUrl(contact.address)} target="_blank" rel="noreferrer">
+      <MapPin size={11} /> Open in Google Maps
+    </a>
+  );
+  const text = {
+    pending: 'Finding it on the map. This takes up to 10 minutes.',
+    not_found: 'Not found on the map. Check the street number and ZIP.',
+    found: 'On the map.',
+  }[contact.geoStatus] || '';
+  return (
+    <div className={`address-status${contact.geoStatus === 'not_found' ? ' warn' : ''}`}>
+      {text && <span>{text}</span>}
+      {open}
+    </div>
+  );
 }

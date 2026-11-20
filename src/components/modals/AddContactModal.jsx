@@ -38,7 +38,7 @@ function findDuplicates(contact, existing) {
 }
 
 function defaultForm(statuses) {
-  return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'',
+  return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', address:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'',
     // The company a new person works at: { id, name } for an existing one, { id: null, name }
     // for one to create on save. Null when none.
     company: null, companyTitle: '' };
@@ -191,6 +191,8 @@ export default function AddContactModal({ open, onClose }) {
       phones: form.phones.map(p => p.trim()).filter(Boolean),
       email: form.email.trim(),
       county: normalizeCounty(form.county),
+      // A company's street address; the server places it on the map.
+      address: isCompany ? form.address.trim() : undefined,
       ownerAddress: form.ownerAddress.trim(),
       propertyAddresses: form.propertyAddresses.map(a => a.trim()).filter(Boolean),
       taxMapIds: form.taxMapIds.map(t => t.trim()).filter(Boolean),
@@ -339,6 +341,14 @@ export default function AddContactModal({ open, onClose }) {
           </div>
         )}
         {nameError && <div className="add-error" role="alert">{nameError}</div>}
+
+        {isCompany && (
+          <div className="add-field">
+            <label className="add-label" htmlFor="add-address">Address <span className="add-optional">puts it on the map</span></label>
+            <input id="add-address" className="add-input" value={form.address}
+              onChange={e => update('address', e.target.value)} placeholder="307 Main St, Greenville, SC 29609" autoComplete="off" />
+          </div>
+        )}
 
         {cfg.companies && !isCompany && (
           <CompanyField clientId={currentClientId} value={form.company} onChange={c => setForm(f => ({ ...f, company: c }))}

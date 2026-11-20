@@ -151,6 +151,31 @@ export async function fetchDedupIndex(clientId) {
   return all.map(mapDbContact);
 }
 
+// Every company in a workspace with where its address stands, for the map and its cleanup
+// list. The whole set, paged past PostgREST's row cap: a map of "the first 1000" would
+// silently hide the rest (see "contacts is ONE PAGE" in src/components/CLAUDE.md).
+const LOCATION_FIELDS = 'id,kind,first_name,last_name,status,address,geo_status,geo_lat,geo_lng,geo_matched';
+
+export async function fetchCompanyLocations(clientId) {
+  if (!clientId) return [];
+  const CHUNK = 1000;
+  const all = [];
+  for (let from = 0; ; from += CHUNK) {
+    const { data, error } = await supabase
+      .from('property_crm_contacts')
+      .select(LOCATION_FIELDS)
+      .eq('client_id', clientId)
+      .eq('kind', 'company')
+      .order('id')
+      .range(from, from + CHUNK - 1);
+    if (error) throw error;
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < CHUNK) break;
+  }
+  return all.map(mapDbContact);
+}
+
 // Rows that could collide with ONE candidate — for the add-contact duplicate warning,
 // where pulling the whole index would be wasteful. Coarse on purpose: it matches a
 // tax map id in any county, and the caller's findDuplicates applies the county rule.
