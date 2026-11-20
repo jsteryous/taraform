@@ -106,6 +106,7 @@ body.theme-light .login-container {
     align-items: center;
     gap: 0.4rem;
 }
+.theme-toggle-label { text-transform: capitalize; }
 .theme-toggle-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); }
 
 /* ── Theme picker panel ── */
@@ -204,6 +205,8 @@ h1 {
     align-items: center;
     gap: 0;
 }
+/* Nothing renders into #statsBar today; an empty flex item still takes a wrapped line. */
+.stats-bar:empty { display: none; }
 
 button {
     background: var(--surface);
@@ -918,11 +921,6 @@ input[type="file"] {
         padding-left: 0.875rem;
         padding-right: 0.875rem;
     }
-
-    /* Header: drop the email, tighten the action buttons */
-    .user-info > span { display: none; }
-    .header-actions { gap: 0.5rem; }
-    .header-actions button { padding: 0.5rem 0.7rem; font-size: var(--text-sm); }
 
     /* Two-line contact rows: name + status on top, phone underneath.
        The desktop 6-column grid has more children than fit a narrow
@@ -2045,3 +2043,81 @@ input::placeholder { color: var(--text-muted); }
 .address-status.warn { color: var(--warning); }
 .address-maps-link { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--accent); text-decoration: none; }
 .address-maps-link:hover { text-decoration: underline; }
+
+/* ── Phone layout ──
+   Kept at the end of the file on purpose: several of the rules it overrides (.header-top,
+   .filter-btn, .client-drop-btn) are declared below the main 768px block, and at equal
+   specificity the later rule wins. */
+@media (max-width: 768px) {
+    /* The list's own rows sit inside .container, which already has the gutter — a second
+       gutter on each row left a phone with ~85% of its width. */
+    .stats-row, .filter-row, .bulk-bar, .select-all-row, .list-wrap {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* Header. Everything on the top line must fit 320px: anything wider than the screen
+       widens the whole page and Safari zooms out to show it, so the app sat in the left
+       two-thirds with a dead strip on the right. Logo + workspace on the left (the name
+       truncates), icon-only buttons on the right. */
+    header { padding-bottom: 0.875rem; margin-bottom: 0; }
+    .header-top { gap: 0.5rem; margin-bottom: 0.75rem; }
+    .header-left { gap: 0.5rem; min-width: 0; flex: 1 1 auto; }
+    .header-left h1 { font-size: var(--text-lg); flex-shrink: 0; }
+    .client-switcher { min-width: 0; }
+    .client-switcher > div { min-width: 0; }
+    .client-name-static, .client-drop-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    .client-drop-btn { min-width: 0; max-width: 100%; }
+    .user-info { gap: 0.375rem; flex-shrink: 0; }
+    .user-info > span { display: none; }
+    .user-info .logout-btn,
+    .theme-toggle-btn {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .theme-toggle-label { display: none; }
+
+    /* Actions: an even 2×2 grid instead of three-then-one. */
+    .header-bottom { margin-top: 0; }
+    .header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        width: 100%;
+    }
+    .header-actions button {
+        justify-content: center;
+        padding: 0.55rem 0.5rem;
+        font-size: var(--text-sm);
+        white-space: nowrap;
+    }
+
+    /* Stats pills: one swipeable line rather than two wrapped rows. */
+    .stats-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-top: 0.875rem;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .stats-row::-webkit-scrollbar { display: none; }
+    .stats-row > button { flex-shrink: 0; }
+
+    /* Filters: search on its own line, the triggers share the next one evenly. */
+    .filter-row { gap: 0.5rem; padding-top: 0.75rem; }
+    .filter-row > div:first-child { flex: 1 1 100% !important; max-width: none !important; min-width: 0 !important; }
+    .filter-row > div:has(> .filter-btn) { flex: 1 1 0; min-width: 0; }
+    .filter-btn { min-width: 0; width: 100%; padding: 0.5rem 0.7rem; font-size: var(--text-sm); }
+    .filter-dropdown { max-width: calc(100vw - 1.75rem); }
+    .filter-row > div:nth-last-child(2) { display: none; } /* the spacer */
+    .filter-meta { flex: 1 1 100%; justify-content: space-between; }
+}

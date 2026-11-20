@@ -89,7 +89,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
               ) : (
               <div ref={clientDropRef} style={{ position: 'relative' }}>
                 <button className="client-drop-btn" onClick={() => setClientDropOpen(o => !o)}>
-                  <span>{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
+                  <span className="client-drop-name">{clientsList.find(c => c.id === currentClientId)?.name || '— Select Client —'}</span>
                   <ChevronDown size={12} style={{ opacity: 0.5, flexShrink: 0 }} />
                 </button>
                 {clientDropOpen && (
@@ -127,7 +127,7 @@ export default function Header({ onAddContact, onImport, onExport, onDashboard, 
             <div ref={themeRef} style={{ position: 'relative' }}>
               <button className="theme-toggle-btn" onClick={() => setThemeOpen(o => !o)}>
                 <ThemeIcon size={14} />
-                <span style={{ textTransform: 'capitalize' }}>{theme}</span>
+                <span className="theme-toggle-label">{theme}</span>
               </button>
               {themeOpen && (
                 <div className="theme-panel" style={{ display: 'block' }}>
