@@ -9,15 +9,15 @@ import { strongest, knowsPhrase, whoLabel } from './waysIn';
 //     company. A company counts as known when anyone linked to it is: knowing the CFO
 //     *is* the relationship with the company, so it never needs an introduction.
 //   Reasons to reach out: a contact we're pursuing who shares a group with you, a
-//     teammate, or someone known; or someone you've marked as Met / Know / Know well
+//     teammate, or someone known; or someone you've marked as Met or Know well
 //     who hasn't had a note in a while.
 //
-// Same rules as the contact page's warmth (contact_ways_in): "known" means Know or Know
-// well, a shared company is a path and never a stored connection, and nothing is
+// Same rules as the contact page's warmth (contact_ways_in): "known" means Met or Know
+// well (any level; "Know" was folded into Met 2026-11-20), a shared company is a path and never a stored connection, and nothing is
 // inferred from note counts. planOutreach is pure; fetchOutreachData only gathers the
 // neighbourhood it needs, so the read stays small however large an imported list gets.
 
-const RANK = { met: 1, know: 2, know_well: 3 };
+const RANK = { met: 1, know_well: 3 };
 const CHUNK = 200;
 
 export const OUTREACH_DEFAULTS = { statuses: ['Target', 'Prospect'], quietDays: 60 };
@@ -41,7 +41,7 @@ export async function fetchOutreachData(clientId) {
     rows(supabase.from('contact_group_members').select('group_id,contact_id,user_id,contact_groups(name)').eq('client_id', clientId)),
   ]);
   const familiarity = fam.map(f => ({ contactId: f.contact_id, userId: f.user_id, level: f.level }));
-  const known = [...new Set(familiarity.filter(f => RANK[f.level] >= 2).map(f => f.contactId))];
+  const known = [...new Set(familiarity.filter(f => RANK[f.level] >= 1).map(f => f.contactId))];
 
   // Companies a known person is at, then everyone at those companies.
   const theirLinks = await inChunks(known, ids =>
@@ -80,8 +80,7 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
     famBy.get(f.contactId).push(f);
   }
   const best = id => strongest(famBy.get(id), me);
-  const metByMe = id => (famBy.get(id) || []).some(f => f.userId === me);
-  const knownDirectly = id => (RANK[best(id)?.level] || 0) >= 2;
+  const knownDirectly = id => (RANK[best(id)?.level] || 0) >= 1;
   // `links` holds every link of each company a known person is at (fetchOutreachData), so
   // this set is complete for the companies that matter.
   const knownCompanies = new Set(links.filter(l => knownDirectly(l.personId)).map(l => l.companyId));
@@ -94,8 +93,7 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
   const score = p => [RANK[p.helperLevel], p.unsure ? 0 : 1, p.helperUserId === me ? 1 : 0, p.how === 'connection' ? 1 : 0];
   const better = (a, b) => { const x = score(a), y = score(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
   function offer(targetId, helperId, path) {
-    // metByMe: you've met them, so call them; "Reasons to reach out" lists them instead.
-    if (targetId === helperId || !pursued(targetId) || isKnown(targetId) || metByMe(targetId) || !contacts.get(helperId)) return;
+    if (targetId === helperId || !pursued(targetId) || isKnown(targetId) || !contacts.get(helperId)) return;
     const k = best(helperId);
     const p = { targetId, helperId, helperUserId: k.userId, helperLevel: k.level, unsure: false, ...path };
     const cur = intros.get(targetId);

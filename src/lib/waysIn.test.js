@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, meterStep, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine, companyWaysIn, describeCompanyWaysIn } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine, companyWaysIn, describeCompanyWaysIn } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -16,11 +16,11 @@ describe('normalizeWaysIn', () => {
     const n = w({
       warmth: 'intro',
       connections: [{ id: 1, contact_id: 7, first_name: 'Pat', last_name: 'Two', description: 'college',
-        referred_by: null, unsure: false, note_body: null, known_by: [{ user_id: ME, level: 'know' }] }],
+        referred_by: null, unsure: false, note_body: null, known_by: [{ user_id: ME, level: 'met' }] }],
       groups: [{ id: 3, name: 'Glen Club', kind: 'club', teammates: [KIM],
         known_contacts: [{ contact_id: 9, first_name: 'Lee', last_name: '', known_by: [{ user_id: KIM, level: 'know_well' }] }] }],
     });
-    expect(n.connections[0]).toMatchObject({ contactId: 7, name: 'Pat Two', noteBody: '', knownBy: [{ userId: ME, level: 'know' }] });
+    expect(n.connections[0]).toMatchObject({ contactId: 7, name: 'Pat Two', noteBody: '', knownBy: [{ userId: ME, level: 'met' }] });
     expect(n.groups[0].knownContacts[0]).toEqual({ contactId: 9, name: 'Lee', knownBy: [{ userId: KIM, level: 'know_well' }] });
   });
 
@@ -41,14 +41,13 @@ describe('whoLabel / knowsPhrase', () => {
     expect(knowsPhrase('kim', 'know_well', 'them')).toBe('kim knows them well');
     expect(knowsPhrase('You', 'met', 'Pat')).toBe('You have met Pat');
     expect(knowsPhrase('kim', 'met', 'Pat')).toBe('kim has met Pat');
-    expect(knowsPhrase('kim', 'know', 'Pat')).toBe('kim knows Pat');
   });
 });
 
 describe('strongest', () => {
   it('picks the highest level, the signed-in user among equals', () => {
-    expect(strongest([{ userId: KIM, level: 'know' }, { userId: ME, level: 'met' }], ME).userId).toBe(KIM);
-    expect(strongest([{ userId: KIM, level: 'know' }, { userId: ME, level: 'know' }], ME).userId).toBe(ME);
+    expect(strongest([{ userId: KIM, level: 'know_well' }, { userId: ME, level: 'met' }], ME).userId).toBe(KIM);
+    expect(strongest([{ userId: KIM, level: 'met' }, { userId: ME, level: 'met' }], ME).userId).toBe(ME);
     expect(strongest([], ME)).toBeNull();
   });
 });
@@ -59,8 +58,8 @@ describe('listLevel', () => {
       .toEqual({ level: 'met', mine: true });
   });
   it("falls back to the team's warmest when you haven't set one", () => {
-    expect(listLevel([{ userId: KIM, level: 'met' }, { userId: 'x', level: 'know' }], ME))
-      .toEqual({ level: 'know', mine: false });
+    expect(listLevel([{ userId: KIM, level: 'met' }, { userId: 'x', level: 'met' }], ME))
+      .toEqual({ level: 'met', mine: false });
   });
   it('is null when nobody has met them', () => {
     expect(listLevel([], ME)).toBeNull();
@@ -79,9 +78,14 @@ describe('describeWaysIn', () => {
   });
 
   it('warm, a teammate: ask them', () => {
+    const d = describeWaysIn(w({ warmth: 'warm', familiarity: [{ user_id: KIM, level: 'met' }] }), ctx);
+    expect(d).toEqual({ headline: 'Best way in: ask kim.', detail: 'kim has met them.' });
+  });
+
+  it('warm, you have met them and a teammate knows them well: still call them yourself', () => {
     const d = describeWaysIn(w({ warmth: 'warm',
-      familiarity: [{ user_id: KIM, level: 'know' }, { user_id: ME, level: 'met' }] }), ctx);
-    expect(d).toEqual({ headline: 'Best way in: ask kim.', detail: 'kim knows them.' });
+      familiarity: [{ user_id: KIM, level: 'know_well' }, { user_id: ME, level: 'met' }] }), ctx);
+    expect(d).toEqual({ headline: 'Call them yourself.', detail: 'You have met them.' });
   });
 
   it('intro: names the connection, how they know each other, and who knows them', () => {
@@ -93,15 +97,15 @@ describe('describeWaysIn', () => {
 
   it('intro through a teammate, flagged when not confirmed', () => {
     const d = describeWaysIn(w({ warmth: 'intro', connections: [
-      { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', unsure: true, known_by: [{ user_id: KIM, level: 'know' }] },
+      { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', unsure: true, known_by: [{ user_id: KIM, level: 'met' }] },
     ] }), ctx);
-    expect(d).toEqual({ headline: 'Best way in: kim can ask Pat.', detail: 'kim knows Pat. Not confirmed.' });
+    expect(d).toEqual({ headline: 'Best way in: kim can ask Pat.', detail: 'kim has met Pat. Not confirmed.' });
   });
 
   it('intro prefers a confirmed connection that is just as warm', () => {
     const d = describeWaysIn(w({ warmth: 'intro', connections: [
-      { id: 1, contact_id: 7, first_name: 'Hunch', last_name: '', unsure: true, known_by: [{ user_id: ME, level: 'know' }] },
-      { id: 2, contact_id: 8, first_name: 'Sure', last_name: '', unsure: false, known_by: [{ user_id: ME, level: 'know' }] },
+      { id: 1, contact_id: 7, first_name: 'Hunch', last_name: '', unsure: true, known_by: [{ user_id: ME, level: 'met' }] },
+      { id: 2, contact_id: 8, first_name: 'Sure', last_name: '', unsure: false, known_by: [{ user_id: ME, level: 'met' }] },
     ] }), ctx);
     expect(d.headline).toBe('Best way in: ask Sure.');
   });
@@ -127,13 +131,6 @@ describe('describeWaysIn', () => {
         { contact_id: 9, first_name: 'Lee', last_name: 'Ray', known_by: [{ user_id: KIM, level: 'know_well' }] }] },
     ] }), ctx);
     expect(d).toEqual({ headline: 'Excuse to reach out: Lee Ray is in Glen Club too.', detail: 'kim knows Lee Ray well.' });
-  });
-
-  it('common: met', () => {
-    expect(describeWaysIn(w({ warmth: 'common', familiarity: [{ user_id: ME, level: 'met' }] }), ctx).headline)
-      .toBe("You've met them, so reach out yourself.");
-    expect(describeWaysIn(w({ warmth: 'common', familiarity: [{ user_id: KIM, level: 'met' }] }), ctx).headline)
-      .toBe('kim has met them.');
   });
 
   it('cold', () => {
@@ -162,11 +159,11 @@ describe('howTheyKnow', () => {
 
 describe('colleagues', () => {
   const tyler = { contact_id: 8, first_name: 'Tyler', last_name: 'H', company_id: 3, company_name: 'Gallo Company',
-    title: 'VP', known_by: [{ user_id: ME, level: 'know' }] };
+    title: 'VP', known_by: [{ user_id: ME, level: 'met' }] };
 
   it('maps colleagues from the RPC', () => {
     expect(w({ colleagues: [tyler] }).colleagues[0]).toEqual({ contactId: 8, name: 'Tyler H', companyId: 3,
-      companyName: 'Gallo Company', title: 'VP', knownBy: [{ userId: ME, level: 'know' }] });
+      companyName: 'Gallo Company', title: 'VP', knownBy: [{ userId: ME, level: 'met' }] });
   });
 
   it('says where they work together', () => {
@@ -177,12 +174,12 @@ describe('colleagues', () => {
 
   it('intro through a colleague you know', () => {
     const d = describeWaysIn(w({ warmth: 'intro', colleagues: [tyler] }), ctx);
-    expect(d).toEqual({ headline: 'Best way in: ask Tyler H.', detail: 'You know Tyler H. How they know each other: Both at Gallo Company.' });
+    expect(d).toEqual({ headline: 'Best way in: ask Tyler H.', detail: 'You have met Tyler H. How they know each other: Both at Gallo Company.' });
   });
 
   it('a stored connection beats an equally warm colleague', () => {
     const d = describeWaysIn(w({ warmth: 'intro', colleagues: [tyler], connections: [
-      { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', known_by: [{ user_id: ME, level: 'know' }] },
+      { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', known_by: [{ user_id: ME, level: 'met' }] },
     ] }), ctx);
     expect(d.headline).toBe('Best way in: ask Pat.');
   });
@@ -196,7 +193,7 @@ describe('companyWaysIn', () => {
       connections: [{ id: 9, contact_id: 3, first_name: 'Cy', last_name: 'Intro', known_by: [] }],
       groups: [{ id: 7, name: 'Rotary', kind: 'civic', teammates: [ME], known_contacts: [] }] })],
     [3, w({ warmth: 'intro',
-      connections: [{ id: 10, contact_id: 50, first_name: 'Out', last_name: 'Side', known_by: [{ user_id: KIM, level: 'know' }] }],
+      connections: [{ id: 10, contact_id: 50, first_name: 'Out', last_name: 'Side', known_by: [{ user_id: KIM, level: 'met' }] }],
       groups: [{ id: 7, name: 'Rotary', kind: 'civic', teammates: [ME], known_contacts: [] }] })],
   ]);
 
@@ -218,32 +215,5 @@ describe('companyWaysIn', () => {
     const cold = companyWaysIn([people[0]], ways, ME);
     expect(cold.warmth).toBe('cold');
     expect(describeCompanyWaysIn(cold, ctx).headline).toBe('Way in: the front door.');
-  });
-});
-
-describe("you've met them", () => {
-  const introAndMet = () => w({
-    warmth: 'intro',
-    familiarity: [{ user_id: ME, level: 'met' }],
-    connections: [{ id: 1, contact_id: 7, first_name: 'Steve', last_name: 'Hall', known_by: [{ user_id: ME, level: 'know_well' }] }],
-  });
-
-  it('says to reach out yourself instead of asking for an intro', () => {
-    expect(describeWaysIn(introAndMet(), ctx).headline).toBe("You've met them, so reach out yourself.");
-  });
-
-  it('shows "You\'ve met" on the meter for you, the server step for a teammate', () => {
-    expect(meterStep(introAndMet(), ME)).toEqual({ index: 2, label: "You've met" });
-    expect(meterStep(introAndMet(), KIM)).toEqual({ index: 2, label: '1 intro away' });
-    expect(meterStep(w({ warmth: 'cold', familiarity: [{ user_id: ME, level: 'met' }] }), ME).label).toBe("You've met");
-  });
-
-  it('a teammate having met them does not change your recommendation', () => {
-    const t = w({
-      warmth: 'intro',
-      familiarity: [{ user_id: KIM, level: 'met' }],
-      connections: [{ id: 1, contact_id: 7, first_name: 'Steve', last_name: 'Hall', known_by: [{ user_id: ME, level: 'know_well' }] }],
-    });
-    expect(describeWaysIn(t, ctx).headline).toBe('Best way in: ask Steve Hall.');
   });
 });

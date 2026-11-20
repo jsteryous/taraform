@@ -10,8 +10,7 @@ import { displayName, fetchConnections } from './links';
 
 export const LEVELS = [
   { value: null,        label: "Haven't met", hint: "We haven't met" },
-  { value: 'met',       label: 'Met',         hint: "We've met" },
-  { value: 'know',      label: 'Know',        hint: 'Would take my call' },
+  { value: 'met',       label: 'Met',         hint: "We've met; they'd take my call" },
   { value: 'know_well', label: 'Know well',   hint: 'Could ask a favor' },
 ];
 
@@ -22,7 +21,8 @@ export const WARMTH = [
   { value: 'warm',   label: 'Warm' },
 ];
 
-const RANK = { met: 1, know: 2, know_well: 3 };
+// Three levels since 2026-11-20 (db/20261120_drop_know_level.sql): "Know" folded into Met.
+const RANK = { met: 1, know_well: 3 };
 
 export async function fetchWaysIn(contactId) {
   const { data, error } = await supabase.rpc('contact_ways_in', { p_contact_id: contactId });
@@ -30,7 +30,7 @@ export async function fetchWaysIn(contactId) {
   return data ? normalizeWaysIn(data) : null;
 }
 
-// level: 'met' | 'know' | 'know_well', or null for "Haven't met" (deletes the row).
+// level: 'met' | 'know_well', or null for "Haven't met" (deletes the row).
 export async function setFamiliarity(contactId, level) {
   const { error } = await supabase.rpc('set_familiarity', { p_contact_id: contactId, p_level: level });
   if (error) throw error;
@@ -124,7 +124,6 @@ export function knowsPhrase(who, level, object) {
   const you = who === 'You';
   switch (level) {
     case 'know_well': return `${who} ${you ? 'know' : 'knows'} ${object} well`;
-    case 'know':      return `${who} ${you ? 'know' : 'knows'} ${object}`;
     case 'met':       return `${who} ${you ? 'have' : 'has'} met ${object}`;
     default:          return '';
   }
@@ -158,20 +157,6 @@ export function howTheyKnow(c) {
   return [desc, direction].filter(Boolean).join(' · ');
 }
 
-// You've marked them Met (Know / Know well are 'warm' and handled before this).
-export function metByMe(w, me) {
-  return !!w?.familiarity?.some(f => f.userId === me && f.level === 'met');
-}
-
-// The meter step to show. The server's warmth ranks an intro above having met; for the
-// person who has met them it's the other way round, so their meter reads "You've met"
-// at the intro step instead of "1 intro away". Teammates still see the server's step.
-export function meterStep(w, me) {
-  const i = WARMTH.findIndex(s => s.value === (w?.warmth || 'cold'));
-  if (w?.warmth !== 'warm' && metByMe(w, me)) return { index: WARMTH.findIndex(s => s.value === 'intro'), label: "You've met" };
-  return { index: i, label: WARMTH[i].label };
-}
-
 // The one sentence under the meter: the best way in, or an excuse to reach out.
 // Follows the same order as the warmth rule in contact_ways_in, so the sentence always
 // explains the step the meter shows.
@@ -180,18 +165,12 @@ export function describeWaysIn(w, ctx) {
   const label = id => whoLabel(id, ctx);
 
   if (w.warmth === 'warm') {
-    const f = strongest(w.familiarity.filter(x => RANK[x.level] >= 2), ctx.me);
+    // Your own Met beats a teammate's Know well: you need no one else to make the call.
+    const f = w.familiarity.find(x => x.userId === ctx.me) || strongest(w.familiarity, ctx.me);
     if (f.userId === ctx.me) {
       return { headline: 'Call them yourself.', detail: `${knowsPhrase('You', f.level, 'them')}.` };
     }
     return { headline: `Best way in: ask ${label(f.userId)}.`, detail: `${knowsPhrase(label(f.userId), f.level, 'them')}.` };
-  }
-
-  // You've met them yourself: call them. An introduction is for someone you can't reach,
-  // and asking a third party to introduce you to a person you've already met is odd. Who
-  // else knows them is still listed under "Who they know".
-  if (metByMe(w, ctx.me)) {
-    return { headline: "You've met them, so reach out yourself.", detail: 'Having met is a reason to call.' };
   }
 
   if (w.warmth === 'intro') {
@@ -225,13 +204,6 @@ export function describeWaysIn(w, ctx) {
       return {
         headline: `Excuse to reach out: ${kc.name} is in ${viaContact.name} too.`,
         detail: `${knowsPhrase(label(k.userId), k.level, kc.name)}.`,
-      };
-    }
-    const met = strongest(w.familiarity, ctx.me);
-    if (met) {
-      return {
-        headline: met.userId === ctx.me ? "You've met them." : `${label(met.userId)} has met them.`,
-        detail: 'Having met is a reason to call.',
       };
     }
   }
@@ -350,7 +322,7 @@ export function describeCompanyWaysIn(cw, ctx) {
   const p = cw.best;
   if (!p.ways) return { headline: 'Way in: the front door.', detail: 'Reach out directly.' };
   if (p.warmth === 'warm') {
-    const f = strongest(p.familiarity.filter(x => RANK[x.level] >= 2), ctx.me);
+    const f = p.familiarity.find(x => x.userId === ctx.me) || strongest(p.familiarity, ctx.me);
     const title = p.title ? `, ${p.title}` : '';
     if (f.userId === ctx.me) return { headline: `Call ${p.name}${title} yourself.`, detail: `${knowsPhrase('You', f.level, p.name)}.` };
     const who = whoLabel(f.userId, ctx);
@@ -361,8 +333,6 @@ export function describeCompanyWaysIn(cw, ctx) {
   const inner = describeWaysIn(p.ways, ctx);
   const headline = inner.headline
     .replace(/^Best way in:/, `Best way in to ${p.name}:`)
-    .replace(/^Excuse to reach out:/, `Excuse to call ${p.name}:`)
-    .replace(/ met them\.$/, ` met ${p.name}.`)
-    .replace(/^You've met them, so reach out yourself\.$/, `You've met ${p.name}, so reach out yourself.`);
+    .replace(/^Excuse to reach out:/, `Excuse to call ${p.name}:`);
   return { headline, detail: inner.detail };
 }

@@ -41,7 +41,7 @@ export default function OutreachCards({ clientId, userId, outreach, onViewContac
       <OutreachCard
         icon={<Handshake size={13} />} title="Introductions to Ask For"
         blurb="People on your target list who you have a known mutual connection with."
-        empty="Nothing yet. This fills in as you mark people you Know or Know well and add who they know, or link them to their companies."
+        empty="Nothing yet. This fills in as you mark people you've Met or Know well and add who they know, or link them to their companies."
         loading={loading} error={error} items={plan?.intros}
         render={p => (
           <Row key={`i${p.targetId}`} target={data.contacts.get(p.targetId)} onOpen={open}

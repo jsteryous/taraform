@@ -25,7 +25,6 @@ const COMPANY_OPTIONS = [
 // shown dashed — a teammate knows them, you haven't said — filters by that teammate's.
 const FAMILIARITY_OPTIONS = [
   { value: 3, label: 'Know well' },
-  { value: 2, label: 'Know' },
   { value: 1, label: 'Met' },
   { value: 0, label: 'Haven’t met' },
 ];

@@ -124,7 +124,7 @@ export const BANKING_CONFIG = {
   contactMethodOptions: [],
   quickNotes: ['Left voicemail', 'Called — no answer', 'Met in person', 'Sent info', 'Call back later'],
   statuses: [
-    { value: 'Target',           color: '#6b7280' },
+    { value: 'Target',           color: '#ec4899' }, // was gray, which read as "nothing here" on the map
     { value: 'Prospect',         color: '#3b82f6' },
     { value: 'Loan Customer',    color: '#10b981' },
     { value: 'Deposit Customer', color: '#06b6d4' },

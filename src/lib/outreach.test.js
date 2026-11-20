@@ -33,29 +33,17 @@ describe('planOutreach: introductions', () => {
     expect(introLine(intros[0], base, ctx)).toBe('Ask Pat Helper. You know Pat Helper well · Golf buddies.');
   });
 
-  it("doesn't suggest an introduction to someone you've met yourself", () => {
-    const data = {
-      contacts: base,
-      familiarity: [{ contactId: 1, userId: ME, level: 'know_well' }, { contactId: 2, userId: ME, level: 'met' }],
-      connections: [{ aId: 1, bId: 2, description: '', referredBy: null, unsure: false }],
-    };
-    expect(planOutreach(data, { me: ME, now: NOW }).intros).toEqual([]);
-    // A teammate who hasn't met them still gets the intro.
-    expect(planOutreach(data, { me: KIM, now: NOW }).intros.map(i => i.targetId)).toEqual([2]);
-  });
-
-  it('skips targets that are not pursued, already known, or reached only through a Met', () => {
+  it('skips targets that are not pursued, already known, or reached only through a stranger', () => {
     const { intros } = planOutreach({
       contacts: base,
       familiarity: [
-        { contactId: 1, userId: ME, level: 'know' },
-        { contactId: 4, userId: KIM, level: 'know' },
-        { contactId: 3, userId: ME, level: 'met' },
+        { contactId: 1, userId: ME, level: 'met' },
+        { contactId: 4, userId: KIM, level: 'met' },
       ],
       connections: [
         { aId: 1, bId: 3, description: '', unsure: false }, // customer: not pursued
-        { aId: 1, bId: 4, description: '', unsure: false }, // already known by Kim
-        { aId: 2, bId: 3, description: '', unsure: false }, // helper only Met
+        { aId: 1, bId: 4, description: '', unsure: false }, // already met by Kim
+        { aId: 2, bId: 3, description: '', unsure: false }, // nobody has met the helper
       ],
     }, { me: ME, now: NOW });
     expect(intros).toEqual([]);
@@ -64,7 +52,7 @@ describe('planOutreach: introductions', () => {
   it('treats a company as known through its people, and reaches the unknown ones there', () => {
     const { intros } = planOutreach({
       contacts: base,
-      familiarity: [{ contactId: 1, userId: KIM, level: 'know' }],
+      familiarity: [{ contactId: 1, userId: KIM, level: 'met' }],
       links: [
         { companyId: 10, personId: 1, title: 'CFO' },
         { companyId: 10, personId: 11, title: 'Owner' },
@@ -73,14 +61,14 @@ describe('planOutreach: introductions', () => {
     const byTarget = new Map(intros.map(i => [i.targetId, i]));
     expect(byTarget.has(10)).toBe(false); // Kim knows Pat, who is at Acme: no intro needed
     expect(byTarget.get(11).how).toBe('colleague');
-    expect(introLine(byTarget.get(11), base, ctx)).toBe('kim can ask Pat Helper: they work together at Acme LLC (Owner). kim knows Pat Helper.');
+    expect(introLine(byTarget.get(11), base, ctx)).toBe('kim can ask Pat Helper: they work together at Acme LLC (Owner). kim has met Pat Helper.');
   });
 
   it('keeps the warmest, confirmed path per target, and ranks warmer helpers first', () => {
     const cs = contacts([[1, 'A', 'In Network'], [5, 'B', 'In Network'], [2, 'T', 'Target'], [6, 'U', 'Prospect']]);
     const { intros } = planOutreach({
       contacts: cs,
-      familiarity: [{ contactId: 1, userId: ME, level: 'know' }, { contactId: 5, userId: ME, level: 'know_well' }],
+      familiarity: [{ contactId: 1, userId: ME, level: 'met' }, { contactId: 5, userId: ME, level: 'know_well' }],
       connections: [
         { aId: 1, bId: 2, description: '', unsure: false },
         { aId: 2, bId: 5, description: '', unsure: true },
@@ -124,14 +112,14 @@ describe('planOutreach: reasons to reach out', () => {
     const { reasons } = planOutreach({
       contacts: cs,
       familiarity: [
-        { contactId: 4, userId: ME, level: 'know' },
+        { contactId: 4, userId: ME, level: 'met' },
         { contactId: 5, userId: ME, level: 'know_well' },
         { contactId: 6, userId: ME, level: 'met' },
-        { contactId: 2, userId: KIM, level: 'know' }, // a teammate's, not mine
+        { contactId: 2, userId: KIM, level: 'met' }, // a teammate's, not mine
       ],
     }, { me: ME, now: NOW });
     expect(reasons.map(r => reasonLine(r, cs, ctx, NOW))).toEqual([
-      'You know them. Last note 6 months ago.',
+      'You have met them. Last note 6 months ago.',
       "You have met them, and there's no note yet.",
     ]);
   });
@@ -140,7 +128,7 @@ describe('planOutreach: reasons to reach out', () => {
     const cs2 = contacts([[10, 'Acme LLC', 'Target', 'company'], [1, 'A', 'Target'], [2, 'B', 'Target']]);
     const { intros, reasons } = planOutreach({
       contacts: cs2,
-      familiarity: [{ contactId: 1, userId: ME, level: 'know' }, { contactId: 2, userId: ME, level: 'know_well' }],
+      familiarity: [{ contactId: 1, userId: ME, level: 'met' }, { contactId: 2, userId: ME, level: 'know_well' }],
       links: [{ companyId: 10, personId: 1, title: '' }, { companyId: 10, personId: 2, title: '' }],
     }, { me: ME, now: NOW });
     expect(intros).toEqual([]);
@@ -150,7 +138,7 @@ describe('planOutreach: reasons to reach out', () => {
   it('does not repeat an intro target as a reason', () => {
     const { intros, reasons } = planOutreach({
       contacts: cs,
-      familiarity: [{ contactId: 1, userId: ME, level: 'know' }],
+      familiarity: [{ contactId: 1, userId: ME, level: 'met' }],
       connections: [{ aId: 1, bId: 2, description: '', unsure: false }],
       groupMembers: [{ groupId: 1, groupName: 'Rotary', userId: ME }, { groupId: 1, groupName: 'Rotary', contactId: 2 }],
     }, { me: ME, now: NOW });

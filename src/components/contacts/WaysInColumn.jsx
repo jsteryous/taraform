@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Link2, Quote, Pencil, X, Plus, Building2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { fetchWaysIn, setFamiliarity, describeWaysIn, meterStep, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, colleagueLine, LEVELS, WARMTH } from '../../lib/waysIn';
+import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, colleagueLine, LEVELS, WARMTH } from '../../lib/waysIn';
 import { removeContactFromGroup, kindLabel } from '../../lib/groups';
 import { displayName } from '../../lib/links';
 import { useConfirm } from '../shared/ConfirmDialog';
@@ -117,7 +117,8 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
 
   const knownByLine = (list, object) => list.map(k => knowsPhrase(whoLabel(k.userId, ctx), k.level, object)).join(' · ');
 
-  const { index: warmIdx, label: warmLabel } = meterStep(data, ctx.me);
+  const warmIdx = WARMTH.findIndex(s => s.value === (data?.warmth || 'cold'));
+  const warmLabel = WARMTH[warmIdx].label;
   const sentence = describeWaysIn(data, ctx);
 
   return (

@@ -476,7 +476,6 @@ textarea {
     white-space: nowrap;
 }
 .familiarity-chip--met { color: #60a5fa; }
-.familiarity-chip--know { color: var(--warning); }
 .familiarity-chip--know_well { color: var(--success); }
 .familiarity-chip--team { border-style: dashed; opacity: 0.8; }
 
