@@ -40,7 +40,7 @@ export default function OutreachCards({ clientId, userId, outreach, onViewContac
     <>
       <OutreachCard
         icon={<Handshake size={13} />} title="Introductions to Ask For"
-        blurb="People you're pursuing whom nobody knows yet, reachable through someone who is known."
+        blurb="People on your target list who you have a known mutual connection with."
         empty="Nothing yet. This fills in as you mark people you Know or Know well and add who they know, or link them to their companies."
         loading={loading} error={error} items={plan?.intros}
         render={p => (
@@ -51,7 +51,7 @@ export default function OutreachCards({ clientId, userId, outreach, onViewContac
       />
       <OutreachCard
         icon={<Sparkles size={13} />} title="Reasons to Reach Out"
-        blurb="Common ground with people you're pursuing, and people you know who've gone quiet."
+        blurb="Found & probable excuses to contact"
         empty="Nothing yet. Add your clubs and boards under Your groups, put contacts in groups, and mark who you've met."
         loading={loading} error={error} items={plan?.reasons}
         render={r => {
