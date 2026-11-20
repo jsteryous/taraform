@@ -79,7 +79,7 @@ describe('planBankingImport', () => {
 
   it('makes a company, a person, a link and a note from one row', () => {
     const p = plan([['Pat Rivers', 'Rivers Homes', '11/3/26', 'asked for coffee', 'text', '', '', 'In Network']]);
-    expect(p.companies).toEqual([{ key: 'rivers homes', name: 'Rivers Homes', status: 'In Network', existingId: null, phones: [], details: {} }]);
+    expect(p.companies).toEqual([{ key: 'rivers homes', name: 'Rivers Homes', status: 'In Network', existingId: null, phones: [], address: '', details: {} }]);
     expect(p.people).toMatchObject([{ firstName: 'Pat', lastName: 'Rivers', status: 'In Network', existingId: null }]);
     expect(p.links).toEqual([{ companyKey: 'rivers homes', personKey: 'pat|rivers', title: '' }]);
     expect(p.notes).toEqual([{ target: 'person', key: 'pat|rivers', body: '11/3/26 · text: asked for coffee', row: 2 }]);
@@ -184,8 +184,9 @@ describe('a business list (Data Axle shape)', () => {
   it('puts the main line and the business details on the company, once', () => {
     const acme = plan.companies.find(c => c.name === 'Acme Plumbing');
     expect(acme.phones).toEqual(['(864) 555-0100']);
+    expect(acme.address).toBe('12 Main St, Greenville, SC 29601');
     expect(acme.details).toEqual({
-      Address: '12 Main St, Greenville, SC 29601', Website: 'acmeplumbing.com', Industry: 'Plumbing Contractors',
+      Website: 'acmeplumbing.com', Industry: 'Plumbing Contractors',
       Employees: '24', Annual_sales: '3500000', Year_established: '1998',
     });
     expect(plan.people.map(p => [p.firstName, p.phones])).toEqual([['John', []], ['Mary', []]]);

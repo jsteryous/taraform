@@ -10,10 +10,12 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
   const cfg = resolveConfig(currentClient);
   const barColor = getStatusColor(cfg, contact.status);
   const showCounty = cfg.listColumns?.includes('county');
+  const showPhone = cfg.listColumns?.includes('phone');
+  const levels = !!cfg.connections;
 
   return (
     <div
-      className={`contact-item${selected ? ' selected' : ''}${cfg.connections ? ' contact-item--levels' : ''}`}
+      className={`contact-item${selected ? ' selected' : ''}${levels ? ' contact-item--levels' : ''}`}
       onClick={e => {
         if (e.metaKey || e.ctrlKey) {
           const url = `${window.location.origin}${window.location.pathname}#/contact/${contact.id}`;
@@ -38,19 +40,21 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
         {contact.kind === 'company' && <Building2 size={13} className="company-icon" />}
         {contact.firstName} {contact.lastName}
       </div>
-      <div className="contact-phones">{contact.phones?.[0] ? <span className="phone-chip">{contact.phones[0]}</span> : '—'}</div>
+      {showPhone && <div className="contact-phones">{contact.phones?.[0] ? <span className="phone-chip">{contact.phones[0]}</span> : '—'}</div>}
       {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 
-      <div className="contact-status-cell">
-        <span className="contact-status-slot"><StatusBadge cfg={cfg} status={contact.status} /></span>
-        {/* How well you know them (or, if you haven't said, the team's warmest — dashed). */}
-        {level && (
-          <span className={`familiarity-chip familiarity-chip--${level}${levelMine ? '' : ' familiarity-chip--team'}`}
-            title={levelMine ? 'How well you know them' : 'You haven’t met them; a teammate has'}>
-            {levelLabel(level)}
-          </span>
-        )}
-      </div>
+      <div className="contact-status-cell"><StatusBadge cfg={cfg} status={contact.status} /></div>
+      {/* How well you know them (or, if you haven't said, the team's warmest — dashed). */}
+      {levels && (
+        <div className="contact-level-cell">
+          {level && (
+            <span className={`familiarity-chip familiarity-chip--${level}${levelMine ? '' : ' familiarity-chip--team'}`}
+              title={levelMine ? 'How well you know them' : 'You haven’t met them; a teammate has'}>
+              {levelLabel(level)}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 });

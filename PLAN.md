@@ -365,3 +365,62 @@ groups + ignored terms → found items), with tests for the cases above. Turned 
 contact along as if it were an unanswered dial. Worth fixing regardless of the above: tag a
 note's kind (call / email / meeting / note), with quick notes setting it, and count only
 call attempts.
+
+## Next: Call days (designed 2026-11-20; step 1 built 2026-11-20)
+
+Bank workspace first. A day of walking into businesses should cover one area, not
+zig-zag across the county, and it shouldn't miss a business worth calling on just because
+it isn't in the book yet.
+
+### What you see
+
+1. **Map.** Every company with an address, colored by status. Tap a pin to open the company.
+   Below it, the companies that have no address yet or whose address couldn't be found,
+   so the cleanup list is visible instead of silently missing from the map.
+2. **Plan a call day** (Dashboard). Pick an area, or take the suggestion ("Poinsett Hwy:
+   6 targets, 3 due, 2 never visited"). Tick stops, get them in driving order and an
+   "Open in Google Maps" link for the phone (a link holds about 9 stops, so a bigger day is
+   two legs). Started by you, not pushed at you: one suggestion card, no notifications.
+3. **Log as you go.** One tap per stop: visited, plus a quick note. Skipped stops come back
+   in the next suggestion.
+4. **Find businesses not in the book.** Google Places search over the area; each result is
+   "already a contact" (with status and how well we know them), "not in the book" (add as
+   Target), or "not a fit" (hidden from later searches).
+5. **Later:** parcel data (does the business own its building, since when), a weekly visit
+   goal once there's a few weeks of logged visits to set it from.
+
+### Data
+
+- **The address is the record; coordinates are derived.** A company has one `address` column
+  (a single line, "307 Main St, Greenville, SC 29609"), typed or imported. Nobody types
+  coordinates. `geo_lat`/`geo_lng` are filled by the server from the address and cleared by a
+  trigger whenever the address changes, so a pin can never sit at an old address.
+- **Geocoding is server-side and free:** the US Census geocoder, called from the `geocode-run`
+  Edge Function that `pg_cron` starts every 10 minutes when something is waiting. Server-side
+  so every path that writes an address (typing, import, a script) is covered. Census results
+  may be stored; Google's may not (below).
+- **A visit is its own activity type**, separate from calls and emails, so "visits this week"
+  can be counted later without guessing. Ties into "a note is not a call" above.
+
+### Google, when the key exists
+
+- **The key never ships in the bundle** (this repo and its build are public). It lives in
+  Supabase secrets and is used only by an Edge Function with a daily cap, plus a budget alert
+  on the Google Cloud project.
+- **Google's terms limit what can be stored.** Place IDs may be kept; names, phones, hours and
+  coordinates from Places may not be cached long-term. So Places is the *finder*: when you
+  add a business, you confirm the address and it becomes our record, geocoded by Census like
+  any other. No bulk import of a corridor from Google.
+- Uses: search-as-you-type for a company's name and address on Add Contact, and the
+  "businesses not in the book" search.
+
+### Order of work
+
+1. **Address field, server geocoding, and the map.** Built 2026-11-20
+   (`db/20261120_company_address_geo.sql`, `supabase/functions/geocode-run`, Map page).
+   As of that day none of the bank's companies had an address, so the map starts empty
+   and fills as addresses are entered.
+2. Google search-as-you-type on Add Contact (needs the key).
+3. Plan a call day: area, stops, route link, visit logging.
+4. Nearby businesses not in the book.
+5. Parcel and ownership data; a weekly visit goal.

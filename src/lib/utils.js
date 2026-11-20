@@ -75,6 +75,15 @@ export function mapDbContact(d) {
     email: d.email || '',
     ownerAddress: d.owner_address,
     propertyAddresses: d.property_addresses || [],
+    // A company's street address (one line). Undefined when the row was read without it
+    // (LIST_FIELDS), so a save from a list row leaves the column alone.
+    address: d.address ?? undefined,
+    // Derived from `address` by the server (db/20261120_company_address_geo.sql).
+    // Read-only: mapContactToDb never sends them, and a trigger refuses them anyway.
+    geoStatus: d.geo_status ?? null,
+    geoLat: d.geo_lat ?? null,
+    geoLng: d.geo_lng ?? null,
+    geoMatched: d.geo_matched ?? null,
     county: normalizeCounty(d.county),
     taxMapIds: d.tax_map_ids || [],
     status: d.status,
@@ -113,6 +122,8 @@ export function mapContactToDb(contact, userId, clientId) {
     acreage:        contact.acreage       || null,
     owner_address: contact.ownerAddress,
     property_addresses: contact.propertyAddresses,
+    // undefined is dropped from the JSON, leaving the column untouched; '' clears it.
+    address: contact.address,
     county: contact.county,
     tax_map_ids: contact.taxMapIds,
     status: contact.status,

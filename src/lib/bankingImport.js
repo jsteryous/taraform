@@ -147,7 +147,8 @@ export const companyKey = (name) => name.toLowerCase().replace(/\s+/g, ' ').trim
 // statusAliases: see matchStatus.
 //
 // Returns a plan:
-//   companies: [{ key, name, status, existingId, phones, details }]  one per distinct business
+//   companies: [{ key, name, status, existingId, phones, address, details }]  one per distinct business
+//              (address goes to the company's `address` column, which the map is built from)
 //   people:    [{ key, firstName, lastName, phones, email, status, existingId }]
 //   links:     [{ companyKey, personKey, title }]       distinct pairs
 //   notes:     [{ target: 'person'|'company', key, body, row }]
@@ -206,7 +207,7 @@ export function planBankingImport({ rows, mapping, existing = [], statuses, stat
     if (companyName) {
       cKey = companyKey(companyName);
       if (!companies.has(cKey)) {
-        companies.set(cKey, { key: cKey, name: companyName, status, existingId: existingCompanies.get(cKey) ?? null, phones: [], details: {} });
+        companies.set(cKey, { key: cKey, name: companyName, status, existingId: existingCompanies.get(cKey) ?? null, phones: [], address: '', details: {} });
       }
       // A business list repeats the company once per executive; the first row with a
       // value wins, and any new number is added.
@@ -214,7 +215,7 @@ export function planBankingImport({ rows, mapping, existing = [], statuses, stat
       const cPhone = clean(cell(row, 'companyPhone'));
       if (cPhone && !co.phones.includes(formatPhone(cPhone))) co.phones.push(formatPhone(cPhone));
       const addr = joinAddress(cell(row, 'address'), cell(row, 'city'), cell(row, 'state'), cell(row, 'zip'));
-      if (addr && !co.details.Address) co.details.Address = addr;
+      if (addr && !co.address) co.address = addr;
       for (const [field, label] of COMPANY_DETAILS) {
         const v = clean(cell(row, field));
         if (v && !co.details[label]) co.details[label] = v;
@@ -355,7 +356,7 @@ export async function runBankingImport(plan, { userId, clientId, onProgress, fol
   await eachLimited(plan.companies, 4, async (c) => {
     try {
       if (c.existingId) { ids.company.set(c.key, c.existingId); return; }
-      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status, phones: c.phones || [], customFields: c.details || {}, followUpOn: followUpFor('company', c.key, c.status) }), userId, clientId);
+      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status, phones: c.phones || [], address: c.address || undefined, customFields: c.details || {}, followUpOn: followUpFor('company', c.key, c.status) }), userId, clientId);
       ids.company.set(c.key, saved.id);
       created.push(saved);
     } catch (e) {

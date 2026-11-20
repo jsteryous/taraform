@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useApp, EMPTY_FILTERS } from '../context/AppContext';
 import { resolveConfig } from '../lib/clientConfig';
 import { summarizeNoteActivity } from '../lib/activityStats';
@@ -7,6 +7,8 @@ import { fetchNoteActivity } from '../lib/notes';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, CalendarClock } from 'lucide-react';
 import OutreachCards from './OutreachCards';
+// Lazy: the map library is only downloaded by workspaces that show the map.
+const CompanyMap = lazy(() => import('./CompanyMap'));
 
 // The dashboard is about the person looking at it, not the workspace: their follow-ups,
 // ways in to people they're pursuing, and the notes they logged. The outreach cards need
@@ -179,6 +181,12 @@ export default function Dashboard({ onClose, onViewContact }) {
 
         {cfg.connections && (
           <OutreachCards clientId={currentClientId} userId={userId} outreach={cfg.outreach} onViewContact={onViewContact} />
+        )}
+
+        {cfg.companies && (
+          <Suspense fallback={<div className="dash-card outreach-muted">Loading map…</div>}>
+            <CompanyMap clientId={currentClientId} statuses={cfg.statuses} onViewContact={onViewContact} />
+          </Suspense>
         )}
 
         {/* ── My activity (notes I logged) ── */}
