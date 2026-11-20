@@ -21,6 +21,14 @@ const COMPANY_OPTIONS = [
   { value: true,   label: 'People & companies' },
   { value: 'only', label: 'Companies only' },
 ];
+// Connections workspaces only. The team's warmest level (familiarity_level), so a row
+// shown dashed — a teammate knows them, you haven't said — filters by that teammate's.
+const FAMILIARITY_OPTIONS = [
+  { value: 3, label: 'Know well' },
+  { value: 2, label: 'Know' },
+  { value: 1, label: 'Met' },
+  { value: 0, label: 'Haven’t met' },
+];
 const EMAIL_OPTIONS = [
   { value: '',        label: 'Any Email' },
   { value: 'has',     label: 'Has email' },
@@ -33,13 +41,13 @@ export default function ContactList({ onView, onExport }) {
     currentClientId, currentClient,
     user, clientsList, clientsLoaded,
     deleteContact, showToast,
-    loadContacts, loadMoreContacts,
+    loadContacts, loadMoreContacts, recheckContact,
     filters, setFilters,
   } = useApp();
 
   const { search: filterSearch, statuses: filterStatuses, counties: filterCounties,
           phone: filterPhone, activity: filterActivity, email: filterEmail,
-          followUp: filterFollowUp, companies: filterCompanies } = filters;
+          followUp: filterFollowUp, companies: filterCompanies, familiarity: filterFamiliarity = [] } = filters;
 
   const setFilterSearch    = useCallback((val) => setFilters(f => ({ ...f, search: val })),   [setFilters]);
   const setFilterStatuses  = useCallback((val) => setFilters(f => ({ ...f, statuses: val })), [setFilters]);
@@ -57,6 +65,7 @@ export default function ContactList({ onView, onExport }) {
   const [statusOpen,    setStatusOpen]    = useState(false);
   const [countyOpen,    setCountyOpen]    = useState(false);
   const [moreOpen,      setMoreOpen]      = useState(false);
+  const [levelOpen,     setLevelOpen]     = useState(false);
   const [confirmBulkDelete, ConfirmUI]    = useConfirm();
 
   // Draft op/days for the custom "Note … N days" activity filter. Kept locally so
@@ -72,6 +81,7 @@ export default function ContactList({ onView, onExport }) {
   const statusRef    = useRef(null);
   const countyRef    = useRef(null);
   const moreRef      = useRef(null);
+  const levelRef     = useRef(null);
   const searchTimer  = useRef(null);
   const noteTimer    = useRef(null);
   const selectAllRef = useRef(null);
@@ -102,6 +112,7 @@ export default function ContactList({ onView, onExport }) {
       activity: activityFilter || null,
       followUp: filterFollowUp || null,
       companies: filterCompanies,
+      familiarity: filterFamiliarity,
     };
     clearTimeout(searchTimer.current);
     if (search) {
@@ -148,10 +159,12 @@ export default function ContactList({ onView, onExport }) {
         next.set(contactId, level ? [...rows, { userId: user.id, level }] : rows);
         return next;
       });
+      // The level is a filter too: a row may no longer belong in the list.
+      recheckContact(contactId);
     }
     window.addEventListener(FAMILIARITY_CHANGED, onChange);
     return () => window.removeEventListener(FAMILIARITY_CHANGED, onChange);
-  }, [user?.id]);
+  }, [user?.id, recheckContact]);
 
   // Indeterminate checkbox state can't be set via JSX — requires a DOM ref.
   useEffect(() => {
@@ -166,9 +179,10 @@ export default function ContactList({ onView, onExport }) {
       if (statusRef.current && !statusRef.current.contains(e.target)) setStatusOpen(false);
       if (countyRef.current && !countyRef.current.contains(e.target)) setCountyOpen(false);
       if (moreRef.current   && !moreRef.current.contains(e.target))   setMoreOpen(false);
+      if (levelRef.current  && !levelRef.current.contains(e.target))  setLevelOpen(false);
     }
     function onKey(e) {
-      if (e.key === 'Escape') { setStatusOpen(false); setCountyOpen(false); setMoreOpen(false); }
+      if (e.key === 'Escape') { setStatusOpen(false); setCountyOpen(false); setMoreOpen(false); setLevelOpen(false); }
     }
     document.addEventListener('mousedown', handler);
     document.addEventListener('keydown', onKey);
@@ -191,6 +205,7 @@ export default function ContactList({ onView, onExport }) {
     activityFilter !== '' ||
     !!filterFollowUp ||
     (cfg.companies && filterCompanies !== false) ||
+    (cfg.connections && filterFamiliarity.length > 0) ||
     search !== '';
 
   function clearAllFilters() {
@@ -281,6 +296,7 @@ export default function ContactList({ onView, onExport }) {
     activity: activityFilter || null,
     followUp: filterFollowUp || null,
     companies: filterCompanies,
+    familiarity: filterFamiliarity,
   };
 
   // Infinite scroll. Read through a ref so the callback is stable: VirtualList
@@ -376,6 +392,34 @@ export default function ContactList({ onView, onExport }) {
                   <label key={c} className="filter-dropdown-item">
                     <input type="checkbox" checked={selectedCounties.has(c)} onChange={() => toggleCounty(c)} style={{ width: '14px', height: '14px' }} />
                     {c}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* How well the team knows them (Connections workspaces) */}
+        {cfg.connections && (
+          <div ref={levelRef} style={{ position: 'relative' }}>
+            <button onClick={() => setLevelOpen(o => !o)} aria-expanded={levelOpen} aria-label="Filter by how well we know them" className={filterBtnClass(filterFamiliarity.length > 0)}>
+              <span className="filter-btn-label">Know them</span>
+              {filterFamiliarity.length > 0 && <span className="filter-count">{filterFamiliarity.length}</span>}
+              <ChevronDown size={12} className="filter-chevron" />
+            </button>
+            {levelOpen && (
+              <div className="filter-dropdown">
+                <div className="filter-dropdown-actions">
+                  <button className="btn-small" onClick={() => setFilters(f => ({ ...f, familiarity: [] }))}>Any</button>
+                </div>
+                {FAMILIARITY_OPTIONS.map(o => (
+                  <label key={o.value} className="filter-dropdown-item">
+                    <input type="checkbox" checked={filterFamiliarity.includes(o.value)} style={{ width: '14px', height: '14px' }}
+                      onChange={() => setFilters(f => {
+                        const cur = f.familiarity || [];
+                        return { ...f, familiarity: cur.includes(o.value) ? cur.filter(v => v !== o.value) : [...cur, o.value] };
+                      })} />
+                    {o.label}
                   </label>
                 ))}
               </div>

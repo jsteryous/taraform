@@ -13,7 +13,7 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
 
   return (
     <div
-      className={`contact-item${selected ? ' selected' : ''}`}
+      className={`contact-item${selected ? ' selected' : ''}${cfg.connections ? ' contact-item--levels' : ''}`}
       onClick={e => {
         if (e.metaKey || e.ctrlKey) {
           const url = `${window.location.origin}${window.location.pathname}#/contact/${contact.id}`;
@@ -41,13 +41,13 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
       <div className="contact-phones">{contact.phones?.[0] ? <span className="phone-chip">{contact.phones[0]}</span> : '—'}</div>
       {showCounty && <div className="contact-county">{contact.county || '—'}</div>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', gridColumn: showCounty ? 'auto' : 'span 1' }}>
-        <StatusBadge cfg={cfg} status={contact.status} />
-        {/* How well you know them (or, if you haven't said, the team's warmest). */}
+      <div className="contact-status-cell">
+        <span className="contact-status-slot"><StatusBadge cfg={cfg} status={contact.status} /></span>
+        {/* How well you know them (or, if you haven't said, the team's warmest — dashed). */}
         {level && (
           <span className={`familiarity-chip familiarity-chip--${level}${levelMine ? '' : ' familiarity-chip--team'}`}
             title={levelMine ? 'How well you know them' : 'You haven’t met them; a teammate has'}>
-            {levelMine ? levelLabel(level) : `Team: ${levelLabel(level)}`}
+            {levelLabel(level)}
           </span>
         )}
       </div>

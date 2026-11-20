@@ -444,13 +444,22 @@ textarea {
     letter-spacing: 0.5px;
 }
 
-/* Relationship level under the status on a list row (ContactCard). Warmer = greener,
-   matching the warmth meter on the contact page; a teammate's level is dashed. */
+/* Status and relationship level on a list row (ContactCard), side by side. The status
+   sits in a fixed-width slot so every row's level chip starts at the same x; the chip
+   uses the status badge's type so the two read as one line. Warmer = greener, matching
+   the warmth meter on the contact page; a teammate's level (not yours) is dashed. */
+.contact-status-cell { display: flex; align-items: center; gap: 0.5rem; }
+.contact-status-slot { display: inline-flex; flex: 0 0 auto; }
+.contact-item--levels { grid-template-columns: 4px 44px 1.5fr 2fr 0.9fr 270px; }
+.contact-item--levels .contact-status-slot { width: 140px; }
 .familiarity-chip {
-    padding: 0.1rem 0.5rem;
+    padding: calc(0.25rem - 1px) 0.625rem;
     border-radius: 4px;
-    font-size: var(--text-2xs);
+    font-size: var(--text-sm);
+    font-weight: 500;
     font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     border: 1px solid currentColor;
     white-space: nowrap;
 }
@@ -923,6 +932,9 @@ input[type="file"] {
     .contact-name { grid-area: name; }
     .contact-phones { grid-area: phones; font-size: var(--text-sm); }
     .contact-county { display: none; }
+    .contact-item--levels { grid-template-columns: 4px 32px 1fr auto; }
+    .contact-status-cell { flex-direction: column; align-items: flex-end; gap: 0.3rem; }
+    .contact-item--levels .contact-status-slot { width: auto; }
     .contact-item > div:last-child { grid-area: status; align-self: center; }
 
     /* iOS Safari zooms the page when a focused input is under 16px */

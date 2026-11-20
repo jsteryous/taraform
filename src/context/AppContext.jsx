@@ -18,7 +18,7 @@ const AppUIContext   = createContext(null);
 // active — carried in the filter itself so applyContactFilters stays config-free.
 // companies: false hides kind = 'company' rows (the default — the list is mostly people),
 // true shows both kinds, 'only' shows companies alone. Search ignores it, so typing a company's name still finds it.
-export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '', followUp: null, companies: false };
+export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '', followUp: null, companies: false, familiarity: [] };
 
 export function AppProvider({ children }) {
   const [user, setUser]                       = useState(null);
@@ -253,6 +253,12 @@ export function AppProvider({ children }) {
     setCurrentContact(prev => prev?.id === id ? null : prev);
   }, [_setContacts]);
 
+  // Re-check one contact against the active filters without saving it — for a change made
+  // through another table (a familiarity level) that can still move it out of the list.
+  const recheckContact = useCallback((id) => {
+    dropIfDrifted(id, currentClientId, filtersRef.current);
+  }, [currentClientId, dropIfDrifted]);
+
   // ── Split context values ──────────────────────────────────
   // Data value: changes on contact/client/filter state — never on toast or theme.
   const dataValue = useMemo(() => ({
@@ -265,11 +271,11 @@ export function AppProvider({ children }) {
     totalCount, setTotalCount,
     loadingContacts,
     currentContact, setCurrentContact,
-    loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact,
+    loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, recheckContact,
     filters, setFilters,
   }), [user, clientsList, clientsLoaded, currentClientId, currentClient, contacts, totalCount,
       loadingContacts, currentContact, filters,
-      loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, _setContacts]);
+      loadContacts, loadMoreContacts, loadFullContact, saveContact, deleteContact, recheckContact, _setContacts]);
 
   // UI value: only changes on toast or theme — never on contact data.
   const uiValue = useMemo(() => ({

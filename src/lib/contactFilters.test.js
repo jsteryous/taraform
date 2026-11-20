@@ -27,6 +27,17 @@ describe('applyContactFilters', () => {
     expect(callsOf(q)).toHaveLength(0);
   });
 
+  it('filters by the team’s warmest level, and not at all when none is picked', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { familiarity: [3, 2] });
+    expect(callsOf(q)).toEqual([{ method: 'in', args: ['familiarity_level', [3, 2]] }]);
+    const none = mockQuery();
+    applyContactFilters(none, { familiarity: [] });
+    expect(callsOf(none)).toHaveLength(0);
+    expect(hasActiveFilters({ familiarity: [0] })).toBe(true);
+    expect(hasActiveFilters({ familiarity: [] })).toBe(false);
+  });
+
   it('hides companies only on an explicit companies: false, and not while searching', () => {
     const hidden = mockQuery();
     applyContactFilters(hidden, { companies: false });

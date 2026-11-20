@@ -5,7 +5,7 @@ export function hasActiveFilters(f) {
   if (!f) return false;
   // `statuses` is null for "all" and an array (possibly empty) for any explicit choice;
   // ?? null keeps a partial object like {} from reading as filtered.
-  return !!(f.search || (f.statuses ?? null) !== null || f.counties?.length || f.phone || f.email || f.activity || f.followUp);
+  return !!(f.search || (f.statuses ?? null) !== null || f.counties?.length || f.phone || f.email || f.activity || f.followUp || f.familiarity?.length);
 }
 
 // Local calendar date as YYYY-MM-DD — the comparison unit for follow_up_on (a DATE
@@ -86,6 +86,10 @@ export function applyContactFilters(q, filters = {}) {
   // businesses to work through.
   if (filters.companies === 'only') q = q.eq('kind', 'company');
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
+  // How well the team knows them: the warmest level any teammate has set, rolled up by a
+  // trigger into familiarity_level (db/20261120_familiarity_level.sql). An array of
+  // 0 (haven't met) … 3 (know well); empty means any.
+  if (filters.familiarity?.length) q = q.in('familiarity_level', filters.familiarity);
   if (filters.counties?.length) q = q.in('county', filters.counties);
   // has_good_phone (db/20260713_filter_columns.sql) is true iff a non-struck number
   // exists, so "missing" correctly covers both no-phone and all-struck contacts.
