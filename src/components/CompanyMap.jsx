@@ -99,7 +99,10 @@ function PinMap({ points, colorOf, onViewContact }) {
     m.once('load', () => el.current?.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
 
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'company-map-popup' });
-    m.on('style.load', () => addPinLayers(m, data.current, themeRef.current));
+    m.on('style.load', () => {
+      tuneBasemap(m, themeRef.current);
+      addPinLayers(m, data.current, themeRef.current);
+    });
     m.on('mouseenter', PIN_LAYER, e => {
       m.getCanvas().style.cursor = 'pointer';
       const f = e.features[0];
@@ -158,6 +161,62 @@ const STYLES = {
   light: 'https://tiles.openfreemap.org/styles/positron',
   dark:  'https://tiles.openfreemap.org/styles/dark',
 };
+// Stock basemaps are drawn for a whole-world view, so street names are small and, in the dark
+// style, gray on near-black. This map is for finding a street to drive down: labels go up a
+// size everywhere, and the dark style gets brighter roads and labels. Matched by layer id, so
+// a renamed layer upstream just keeps its stock look rather than breaking the map.
+const LABEL_SCALE = 1.2;
+const DARK_TWEAKS = {
+  line: {
+    highway_minor:           '#2c2c2c',
+    highway_path:            '#262626',
+    highway_major_casing:    'rgba(120,120,120,0.9)',
+    highway_major_inner:     '#242424',
+    highway_major_subtle:    '#454545',
+    highway_motorway_casing: 'rgba(150,150,150,0.9)',
+    highway_motorway_subtle: '#3a3a3a',
+  },
+  text: {
+    highway_name_other:    '#b5b5b5',
+    highway_name_motorway: '#c8c8c8',
+    water_name:            '#9a9a9a',
+    place_other:   '#cfcfcf', place_suburb: '#cfcfcf', place_village: '#cfcfcf',
+    place_town:    '#dedede', place_city:   '#e6e6e6', place_city_large: '#e6e6e6',
+  },
+};
+
+function tuneBasemap(m, theme) {
+  for (const layer of m.getStyle().layers) {
+    if (layer.type !== 'symbol') continue;
+    const size = m.getLayoutProperty(layer.id, 'text-size');
+    if (size != null) m.setLayoutProperty(layer.id, 'text-size', scaleSize(size, LABEL_SCALE));
+  }
+  if (theme !== 'dark') return;
+  const has = id => m.getLayer(id);
+  for (const [id, color] of Object.entries(DARK_TWEAKS.line)) if (has(id)) m.setPaintProperty(id, 'line-color', color);
+  for (const [id, color] of Object.entries(DARK_TWEAKS.text)) {
+    if (!has(id)) continue;
+    m.setPaintProperty(id, 'text-color', color);
+    m.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.9)');
+    m.setPaintProperty(id, 'text-halo-width', 1.25);
+    m.setPaintProperty(id, 'text-halo-blur', 0);
+  }
+}
+
+// A number, or a zoom interpolate/step whose output stops are numbers. MapLibre only allows a
+// zoom curve at the top of the expression, so the stops are scaled rather than wrapped in '*'.
+function scaleSize(size, k) {
+  const r = n => Math.round(n * k * 10) / 10;
+  if (typeof size === 'number') return r(size);
+  if (Array.isArray(size) && size[0] === 'interpolate') {
+    return [...size.slice(0, 3), ...size.slice(3).map((v, i) => (i % 2 === 1 && typeof v === 'number' ? r(v) : v))];
+  }
+  if (Array.isArray(size) && size[0] === 'step') {
+    return [...size.slice(0, 2), ...size.slice(2).map((v, i) => (i % 2 === 0 && typeof v === 'number' ? r(v) : v))];
+  }
+  return size;
+}
+
 const PIN_SOURCE = 'companies';
 const PIN_LAYER = 'company-pins';
 const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -182,24 +241,24 @@ function addPinLayers(m, geojson, theme) {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5.5, 14, 8.5],
       'circle-color': ['get', 'color'],
       'circle-stroke-width': 2,
-      'circle-stroke-color': dark ? '#0f0f0f' : '#ffffff',
+      'circle-stroke-color': dark ? '#f2f2f2' : '#ffffff',
     },
   });
   m.addLayer({
     id: 'company-labels', type: 'symbol', source: PIN_SOURCE, minzoom: 12,
     layout: {
       'text-field': ['get', 'name'],
-      'text-font': ['Noto Sans Regular'],
-      'text-size': 12,
+      'text-font': ['Noto Sans Bold'],
+      'text-size': 14,
       'text-offset': [0.9, 0],
       'text-anchor': 'left',
       'text-max-width': 12,
       'text-optional': true,
     },
     paint: {
-      'text-color': dark ? '#e8e8e8' : '#1f2937',
-      'text-halo-color': dark ? 'rgba(10,10,10,0.85)' : 'rgba(255,255,255,0.9)',
-      'text-halo-width': 1.5,
+      'text-color': dark ? '#ffffff' : '#111827',
+      'text-halo-color': dark ? 'rgba(0,0,0,0.95)' : 'rgba(255,255,255,0.95)',
+      'text-halo-width': 1.75,
     },
   });
 }
