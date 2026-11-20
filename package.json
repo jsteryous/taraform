@@ -14,8 +14,8 @@
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.39.0",
-        "leaflet": "^1.9.4",
         "lucide-react": "^1.7.0",
+        "maplibre-gl": "6.16.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^7.14.0"
