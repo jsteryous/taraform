@@ -158,7 +158,7 @@ export const BANKING_CONFIG = {
   },
   tabs: ['notes'],
   visibleFields: [],
-  listColumns: ['name', 'phone', 'status'],
+  listColumns: ['name', 'status'],
 };
 
 export const PRESET_TYPES = [
