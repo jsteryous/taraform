@@ -5,6 +5,7 @@ import StatsBar from '../layout/StatsBar';
 import VirtualList from './VirtualList';
 import { resolveConfig } from '../../lib/clientConfig';
 import { myFollowUps } from '../../lib/contactFilters';
+import { fetchFamiliarityFor, listLevel, FAMILIARITY_CHANGED } from '../../lib/waysIn';
 import { useConfirm } from '../shared/ConfirmDialog';
 import { Search, X, ChevronDown, Building2, Inbox } from 'lucide-react';
 
@@ -12,6 +13,13 @@ const PHONE_OPTIONS = [
   { value: '',        label: 'Any Phone' },
   { value: 'has',     label: 'Has phone' },
   { value: 'missing', label: 'No phone' },
+];
+// Workspaces with companies only. false is the default (EMPTY_FILTERS): the list is mostly
+// people, and a search finds a company by name regardless.
+const COMPANY_OPTIONS = [
+  { value: false,  label: 'People only' },
+  { value: true,   label: 'People & companies' },
+  { value: 'only', label: 'Companies only' },
 ];
 const EMAIL_OPTIONS = [
   { value: '',        label: 'Any Email' },
@@ -103,6 +111,48 @@ export default function ContactList({ onView, onExport }) {
     }
   }, [currentClientId, filters, loadContacts]);
 
+  // How well the team knows each loaded person (Connections workspaces only). Read for the
+  // rows on screen as pages arrive; a change made on a contact page arrives as an event
+  // from setFamiliarity, so the row updates without a refetch.
+  const [familiarity, setFamiliarity] = useState(() => new Map());
+  const familiarityClient = useRef(null);
+  const personIds = useMemo(
+    () => (cfg.connections ? contacts.filter(c => c.kind !== 'company').map(c => c.id) : []),
+    [contacts, cfg.connections]);
+  useEffect(() => {
+    if (familiarityClient.current !== currentClientId) {
+      familiarityClient.current = currentClientId;
+      setFamiliarity(new Map());
+    }
+    if (!personIds.length) return;
+    let cancelled = false;
+    fetchFamiliarityFor(personIds)
+      .then(found => {
+        if (cancelled) return;
+        setFamiliarity(prev => {
+          const next = new Map(prev);
+          for (const id of personIds) next.set(id, found.get(id) || []);
+          return next;
+        });
+      })
+      .catch(e => console.error('familiarity load failed:', e));
+    return () => { cancelled = true; };
+  }, [personIds.join(','), currentClientId]); // eslint-disable-line
+  useEffect(() => {
+    function onChange(e) {
+      const { contactId, level } = e.detail || {};
+      if (!user?.id || contactId == null) return;
+      setFamiliarity(prev => {
+        const rows = (prev.get(contactId) || []).filter(r => r.userId !== user.id);
+        const next = new Map(prev);
+        next.set(contactId, level ? [...rows, { userId: user.id, level }] : rows);
+        return next;
+      });
+    }
+    window.addEventListener(FAMILIARITY_CHANGED, onChange);
+    return () => window.removeEventListener(FAMILIARITY_CHANGED, onChange);
+  }, [user?.id]);
+
   // Indeterminate checkbox state can't be set via JSX — requires a DOM ref.
   useEffect(() => {
     if (selectAllRef.current) {
@@ -140,7 +190,7 @@ export default function ContactList({ onView, onExport }) {
     emailFilter !== '' ||
     activityFilter !== '' ||
     !!filterFollowUp ||
-    (cfg.companies && filterCompanies === true) ||
+    (cfg.companies && filterCompanies !== false) ||
     search !== '';
 
   function clearAllFilters() {
@@ -219,7 +269,7 @@ export default function ContactList({ onView, onExport }) {
   // active, so the bar never reflows as the selection changes.
   const statusActive = selectedStatuses.size < ALL_STATUSES.length;
   const countyActive = selectedCounties.size > 0;
-  const moreActiveCount = (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0) + (filterFollowUp ? 1 : 0);
+  const moreActiveCount = (cfg.companies && filterCompanies !== false ? 1 : 0) + (phoneFilter ? 1 : 0) + (emailFilter ? 1 : 0) + (activityFilter ? 1 : 0) + (filterFollowUp ? 1 : 0);
 
   // Current filter snapshot — used for load-more to continue with same query params
   const serverFilters = {
@@ -269,9 +319,7 @@ export default function ContactList({ onView, onExport }) {
   return (
     <>
       {ConfirmUI}
-      <StatsBar onFilterStatus={handleStatPillFilter}
-        showCompanies={filterCompanies !== false}
-        onToggleCompanies={() => setFilters(f => ({ ...f, companies: f.companies === false }))} />
+      <StatsBar onFilterStatus={handleStatPillFilter} companies={filterCompanies} />
 
       {/* Filter bar */}
       <div className="filter-row">
@@ -344,6 +392,15 @@ export default function ContactList({ onView, onExport }) {
           </button>
           {moreOpen && (
             <div className="filter-dropdown filter-dropdown--right">
+              {cfg.companies && (<>
+                <div className="filter-dropdown-section">Companies</div>
+                {COMPANY_OPTIONS.map(o => (
+                  <label key={String(o.value)} className="filter-dropdown-item">
+                    <input type="radio" name="companies_filter" checked={filterCompanies === o.value} onChange={() => setFilters(f => ({ ...f, companies: o.value }))} style={{ width: '14px', height: '14px' }} />
+                    {o.label}
+                  </label>
+                ))}
+              </>)}
               <div className="filter-dropdown-section">Phone</div>
               {PHONE_OPTIONS.map(o => (
                 <label key={o.value} className="filter-dropdown-item">
@@ -455,9 +512,13 @@ export default function ContactList({ onView, onExport }) {
             <VirtualList
               items={contacts}
               onEndReached={loadNextPage}
-              renderItem={(c) => (
-                <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView} />
-              )}
+              renderItem={(c) => {
+                const lvl = cfg.connections ? listLevel(familiarity.get(c.id), user?.id) : null;
+                return (
+                  <ContactCard key={c.id} contact={c} selected={selected.has(c.id)} onSelect={toggleSelect} onClick={onView}
+                    level={lvl?.level ?? null} levelMine={lvl?.mine ?? false} />
+                );
+              }}
             />
             {/* Pages load as you scroll; this only says so. A failed page leaves the
                 button as the way to retry, since scrolling at the bottom won't refire. */}

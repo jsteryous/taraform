@@ -80,8 +80,11 @@ export function applyContactFilters(q, filters = {}) {
   // Companies are hidden unless asked for (EMPTY_FILTERS.companies is false). Only an
   // explicit false hides them, so callers that build their own filter object (the
   // dashboard's queue count) see everyone. A search looks past it: hunting for a
-  // company by name shouldn't need the toggle first. kind is NOT NULL (db/20261113_companies.sql).
+  // company by name shouldn't need the filter first. kind is NOT NULL (db/20261113_companies.sql).
   if (filters.companies === false && !filters.search?.trim()) q = q.eq('kind', 'person');
+  // 'only' is the opposite facet: companies and nothing else, search or not — a list of
+  // businesses to work through.
+  if (filters.companies === 'only') q = q.eq('kind', 'company');
   if (filters.statuses?.length) q = q.in('status', filters.statuses);
   if (filters.counties?.length) q = q.in('county', filters.counties);
   // has_good_phone (db/20260713_filter_columns.sql) is true iff a non-struck number

@@ -38,18 +38,9 @@ export async function fetchContactsPage(clientId, filters = {}, from = 0, size =
 }
 
 // Row count for a filter, through the same buildQuery as the list — so a StatsBar pill
-// always equals the list its click produces (companies toggle included).
+// always equals the list its click produces (companies filter included).
 export async function countContacts(clientId, filters = {}) {
   const { count, error } = await buildQuery(clientId, filters, 'id', { count: 'exact', head: true });
-  if (error) throw error;
-  return count || 0;
-}
-
-// How many companies a workspace has, whatever the toggle says — the companies pill's number.
-export async function countCompanies(clientId) {
-  const { count, error } = await supabase.from('property_crm_contacts')
-    .select('id', { count: 'exact', head: true })
-    .eq('client_id', clientId).eq('kind', 'company');
   if (error) throw error;
   return count || 0;
 }

@@ -444,6 +444,21 @@ textarea {
     letter-spacing: 0.5px;
 }
 
+/* Relationship level under the status on a list row (ContactCard). Warmer = greener,
+   matching the warmth meter on the contact page; a teammate's level is dashed. */
+.familiarity-chip {
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    font-size: var(--text-2xs);
+    font-family: var(--mono);
+    border: 1px solid currentColor;
+    white-space: nowrap;
+}
+.familiarity-chip--met { color: #60a5fa; }
+.familiarity-chip--know { color: var(--warning); }
+.familiarity-chip--know_well { color: var(--success); }
+.familiarity-chip--team { border-style: dashed; opacity: 0.8; }
+
 /* "Due" pill next to the Follow-up field label (ContactDetail) */
 /* Cadence hint under the follow-up date: "Attempt 3 of 7 · next +16d". */
 .followup-next { margin-top: 0.45rem; font-size: var(--text-sm); color: var(--text); }

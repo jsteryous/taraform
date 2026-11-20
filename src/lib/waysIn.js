@@ -34,6 +34,42 @@ export async function fetchWaysIn(contactId) {
 export async function setFamiliarity(contactId, level) {
   const { error } = await supabase.rpc('set_familiarity', { p_contact_id: contactId, p_level: level });
   if (error) throw error;
+  // The contact list shows each row's level; tell it, rather than make it refetch.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(FAMILIARITY_CHANGED, { detail: { contactId, level } }));
+  }
+}
+
+export const FAMILIARITY_CHANGED = 'taraform:familiarity';
+
+// Every teammate's familiarity rows for a set of contacts (the list's loaded rows). RLS
+// limits it to the caller's workspaces. Returns Map(contactId → [{ userId, level }]).
+export async function fetchFamiliarityFor(contactIds) {
+  const out = new Map();
+  for (let i = 0; i < contactIds.length; i += 200) {
+    const { data, error } = await supabase.from('contact_familiarity')
+      .select('contact_id,user_id,level').in('contact_id', contactIds.slice(i, i + 200));
+    if (error) throw error;
+    for (const r of data || []) {
+      if (!out.has(r.contact_id)) out.set(r.contact_id, []);
+      out.get(r.contact_id).push({ userId: r.user_id, level: r.level });
+    }
+  }
+  return out;
+}
+
+// What the list row shows: your own level when you've set one, otherwise the warmest
+// teammate's (flagged mine: false so it reads as "the team knows them", not you).
+// null when nobody on the team has met them.
+export function listLevel(rows, me) {
+  if (!rows?.length) return null;
+  const own = rows.find(r => r.userId === me);
+  if (own) return { level: own.level, mine: true };
+  return { level: strongest(rows, me).level, mine: false };
+}
+
+export function levelLabel(level) {
+  return LEVELS.find(l => l.value === level)?.label ?? '';
 }
 
 // The RPC returns snake_case jsonb; give the UI one camelCase shape with names joined.

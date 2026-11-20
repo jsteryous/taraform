@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, whoLabel, howTheyKnow, colleagueLine } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -50,6 +50,25 @@ describe('strongest', () => {
     expect(strongest([{ userId: KIM, level: 'know' }, { userId: ME, level: 'met' }], ME).userId).toBe(KIM);
     expect(strongest([{ userId: KIM, level: 'know' }, { userId: ME, level: 'know' }], ME).userId).toBe(ME);
     expect(strongest([], ME)).toBeNull();
+  });
+});
+
+describe('listLevel', () => {
+  it('shows your own level, even when a teammate knows them better', () => {
+    expect(listLevel([{ userId: KIM, level: 'know_well' }, { userId: ME, level: 'met' }], ME))
+      .toEqual({ level: 'met', mine: true });
+  });
+  it("falls back to the team's warmest when you haven't set one", () => {
+    expect(listLevel([{ userId: KIM, level: 'met' }, { userId: 'x', level: 'know' }], ME))
+      .toEqual({ level: 'know', mine: false });
+  });
+  it('is null when nobody has met them', () => {
+    expect(listLevel([], ME)).toBeNull();
+    expect(listLevel(undefined, ME)).toBeNull();
+  });
+  it('labels levels the way the contact page does', () => {
+    expect(levelLabel('know_well')).toBe('Know well');
+    expect(levelLabel(null)).toBe("Haven't met");
   });
 });
 

@@ -3,8 +3,9 @@ import { Building2 } from 'lucide-react';
 import { useAppData } from '../../context/AppContext';
 import StatusBadge from './StatusBadge';
 import { resolveConfig, getStatusColor } from '../../lib/clientConfig';
+import { levelLabel } from '../../lib/waysIn';
 
-const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onClick }) {
+const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onClick, level = null, levelMine = false }) {
   const { currentClient } = useAppData();
   const cfg = resolveConfig(currentClient);
   const barColor = getStatusColor(cfg, contact.status);
@@ -42,6 +43,13 @@ const ContactCard = memo(function ContactCard({ contact, selected, onSelect, onC
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', gridColumn: showCounty ? 'auto' : 'span 1' }}>
         <StatusBadge cfg={cfg} status={contact.status} />
+        {/* How well you know them (or, if you haven't said, the team's warmest). */}
+        {level && (
+          <span className={`familiarity-chip familiarity-chip--${level}${levelMine ? '' : ' familiarity-chip--team'}`}
+            title={levelMine ? 'How well you know them' : 'You haven’t met them; a teammate has'}>
+            {levelMine ? levelLabel(level) : `Team: ${levelLabel(level)}`}
+          </span>
+        )}
       </div>
     </div>
   );

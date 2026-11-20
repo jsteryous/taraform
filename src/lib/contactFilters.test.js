@@ -41,6 +41,15 @@ describe('applyContactFilters', () => {
     expect(callsOf(searching).some(c => c.method === 'eq' && c.args[0] === 'kind')).toBe(false);
   });
 
+  it("companies: 'only' narrows to companies, searching or not", () => {
+    for (const search of ['', 'acme']) {
+      const q = mockQuery();
+      applyContactFilters(q, { companies: 'only', search });
+      expect(callsOf(q)).toContainEqual({ method: 'eq', args: ['kind', 'company'] });
+      expect(callsOf(q)).not.toContainEqual({ method: 'eq', args: ['kind', 'person'] });
+    }
+  });
+
   it('filters statuses and counties with .in()', () => {
     const q = mockQuery();
     applyContactFilters(q, { statuses: ['New Lead'], counties: ['Greenville'] });

@@ -16,8 +16,8 @@ const AppUIContext   = createContext(null);
 
 // followUp: null, or the resolved { days, statuses } config while the queue filter is
 // active — carried in the filter itself so applyContactFilters stays config-free.
-// companies: false hides kind = 'company' rows (the default — the list is mostly people);
-// true shows them. Search ignores it, so typing a company's name still finds it.
+// companies: false hides kind = 'company' rows (the default — the list is mostly people),
+// true shows both kinds, 'only' shows companies alone. Search ignores it, so typing a company's name still finds it.
 export const EMPTY_FILTERS = { search: '', statuses: null, counties: [], phone: '', activity: '', email: '', followUp: null, companies: false };
 
 export function AppProvider({ children }) {
