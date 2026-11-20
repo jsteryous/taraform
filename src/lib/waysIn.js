@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { displayName } from './links';
+import { displayName, fetchConnections } from './links';
 
 // Connections & Ways In (PLAN.md; db/20261118_connections.sql).
 //
@@ -255,4 +255,92 @@ export async function updatePeopleConnection(id, { description, referredBy = nul
 export async function disconnectPeople(id) {
   const { error } = await supabase.from('contact_connections').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ── Companies ──────────────────────────────────────────────────────────────────────────
+//
+// A company has no ways in of its own: you know a company through the people at it. So
+// its column is built from its linked people's — each one's contact_ways_in, read in
+// parallel — and summarised by the pure companyWaysIn below. Nothing is stored for the
+// company itself, and every edit (familiarity, connections, groups) happens on a person.
+
+const WARMTH_RANK = Object.fromEntries(WARMTH.map((w, i) => [w.value, i]));
+const MAX_PEOPLE = 40; // a company page reads one call per person; past this, the warmest few are enough
+
+export async function fetchCompanyWaysIn(company, me) {
+  const links = (await fetchConnections(company)).slice(0, MAX_PEOPLE);
+  const ways = await Promise.all(links.map(l => fetchWaysIn(l.contact.id).catch(() => null)));
+  return companyWaysIn(
+    links.map(l => ({ id: l.contact.id, name: l.contact.name, title: l.title })),
+    new Map(links.map((l, i) => [l.contact.id, ways[i]])),
+    me,
+  );
+}
+
+// people: [{ id, name, title }]; waysById: Map(id → normalizeWaysIn shape, or null).
+// → { warmth, people: [{ id, name, title, warmth, familiarity, ways }] warmest first,
+//     best (the warmest person, or null), outside: connections to people not at this
+//     company, each with `via`, groups: each with the people here who are in it }.
+export function companyWaysIn(people, waysById, me) {
+  const here = new Set(people.map(p => p.id));
+  const list = people.map(p => {
+    const w = waysById.get(p.id) || null;
+    return { ...p, ways: w, warmth: w?.warmth || 'cold', familiarity: w?.familiarity || [] };
+  });
+  const familiarityRank = p => RANK[strongest(p.familiarity, me)?.level] || 0;
+  list.sort((a, b) =>
+    WARMTH_RANK[b.warmth] - WARMTH_RANK[a.warmth] ||
+    familiarityRank(b) - familiarityRank(a) ||
+    a.name.localeCompare(b.name));
+
+  const outside = [];
+  const seen = new Set();
+  for (const p of list) {
+    for (const c of p.ways?.connections || []) {
+      if (here.has(c.contactId) || seen.has(`${c.contactId}:${p.id}`)) continue;
+      seen.add(`${c.contactId}:${p.id}`);
+      outside.push({ ...c, via: { id: p.id, name: p.name } });
+    }
+  }
+  const knownRank = c => RANK[strongest(c.knownBy, me)?.level] || 0;
+  outside.sort((a, b) => knownRank(b) - knownRank(a) || a.name.localeCompare(b.name));
+
+  const groups = new Map();
+  for (const p of list) {
+    for (const g of p.ways?.groups || []) {
+      if (!groups.has(g.id)) groups.set(g.id, { ...g, people: [] });
+      groups.get(g.id).people.push({ id: p.id, name: p.name });
+    }
+  }
+
+  return {
+    warmth: list[0]?.warmth || 'cold',
+    people: list,
+    best: list[0] || null,
+    outside,
+    groups: [...groups.values()],
+  };
+}
+
+// The sentence under a company's meter: the best way in is the best way in to its
+// warmest person, said with their name.
+export function describeCompanyWaysIn(cw, ctx) {
+  if (!cw.people.length) return { headline: 'Nobody linked yet.', detail: 'Link the people who work here, in the People panel.' };
+  const p = cw.best;
+  if (!p.ways) return { headline: 'No way in yet.', detail: '' };
+  if (p.warmth === 'warm') {
+    const f = strongest(p.familiarity.filter(x => RANK[x.level] >= 2), ctx.me);
+    const title = p.title ? `, ${p.title}` : '';
+    if (f.userId === ctx.me) return { headline: `Call ${p.name}${title} yourself.`, detail: `${knowsPhrase('You', f.level, p.name)}.` };
+    const who = whoLabel(f.userId, ctx);
+    return { headline: `Best way in: ask ${who} about ${p.name}${title}.`, detail: `${knowsPhrase(who, f.level, p.name)}.` };
+  }
+  if (p.warmth === 'cold') return { headline: 'No way in yet.', detail: 'Nobody on the team knows anyone here.' };
+  // Name the person in the person-level sentence ("Best way in to Pat Smith: …").
+  const inner = describeWaysIn(p.ways, ctx);
+  const headline = inner.headline
+    .replace(/^Best way in:/, `Best way in to ${p.name}:`)
+    .replace(/^Excuse to reach out:/, `Excuse to call ${p.name}:`)
+    .replace(/ met them\.$/, ` met ${p.name}.`);
+  return { headline, detail: inner.detail };
 }

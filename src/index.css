@@ -1986,3 +1986,8 @@ input::placeholder { color: var(--text-muted); }
 .add-company-name { font-weight: 500; }
 .add-company-chosen .multi-remove { margin-left: auto; }
 .add-company-title { margin-top: 0.35rem; }
+
+/* ── Company ways in: each person's warmth as a tag ── */
+.ways-kind.warmth-text-common { color: #60a5fa; border-color: #60a5fa; }
+.ways-kind.warmth-text-intro { color: var(--warning); border-color: var(--warning); }
+.ways-kind.warmth-text-warm { color: var(--success); border-color: var(--success); }

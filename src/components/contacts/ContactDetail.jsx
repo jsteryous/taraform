@@ -11,6 +11,7 @@ import NotesTab from './NotesTab';
 import ConnectionsPanel from './ConnectionsPanel';
 import OffersTab from './OffersTab';
 import WaysInColumn from './WaysInColumn';
+import CompanyWaysInColumn from './CompanyWaysInColumn';
 import Select from '../shared/Select';
 import { useConfirm } from '../shared/ConfirmDialog';
 import CallSetupModal from '../modals/CallSetupModal';
@@ -581,7 +582,9 @@ export default function ContactDetail({ onClose }) {
 
         {/* ── Connections & Ways In — the same right column, in workspaces without offers ── */}
         {cfg.connections && !cfg.tabs.includes('offers') && (
-          <WaysInColumn key={draft.id} contact={draft} refreshKey={linksVersion + panelVersion} />
+          draft.kind === 'company'
+            ? <CompanyWaysInColumn key={draft.id} contact={draft} refreshKey={linksVersion + panelVersion} />
+            : <WaysInColumn key={draft.id} contact={draft} refreshKey={linksVersion + panelVersion} />
         )}
 
       </div>

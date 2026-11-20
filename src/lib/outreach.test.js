@@ -50,7 +50,7 @@ describe('planOutreach: introductions', () => {
     expect(intros).toEqual([]);
   });
 
-  it('reaches a company and its other people through a known person there', () => {
+  it('treats a company as known through its people, and reaches the unknown ones there', () => {
     const { intros } = planOutreach({
       contacts: base,
       familiarity: [{ contactId: 1, userId: KIM, level: 'know' }],
@@ -60,9 +60,8 @@ describe('planOutreach: introductions', () => {
       ],
     }, { me: ME, now: NOW });
     const byTarget = new Map(intros.map(i => [i.targetId, i]));
-    expect(byTarget.get(10).how).toBe('works-at');
+    expect(byTarget.has(10)).toBe(false); // Kim knows Pat, who is at Acme: no intro needed
     expect(byTarget.get(11).how).toBe('colleague');
-    expect(introLine(byTarget.get(10), base, ctx)).toBe('kim can ask Pat Helper, CFO there. kim knows Pat Helper.');
     expect(introLine(byTarget.get(11), base, ctx)).toBe('kim can ask Pat Helper: they work together at Acme LLC (Owner). kim knows Pat Helper.');
   });
 
@@ -124,6 +123,17 @@ describe('planOutreach: reasons to reach out', () => {
       'You know them. Last note 6 months ago.',
       "You have met them, and there's no note yet.",
     ]);
+  });
+
+  it('never offers an intro to a company whose people are all known', () => {
+    const cs2 = contacts([[10, 'Acme LLC', 'Target', 'company'], [1, 'A', 'Target'], [2, 'B', 'Target']]);
+    const { intros, reasons } = planOutreach({
+      contacts: cs2,
+      familiarity: [{ contactId: 1, userId: ME, level: 'know' }, { contactId: 2, userId: ME, level: 'know_well' }],
+      links: [{ companyId: 10, personId: 1, title: '' }, { companyId: 10, personId: 2, title: '' }],
+    }, { me: ME, now: NOW });
+    expect(intros).toEqual([]);
+    expect(reasons.map(r => r.targetId)).not.toContain(10);
   });
 
   it('does not repeat an intro target as a reason', () => {

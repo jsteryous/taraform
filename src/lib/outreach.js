@@ -6,7 +6,8 @@ import { strongest, knowsPhrase, whoLabel } from './waysIn';
 //
 //   Introductions to ask for: a contact we're pursuing whom nobody knows, reachable
 //     through someone who is known — a stored connection, or a known person at the same
-//     company (or at the company itself, when the company is the one being pursued).
+//     company. A company counts as known when anyone linked to it is: knowing the CFO
+//     *is* the relationship with the company, so it never needs an introduction.
 //   Reasons to reach out: a contact we're pursuing who shares a group with you, a
 //     teammate, or someone known; or someone you've marked as Met / Know / Know well
 //     who hasn't had a note in a while.
@@ -79,7 +80,11 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
     famBy.get(f.contactId).push(f);
   }
   const best = id => strongest(famBy.get(id), me);
-  const isKnown = id => (RANK[best(id)?.level] || 0) >= 2;
+  const knownDirectly = id => (RANK[best(id)?.level] || 0) >= 2;
+  // `links` holds every link of each company a known person is at (fetchOutreachData), so
+  // this set is complete for the companies that matter.
+  const knownCompanies = new Set(links.filter(l => knownDirectly(l.personId)).map(l => l.companyId));
+  const isKnown = id => knownDirectly(id) || knownCompanies.has(id);
   const pursued = id => { const c = contacts.get(id); return !!c && statuses.includes(c.status); };
   const statusOrder = id => statuses.indexOf(contacts.get(id).status);
 
@@ -106,7 +111,6 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
   }
   for (const [companyId, people] of byCompany) {
     for (const helper of people.filter(l => isKnown(l.personId))) {
-      offer(companyId, helper.personId, { how: 'works-at', companyId, helperTitle: helper.title });
       for (const other of people) {
         if (other.personId !== helper.personId) {
           offer(other.personId, helper.personId, { how: 'colleague', companyId, targetTitle: other.title });
@@ -167,9 +171,6 @@ export function introLine(p, contacts, ctx) {
   const who = whoLabel(p.helperUserId, ctx);
   const knows = knowsPhrase(who, p.helperLevel, helper);
   const ask = who === 'You' ? `Ask ${helper}` : `${who} can ask ${helper}`;
-  if (p.how === 'works-at') {
-    return `${ask}${p.helperTitle ? `, ${p.helperTitle}` : ''} there. ${knows}.`;
-  }
   if (p.how === 'colleague') {
     return `${ask}: they work together at ${company || 'the same company'}${p.targetTitle ? ` (${p.targetTitle})` : ''}. ${knows}.`;
   }

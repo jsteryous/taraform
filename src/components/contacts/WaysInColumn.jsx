@@ -16,6 +16,7 @@ import { classifyError } from '../../lib/errors';
 // do you know them?", connections (ConnectionForm) and groups (GroupPicker). Notes fill
 // it too: the note finder (NotesTab) links names it recognises and bumps `refreshKey`.
 // Colleagues (people at the same company) are derived from company links, not stored.
+// A company's page uses CompanyWaysInColumn instead.
 export default function WaysInColumn({ contact, refreshKey = 0 }) {
   const { user, currentClientId, loadFullContact, setCurrentContact, showToast } = useApp();
   const navigate = useNavigate();
@@ -111,15 +112,6 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
   }
 
   const knownByLine = (list, object) => list.map(k => knowsPhrase(whoLabel(k.userId, ctx), k.level, object)).join(' · ');
-
-  if (contact.kind === 'company') {
-    return (
-      <div className="ways-column">
-        <div className="offers-column-header"><span className="field-label">Connections &amp; Ways In</span></div>
-        <div className="conn-empty">Ways in are worked out for people. Open someone at this company.</div>
-      </div>
-    );
-  }
 
   const warmIdx = WARMTH.findIndex(s => s.value === (data?.warmth || 'cold'));
   const sentence = describeWaysIn(data, ctx);

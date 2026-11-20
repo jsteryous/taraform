@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine, companyWaysIn, describeCompanyWaysIn } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -185,5 +185,38 @@ describe('colleagues', () => {
       { id: 1, contact_id: 7, first_name: 'Pat', last_name: '', known_by: [{ user_id: ME, level: 'know' }] },
     ] }), ctx);
     expect(d.headline).toBe('Best way in: ask Pat.');
+  });
+});
+
+describe('companyWaysIn', () => {
+  const people = [{ id: 1, name: 'Ann Cold', title: '' }, { id: 2, name: 'Bo Warm', title: 'CFO' }, { id: 3, name: 'Cy Intro', title: '' }];
+  const ways = new Map([
+    [1, w({})],
+    [2, w({ warmth: 'warm', familiarity: [{ user_id: ME, level: 'know_well' }],
+      connections: [{ id: 9, contact_id: 3, first_name: 'Cy', last_name: 'Intro', known_by: [] }],
+      groups: [{ id: 7, name: 'Rotary', kind: 'civic', teammates: [ME], known_contacts: [] }] })],
+    [3, w({ warmth: 'intro',
+      connections: [{ id: 10, contact_id: 50, first_name: 'Out', last_name: 'Side', known_by: [{ user_id: KIM, level: 'know' }] }],
+      groups: [{ id: 7, name: 'Rotary', kind: 'civic', teammates: [ME], known_contacts: [] }] })],
+  ]);
+
+  it('takes the warmest person as the company warmth and puts them first', () => {
+    const cw = companyWaysIn(people, ways, ME);
+    expect(cw.warmth).toBe('warm');
+    expect(cw.people.map(p => p.id)).toEqual([2, 3, 1]);
+    expect(describeCompanyWaysIn(cw, ctx).headline).toBe('Call Bo Warm, CFO yourself.');
+  });
+
+  it('lists connections outside the company with who they come through, and merges groups', () => {
+    const cw = companyWaysIn(people, ways, ME);
+    expect(cw.outside.map(c => [c.name, c.via.name])).toEqual([['Out Side', 'Cy Intro']]);
+    expect(cw.groups.map(g => [g.name, g.people.map(p => p.name)])).toEqual([['Rotary', ['Bo Warm', 'Cy Intro']]]);
+  });
+
+  it('says so when nobody is linked or nobody is known', () => {
+    expect(describeCompanyWaysIn(companyWaysIn([], new Map(), ME), ctx).headline).toBe('Nobody linked yet.');
+    const cold = companyWaysIn([people[0]], ways, ME);
+    expect(cold.warmth).toBe('cold');
+    expect(describeCompanyWaysIn(cold, ctx).headline).toBe('No way in yet.');
   });
 });
