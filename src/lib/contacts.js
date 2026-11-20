@@ -154,7 +154,7 @@ export async function fetchDedupIndex(clientId) {
 // Every company in a workspace with where its address stands, for the map and its cleanup
 // list. The whole set, paged past PostgREST's row cap: a map of "the first 1000" would
 // silently hide the rest (see "contacts is ONE PAGE" in src/components/CLAUDE.md).
-const LOCATION_FIELDS = 'id,kind,first_name,last_name,status,address,geo_status,geo_lat,geo_lng,geo_matched';
+const LOCATION_FIELDS = 'id,kind,first_name,last_name,status,address,geo_status,geo_lat,geo_lng,geo_matched,follow_up_on,last_note_at';
 
 export async function fetchCompanyLocations(clientId) {
   if (!clientId) return [];

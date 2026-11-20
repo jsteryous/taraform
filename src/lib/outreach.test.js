@@ -33,6 +33,17 @@ describe('planOutreach: introductions', () => {
     expect(introLine(intros[0], base, ctx)).toBe('Ask Pat Helper. You know Pat Helper well · Golf buddies.');
   });
 
+  it("doesn't suggest an introduction to someone you've met yourself", () => {
+    const data = {
+      contacts: base,
+      familiarity: [{ contactId: 1, userId: ME, level: 'know_well' }, { contactId: 2, userId: ME, level: 'met' }],
+      connections: [{ aId: 1, bId: 2, description: '', referredBy: null, unsure: false }],
+    };
+    expect(planOutreach(data, { me: ME, now: NOW }).intros).toEqual([]);
+    // A teammate who hasn't met them still gets the intro.
+    expect(planOutreach(data, { me: KIM, now: NOW }).intros.map(i => i.targetId)).toEqual([2]);
+  });
+
   it('skips targets that are not pursued, already known, or reached only through a Met', () => {
     const { intros } = planOutreach({
       contacts: base,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('./supabase', () => ({ supabase: {} }));
 
-import { normalizeWaysIn, describeWaysIn, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine, companyWaysIn, describeCompanyWaysIn } from './waysIn';
+import { normalizeWaysIn, describeWaysIn, meterStep, knowsPhrase, strongest, listLevel, levelLabel, whoLabel, howTheyKnow, colleagueLine, companyWaysIn, describeCompanyWaysIn } from './waysIn';
 
 const ME = 'u-me';
 const KIM = 'u-kim';
@@ -131,7 +131,7 @@ describe('describeWaysIn', () => {
 
   it('common: met', () => {
     expect(describeWaysIn(w({ warmth: 'common', familiarity: [{ user_id: ME, level: 'met' }] }), ctx).headline)
-      .toBe("You've met them.");
+      .toBe("You've met them, so reach out yourself.");
     expect(describeWaysIn(w({ warmth: 'common', familiarity: [{ user_id: KIM, level: 'met' }] }), ctx).headline)
       .toBe('kim has met them.');
   });
@@ -218,5 +218,32 @@ describe('companyWaysIn', () => {
     const cold = companyWaysIn([people[0]], ways, ME);
     expect(cold.warmth).toBe('cold');
     expect(describeCompanyWaysIn(cold, ctx).headline).toBe('Way in: the front door.');
+  });
+});
+
+describe("you've met them", () => {
+  const introAndMet = () => w({
+    warmth: 'intro',
+    familiarity: [{ user_id: ME, level: 'met' }],
+    connections: [{ id: 1, contact_id: 7, first_name: 'Steve', last_name: 'Hall', known_by: [{ user_id: ME, level: 'know_well' }] }],
+  });
+
+  it('says to reach out yourself instead of asking for an intro', () => {
+    expect(describeWaysIn(introAndMet(), ctx).headline).toBe("You've met them, so reach out yourself.");
+  });
+
+  it('shows "You\'ve met" on the meter for you, the server step for a teammate', () => {
+    expect(meterStep(introAndMet(), ME)).toEqual({ index: 2, label: "You've met" });
+    expect(meterStep(introAndMet(), KIM)).toEqual({ index: 2, label: '1 intro away' });
+    expect(meterStep(w({ warmth: 'cold', familiarity: [{ user_id: ME, level: 'met' }] }), ME).label).toBe("You've met");
+  });
+
+  it('a teammate having met them does not change your recommendation', () => {
+    const t = w({
+      warmth: 'intro',
+      familiarity: [{ user_id: KIM, level: 'met' }],
+      connections: [{ id: 1, contact_id: 7, first_name: 'Steve', last_name: 'Hall', known_by: [{ user_id: ME, level: 'know_well' }] }],
+    });
+    expect(describeWaysIn(t, ctx).headline).toBe('Best way in: ask Steve Hall.');
   });
 });

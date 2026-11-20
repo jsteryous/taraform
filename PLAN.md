@@ -421,6 +421,12 @@ it isn't in the book yet.
    As of that day none of the bank's companies had an address, so the map starts empty
    and fills as addresses are entered.
 2. Google search-as-you-type on Add Contact (needs the key).
-3. Plan a call day: area, stops, route link, visit logging.
+3. Plan a call day: area, stops, route link. **Built 2026-11-20 without visit logging**
+   (`lib/visitDay.js`, `VisitDayCard.jsx`). A stop is a mapped company that is due for
+   follow-up or a Target/Prospect; areas are the best-scoring bunch within 2 miles of one
+   company, up to 10 stops, three suggestions with no company in two. Stops go in driving
+   order (open path, nearest neighbour + 2-opt); Google Maps links carry 10 stops each and the
+   first starts from the phone's location. Until visits are logged, "never contacted" (no
+   notes) stands in for "never visited". Visit logging (a note kind) is still to do.
 4. Nearby businesses not in the book.
 5. Parcel and ownership data; a weekly visit goal.

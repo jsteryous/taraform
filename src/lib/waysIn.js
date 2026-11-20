@@ -158,6 +158,20 @@ export function howTheyKnow(c) {
   return [desc, direction].filter(Boolean).join(' · ');
 }
 
+// You've marked them Met (Know / Know well are 'warm' and handled before this).
+export function metByMe(w, me) {
+  return !!w?.familiarity?.some(f => f.userId === me && f.level === 'met');
+}
+
+// The meter step to show. The server's warmth ranks an intro above having met; for the
+// person who has met them it's the other way round, so their meter reads "You've met"
+// at the intro step instead of "1 intro away". Teammates still see the server's step.
+export function meterStep(w, me) {
+  const i = WARMTH.findIndex(s => s.value === (w?.warmth || 'cold'));
+  if (w?.warmth !== 'warm' && metByMe(w, me)) return { index: WARMTH.findIndex(s => s.value === 'intro'), label: "You've met" };
+  return { index: i, label: WARMTH[i].label };
+}
+
 // The one sentence under the meter: the best way in, or an excuse to reach out.
 // Follows the same order as the warmth rule in contact_ways_in, so the sentence always
 // explains the step the meter shows.
@@ -171,6 +185,13 @@ export function describeWaysIn(w, ctx) {
       return { headline: 'Call them yourself.', detail: `${knowsPhrase('You', f.level, 'them')}.` };
     }
     return { headline: `Best way in: ask ${label(f.userId)}.`, detail: `${knowsPhrase(label(f.userId), f.level, 'them')}.` };
+  }
+
+  // You've met them yourself: call them. An introduction is for someone you can't reach,
+  // and asking a third party to introduce you to a person you've already met is odd. Who
+  // else knows them is still listed under "Who they know".
+  if (metByMe(w, ctx.me)) {
+    return { headline: "You've met them, so reach out yourself.", detail: 'Having met is a reason to call.' };
   }
 
   if (w.warmth === 'intro') {
@@ -341,6 +362,7 @@ export function describeCompanyWaysIn(cw, ctx) {
   const headline = inner.headline
     .replace(/^Best way in:/, `Best way in to ${p.name}:`)
     .replace(/^Excuse to reach out:/, `Excuse to call ${p.name}:`)
-    .replace(/ met them\.$/, ` met ${p.name}.`);
+    .replace(/ met them\.$/, ` met ${p.name}.`)
+    .replace(/^You've met them, so reach out yourself\.$/, `You've met ${p.name}, so reach out yourself.`);
   return { headline, detail: inner.detail };
 }

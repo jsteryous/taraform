@@ -80,6 +80,7 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
     famBy.get(f.contactId).push(f);
   }
   const best = id => strongest(famBy.get(id), me);
+  const metByMe = id => (famBy.get(id) || []).some(f => f.userId === me);
   const knownDirectly = id => (RANK[best(id)?.level] || 0) >= 2;
   // `links` holds every link of each company a known person is at (fetchOutreachData), so
   // this set is complete for the companies that matter.
@@ -93,7 +94,8 @@ export function planOutreach(data, { me, statuses = OUTREACH_DEFAULTS.statuses, 
   const score = p => [RANK[p.helperLevel], p.unsure ? 0 : 1, p.helperUserId === me ? 1 : 0, p.how === 'connection' ? 1 : 0];
   const better = (a, b) => { const x = score(a), y = score(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
   function offer(targetId, helperId, path) {
-    if (targetId === helperId || !pursued(targetId) || isKnown(targetId) || !contacts.get(helperId)) return;
+    // metByMe: you've met them, so call them; "Reasons to reach out" lists them instead.
+    if (targetId === helperId || !pursued(targetId) || isKnown(targetId) || metByMe(targetId) || !contacts.get(helperId)) return;
     const k = best(helperId);
     const p = { targetId, helperId, helperUserId: k.userId, helperLevel: k.level, unsure: false, ...path };
     const cur = intros.get(targetId);

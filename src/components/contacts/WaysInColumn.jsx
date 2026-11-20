@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Link2, Quote, Pencil, X, Plus, Building2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { fetchWaysIn, setFamiliarity, describeWaysIn, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, colleagueLine, LEVELS, WARMTH } from '../../lib/waysIn';
+import { fetchWaysIn, setFamiliarity, describeWaysIn, meterStep, whoLabel, knowsPhrase, disconnectPeople, howTheyKnow, colleagueLine, LEVELS, WARMTH } from '../../lib/waysIn';
 import { removeContactFromGroup, kindLabel } from '../../lib/groups';
 import { displayName } from '../../lib/links';
 import { useConfirm } from '../shared/ConfirmDialog';
@@ -117,7 +117,7 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
 
   const knownByLine = (list, object) => list.map(k => knowsPhrase(whoLabel(k.userId, ctx), k.level, object)).join(' · ');
 
-  const warmIdx = WARMTH.findIndex(s => s.value === (data?.warmth || 'cold'));
+  const { index: warmIdx, label: warmLabel } = meterStep(data, ctx.me);
   const sentence = describeWaysIn(data, ctx);
 
   return (
@@ -135,12 +135,12 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
           {/* 1. How warm */}
           <section className="ways-section" aria-label="How warm is this contact">
             <div className={`ways-meter warmth-${data.warmth}`} role="meter" aria-valuemin={0} aria-valuemax={3}
-              aria-valuenow={warmIdx} aria-valuetext={WARMTH[warmIdx].label}>
+              aria-valuenow={warmIdx} aria-valuetext={warmLabel}>
               {WARMTH.map((s, i) => (
                 <div key={s.value} className={`ways-step${i <= warmIdx ? ' on' : ''}`} />
               ))}
             </div>
-            <div className="ways-warmth-label">{WARMTH[warmIdx].label}</div>
+            <div className="ways-warmth-label">{warmLabel}</div>
             <div className="ways-headline">{sentence.headline}</div>
             {sentence.detail && <div className="ways-detail">{sentence.detail}</div>}
           </section>

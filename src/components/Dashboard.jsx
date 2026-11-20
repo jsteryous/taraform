@@ -7,6 +7,7 @@ import { fetchNoteActivity } from '../lib/notes';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, CalendarClock } from 'lucide-react';
 import OutreachCards from './OutreachCards';
+import VisitDayCard from './VisitDayCard';
 // Lazy: the map library is only downloaded by workspaces that show the map.
 const CompanyMap = lazy(() => import('./CompanyMap'));
 
@@ -178,6 +179,10 @@ export default function Dashboard({ onClose, onViewContact }) {
             )
           )}
         </div>
+
+        {cfg.companies && (
+          <VisitDayCard clientId={currentClientId} followUp={cfg.followUp} onViewContact={onViewContact} />
+        )}
 
         {cfg.connections && (
           <OutreachCards clientId={currentClientId} userId={userId} outreach={cfg.outreach} onViewContact={onViewContact} />
