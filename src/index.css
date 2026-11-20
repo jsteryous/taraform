@@ -2021,15 +2021,64 @@ input::placeholder { color: var(--text-muted); }
 .ways-kind.warmth-text-warm { color: var(--success); border-color: var(--success); }
 
 /* ── Dashboard map of companies (CompanyMap.jsx) ── */
+.company-map-wrap { position: relative; }
 .company-map {
-    height: 380px;
-    border-radius: 8px;
+    height: 420px;
+    border-radius: 10px;
     border: 1px solid var(--border);
     overflow: hidden;
-    /* Leaflet panes use z-index up to ~1000; keep them under the app's overlays. */
+    background: var(--surface-hover);
+    /* Keep the map's own stacking under the app's overlays. */
     position: relative;
     z-index: 0;
 }
+.company-map-empty {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: calc(100% - 2rem);
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+}
+.company-map-empty svg { flex-shrink: 0; color: var(--accent); }
+/* MapLibre's own controls and hover card, in the app's colours. */
+.company-map .maplibregl-ctrl-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+.company-map .maplibregl-ctrl-group button + button { border-top: 1px solid var(--border); }
+body:not(.theme-light) .company-map .maplibregl-ctrl-icon { filter: invert(1) brightness(0.9); }
+.company-map .maplibregl-ctrl-attrib { font-size: var(--text-2xs); }
+body:not(.theme-light) .company-map .maplibregl-ctrl-attrib { background: rgba(20, 20, 20, 0.75); color: var(--text-muted); }
+body:not(.theme-light) .company-map .maplibregl-ctrl-attrib a { color: var(--text-muted); }
+body:not(.theme-light) .company-map .maplibregl-ctrl-attrib-button { filter: invert(1); }
+.company-map-popup .maplibregl-popup-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-family: var(--sans);
+    font-size: var(--text-sm);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.company-map-popup .maplibregl-popup-content span { color: var(--text-muted); font-size: var(--text-xs); }
+.company-map-popup .maplibregl-popup-tip { display: none; }
+@media (max-width: 640px) { .company-map { height: 340px; } }
 .company-map-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.6rem; }
 .company-map-key { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--text-xs); color: var(--text-muted); }
 .company-map-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
