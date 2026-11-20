@@ -6,10 +6,12 @@ import { applyContactFilters, myFollowUps } from '../lib/contactFilters';
 import { fetchNoteActivity } from '../lib/notes';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, CalendarClock } from 'lucide-react';
+import OutreachCards from './OutreachCards';
 
-// The dashboard is about the person looking at it, not the workspace: their follow-ups
-// and the notes they logged. Same layout for every preset — nothing here is land- or
-// bank-specific, and anything workspace-wide belongs in the list and its stats pills.
+// The dashboard is about the person looking at it, not the workspace: their follow-ups,
+// ways in to people they're pursuing, and the notes they logged. The outreach cards need
+// Connections data, so they show only where `connections` is on (banking); everything
+// else is the same for every preset.
 export default function Dashboard({ onClose, onViewContact }) {
   const { user, currentClientId, currentClient, setFilters } = useApp();
   const cfg = resolveConfig(currentClient);
@@ -174,6 +176,10 @@ export default function Dashboard({ onClose, onViewContact }) {
             )
           )}
         </div>
+
+        {cfg.connections && (
+          <OutreachCards clientId={currentClientId} userId={userId} outreach={cfg.outreach} onViewContact={onViewContact} />
+        )}
 
         {/* ── My activity (notes I logged) ── */}
         <div style={card}>
