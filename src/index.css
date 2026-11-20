@@ -1976,3 +1976,6 @@ input::placeholder { color: var(--text-muted); }
     text-underline-offset: 2px; font-family: inherit;
 }
 .outreach-more { margin-top: 0.6rem; }
+
+/* Banking import: calls-per-weekday input in the First calls banner. */
+.bi-perday { width: 4.5rem; }

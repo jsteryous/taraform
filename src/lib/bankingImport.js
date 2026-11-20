@@ -28,24 +28,54 @@ export const BANKING_FIELDS = [
   { key: 'note',      label: 'Note' },
   { key: 'date',      label: 'Date of contact' },
   { key: 'method',    label: 'How (call, text…)' },
+  // About the business, not the person (a purchased list such as Data Axle). They land
+  // on the company: its main line in phones, the rest as fields on its page.
+  { key: 'companyPhone',    label: 'Company phone' },
+  { key: 'address',         label: 'Street address' },
+  { key: 'city',            label: 'City' },
+  { key: 'state',           label: 'State' },
+  { key: 'zip',             label: 'ZIP' },
+  { key: 'website',         label: 'Website' },
+  { key: 'industry',        label: 'Industry' },
+  { key: 'employees',       label: 'Employees' },
+  { key: 'sales',           label: 'Annual sales' },
+  { key: 'yearEstablished', label: 'Year established' },
+];
+
+// Company fields that become entries in the company's custom_fields. The key is what the
+// contact page shows as the label (underscores read as spaces).
+const COMPANY_DETAILS = [
+  ['website', 'Website'], ['industry', 'Industry'], ['employees', 'Employees'],
+  ['sales', 'Annual_sales'], ['yearEstablished', 'Year_established'],
 ];
 
 const HEADER_GUESSES = {
-  name:      ['customer name', 'full name', 'name', 'contact name', 'contact', 'person'],
-  firstName: ['first name', 'firstname', 'first'],
-  lastName:  ['last name', 'lastname', 'last'],
+  name:      ['customer name', 'full name', 'name', 'contact name', 'contact', 'person', 'executive name', 'executive full name'],
+  firstName: ['first name', 'firstname', 'first', 'executive first name', 'contact first name'],
+  lastName:  ['last name', 'lastname', 'last', 'executive last name', 'contact last name'],
   company:   ['business name', 'company', 'company name', 'business', 'organization', 'employer', 'firm'],
-  title:     ['title', 'role', 'position', 'job title'],
-  phone:     ['phone', 'phone number', 'cell', 'mobile', 'telephone'],
+  title:     ['title', 'role', 'position', 'job title', 'executive title', 'executive title description', 'contact title'],
+  // Before `phone`: on a business list the only number is the location's main line.
+  companyPhone: ['phone number combined', 'company phone', 'business phone', 'main phone', 'location phone'],
+  phone:     ['phone', 'phone number', 'cell', 'mobile', 'telephone', 'executive phone', 'direct phone'],
   email:     ['email', 'email address', 'e-mail'],
   status:    ['status', 'relationship', 'category'],
   note:      ['notes', 'note', 'comments', 'comment'],
   date:      ['date', 'last contact', 'last contacted', 'date contacted'],
   method:    ['method', 'contact method', 'channel', 'how'],
+  address:   ['address', 'street address', 'location address', 'physical address', 'address line 1'],
+  city:      ['city', 'location city', 'physical city'],
+  state:     ['state', 'location state', 'physical state'],
+  zip:       ['zip code', 'zip', 'postal code', 'location zip code', 'physical zip'],
+  website:   ['website', 'web address', 'url', 'web site'],
+  industry:  ['primary sic description', 'primary naics description', 'naics description', 'sic description', 'industry', 'primary sic code description'],
+  employees: ['location employee size actual', 'employee size actual', 'location employee size range', 'employee size range', 'employees', 'number of employees'],
+  sales:     ['location sales volume actual', 'sales volume actual', 'location sales volume range', 'sales volume range', 'annual sales', 'sales volume'],
+  yearEstablished: ['year established', 'year started', 'year founded'],
 };
 
 export function autoMapBanking(headers) {
-  const h = headers.map(x => String(x || '').toLowerCase().trim());
+  const h = headers.map(x => String(x || '').toLowerCase().replace(/[_\s]+/g, ' ').trim());
   const mapping = {};
   const used = new Set();
   for (const [field, guesses] of Object.entries(HEADER_GUESSES)) {
@@ -103,6 +133,12 @@ export function noteBody({ date, method, note }) {
   return head;
 }
 
+// "12 Main St, Greenville, SC 29601" from whichever parts the sheet has.
+export function joinAddress(street, city, state, zip) {
+  const stateZip = [clean(state), clean(zip)].filter(Boolean).join(' ');
+  return [clean(street), clean(city), stateZip].filter(Boolean).join(', ');
+}
+
 export const personKey  = (first, last) => `${first.toLowerCase()}|${last.toLowerCase()}`;
 export const companyKey = (name) => name.toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -111,7 +147,7 @@ export const companyKey = (name) => name.toLowerCase().replace(/\s+/g, ' ').trim
 // statusAliases: see matchStatus.
 //
 // Returns a plan:
-//   companies: [{ key, name, status, existingId }]      one per distinct business
+//   companies: [{ key, name, status, existingId, phones, details }]  one per distinct business
 //   people:    [{ key, firstName, lastName, phones, email, status, existingId }]
 //   links:     [{ companyKey, personKey, title }]       distinct pairs
 //   notes:     [{ target: 'person'|'company', key, body, row }]
@@ -170,7 +206,18 @@ export function planBankingImport({ rows, mapping, existing = [], statuses, stat
     if (companyName) {
       cKey = companyKey(companyName);
       if (!companies.has(cKey)) {
-        companies.set(cKey, { key: cKey, name: companyName, status, existingId: existingCompanies.get(cKey) ?? null });
+        companies.set(cKey, { key: cKey, name: companyName, status, existingId: existingCompanies.get(cKey) ?? null, phones: [], details: {} });
+      }
+      // A business list repeats the company once per executive; the first row with a
+      // value wins, and any new number is added.
+      const co = companies.get(cKey);
+      const cPhone = clean(cell(row, 'companyPhone'));
+      if (cPhone && !co.phones.includes(formatPhone(cPhone))) co.phones.push(formatPhone(cPhone));
+      const addr = joinAddress(cell(row, 'address'), cell(row, 'city'), cell(row, 'state'), cell(row, 'zip'));
+      if (addr && !co.details.Address) co.details.Address = addr;
+      for (const [field, label] of COMPANY_DETAILS) {
+        const v = clean(cell(row, field));
+        if (v && !co.details[label]) co.details[label] = v;
       }
     }
 
@@ -236,6 +283,34 @@ export function importFollowUp(notes, target, key, status, followUp, now = new D
   return scheduleAfterNote(count, status, null, followUp, now) ?? null;
 }
 
+// First calls for a list nobody has called yet (a purchased list has no notes, so
+// importFollowUp schedules nothing, and a Target with no date never comes due).
+// Spreads the new contacts over weekdays, `perDay` a day from `start`: the company for a
+// row with one (its people show on its page), the person for a row without. Only
+// statuses in `statuses` (the cadence's), and never a contact that has a note in this
+// import — those are already scheduled from their notes.
+// → Map('company:key' | 'person:key' → 'YYYY-MM-DD'), in sheet order.
+export function planFirstCalls(plan, { perDay, start = new Date(), statuses = [] } = {}) {
+  const out = new Map();
+  if (!plan || !(perDay > 0)) return out;
+  const noted = new Set(plan.notes.map(n => `${n.target}:${n.key}`));
+  const linked = new Set(plan.links.map(l => l.personKey));
+  const due = [
+    ...plan.companies.filter(c => !c.existingId).map(c => ({ id: `company:${c.key}`, status: c.status })),
+    ...plan.people.filter(p => !p.existingId && !linked.has(p.key)).map(p => ({ id: `person:${p.key}`, status: p.status })),
+  ].filter(x => statuses.includes(x.status) && !noted.has(x.id));
+  const day = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const weekday = () => { while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1); };
+  weekday();
+  due.forEach((x, i) => {
+    if (i > 0 && i % perDay === 0) { day.setDate(day.getDate() + 1); weekday(); }
+    out.set(x.id, ymd(day));
+  });
+  return out;
+}
+
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 function blankContact(fields) {
   const now = new Date().toISOString();
   return {
@@ -263,13 +338,14 @@ async function eachLimited(items, limit, fn) {
 // stopping halfway: a half-run import is safe to re-run for contacts and links (they
 // dedupe), but notes on the contacts it created would then be "already in Taraform" and
 // skipped — so it is better to finish everything that can finish and list what didn't.
-export async function runBankingImport(plan, { userId, clientId, onProgress, followUp = null } = {}) {
+export async function runBankingImport(plan, { userId, clientId, onProgress, followUp = null, firstCalls = new Map() } = {}) {
   const ids = { company: new Map(), person: new Map() };
   // Each imported note is a call, so a new contact starts out scheduled exactly as if
   // those notes had been logged by hand. Without this, a status whose only way into the
   // queue is a date (banking Target) would never come due. Pass followUp = null when the
   // importer's own auto-schedule switch is off.
-  const followUpFor = (target, key, status) => importFollowUp(plan.notes, target, key, status, followUp);
+  const followUpFor = (target, key, status) =>
+    importFollowUp(plan.notes, target, key, status, followUp) ?? firstCalls.get(`${target}:${key}`) ?? null;
   const created = [];
   const failures = [];
   const total = plan.companies.length + plan.people.length + plan.links.length + plan.notes.length;
@@ -279,7 +355,7 @@ export async function runBankingImport(plan, { userId, clientId, onProgress, fol
   await eachLimited(plan.companies, 4, async (c) => {
     try {
       if (c.existingId) { ids.company.set(c.key, c.existingId); return; }
-      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status, followUpOn: followUpFor('company', c.key, c.status) }), userId, clientId);
+      const saved = await insertContact(blankContact({ kind: 'company', firstName: c.name, status: c.status, phones: c.phones || [], customFields: c.details || {}, followUpOn: followUpFor('company', c.key, c.status) }), userId, clientId);
       ids.company.set(c.key, saved.id);
       created.push(saved);
     } catch (e) {

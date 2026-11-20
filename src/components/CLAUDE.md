@@ -25,6 +25,7 @@ Render it, page it, select from it. To *ask a question* about the client's conta
 - **Existing contacts are reused and never modified, and their notes are not re-added** — re-importing a sheet must not double every note. The preview lists the notes it is leaving out.
 - **A note can't be backdated** (`contact_notes_stamp` forces `created_at = now()`), so the sheet's date and method go at the front of the note text.
 - **Status values that aren't statuses are surfaced, not defaulted silently** — the preview asks what each one becomes (`statusAliases`).
+- **A purchased business list (Data Axle) is the other shape:** one row per executive, no notes, no status. Its phone is the location's main line, so it maps to *Company phone* (on the company), not *Phone* (the person); address, website, industry, employees, sales and year established become the company's `custom_fields` (shown as fields on its page, not yet filterable). Status defaults to the first (Target). Because there are no notes, `importFollowUp` schedules nothing and every Target would be stranded, so the preview offers **First calls**: `planFirstCalls` spreads new, un-noted, on-cadence contacts over weekdays, N a day in sheet order — the company for a row with one, the person otherwise.
 `parseCSVRaw` is a real RFC 4180 reader as of this change: Excel's CSVs carry a BOM, line breaks inside quoted cells and `""` escapes, all of which the old split-on-newline parser got wrong.
 
 ## Offers ↔ contact status (OffersTab)

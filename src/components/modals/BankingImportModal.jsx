@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { resolveConfig } from '../../lib/clientConfig';
 import { parseCSVRaw } from '../../lib/utils';
 import { fetchDedupIndex } from '../../lib/contacts';
-import { BANKING_FIELDS, autoMapBanking, planBankingImport, runBankingImport } from '../../lib/bankingImport';
+import { BANKING_FIELDS, autoMapBanking, planBankingImport, runBankingImport, planFirstCalls } from '../../lib/bankingImport';
 import { AlertTriangle, FileText } from 'lucide-react';
 
 // CSV import for workspaces with companies. The rules live in lib/bankingImport.js; this
@@ -27,6 +27,9 @@ export default function BankingImportModal({ open, onClose }) {
   const [mapping, setMapping] = useState({});
   const [existing, setExisting] = useState(null);
   const [aliases, setAliases] = useState({});
+  // First calls per weekday for contacts that arrive with no notes (a purchased list).
+  // 0 leaves them unscheduled.
+  const [perDay, setPerDay] = useState(5);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState([0, 0]);
   const [result, setResult] = useState(null);
@@ -35,10 +38,14 @@ export default function BankingImportModal({ open, onClose }) {
   const plan = useMemo(() => (existing
     ? planBankingImport({ rows, mapping, existing, statuses, statusAliases: aliases })
     : null), [rows, mapping, existing, statuses, aliases]);
+  const cadenceStatuses = useMemo(() => resolveConfig(currentClient).followUp?.cadence?.statuses || [], [currentClient]);
+  const firstCalls = useMemo(() => planFirstCalls(plan, { perDay, statuses: cadenceStatuses }), [plan, perDay, cadenceStatuses]);
+  const unscheduled = useMemo(() => planFirstCalls(plan, { perDay: 1e9, statuses: cadenceStatuses }).size, [plan, cadenceStatuses]);
+  const lastCall = [...firstCalls.values()].pop();
 
   function reset() {
     setStep('upload'); setHeaders([]); setRows([]); setMapping({});
-    setExisting(null); setAliases({}); setResult(null); setProgress([0, 0]);
+    setExisting(null); setAliases({}); setResult(null); setProgress([0, 0]); setPerDay(5);
   }
 
   function handleClose() {
@@ -102,6 +109,7 @@ export default function BankingImportModal({ open, onClose }) {
         userId: user.id, clientId: currentClientId,
         followUp: currentClient?.autoFollowUp !== false ? resolveConfig(currentClient).followUp : null,
         onProgress: (done, total) => setProgress([done, total]),
+        firstCalls,
       });
       setResult(r);
       setStep('done');
@@ -237,6 +245,27 @@ export default function BankingImportModal({ open, onClose }) {
                 {newPeople.slice(0, SHOWN).map(p => <li key={p.key}>{`${p.firstName} ${p.lastName}`.trim()}<span className="dupe-meta">{p.status}</span></li>)}
               </ul>
               <More n={Math.max(newCompanies.length, newPeople.length)} />
+            </div>
+          )}
+
+          {unscheduled > 0 && (
+            <div className="dupe-banner">
+              <div className="dupe-title">First calls</div>
+              <div className="dupe-sub">
+                {unscheduled} new {unscheduled === 1 ? 'contact has' : 'contacts have'} no notes, so nothing would bring
+                {unscheduled === 1 ? ' it' : ' them'} into your follow-up queue. Spread the first calls out, in sheet
+                order: the company for a row with one, the person otherwise.
+              </div>
+              <label className="bi-alias">
+                <span>Calls per weekday <span className="dupe-meta">0 = don’t schedule</span></span>
+                <input type="number" min="0" max="100" value={perDay} className="bi-perday"
+                  onChange={e => setPerDay(Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)))} />
+              </label>
+              {lastCall && (
+                <div className="dupe-meta">
+                  First due {new Date([...firstCalls.values()][0] + 'T00:00:00').toLocaleDateString()}, last {new Date(lastCall + 'T00:00:00').toLocaleDateString()}.
+                </div>
+              )}
             </div>
           )}
 
