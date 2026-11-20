@@ -171,7 +171,4 @@ $$;
 revoke all on function public.contact_ways_in(bigint) from public, anon;
 grant execute on function public.contact_ways_in(bigint) to authenticated;
 
-revoke all on function public.contact_ways_in(bigint) from public, anon;
-grant execute on function public.contact_ways_in(bigint) to authenticated;
-
 commit;
