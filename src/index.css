@@ -1332,6 +1332,9 @@ input[type="file"] {
 #contactDetailPage.active {
     display: block;
 }
+/* While a contact is open the list behind it doesn't scroll (ContactDetail sets this). */
+html.detail-open { overflow: hidden; }
+#contactDetailPage { overscroll-behavior: contain; }
 .detail-page-header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
