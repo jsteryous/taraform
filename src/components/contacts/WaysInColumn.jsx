@@ -8,6 +8,7 @@ import { displayName } from '../../lib/links';
 import { useConfirm } from '../shared/ConfirmDialog';
 import ConnectionForm from './ConnectionForm';
 import GroupPicker from './GroupPicker';
+import YourGroupsModal from '../modals/YourGroupsModal';
 import { fetchAuthorNames } from '../../lib/notes';
 import { classifyError } from '../../lib/errors';
 
@@ -29,6 +30,9 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
   // Which inline form is open: 'connect', 'group', or { edit: connection }.
   const [form, setForm] = useState(null);
   const [confirm, ConfirmUI] = useConfirm();
+  // "Your groups" (rename, other names, delete) opened from here, so a group can be fixed
+  // or deleted from the page where it looks wrong, not only from the header.
+  const [manageGroups, setManageGroups] = useState(false);
   const seq = useRef(0);
 
   async function load() {
@@ -119,6 +123,7 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
   return (
     <div className="ways-column">
       {ConfirmUI}
+      {manageGroups && <YourGroupsModal open onClose={() => { setManageGroups(false); load(); }} />}
       <div className="offers-column-header"><span className="field-label">Connections &amp; Ways In</span></div>
 
       {loading ? (
@@ -209,7 +214,10 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
 
           {/* 4. Common ground */}
           <section className="ways-section">
-            <div className="field-label">Common ground</div>
+            <div className="field-label ways-label-row">
+              Common ground
+              <button type="button" className="ways-manage" onClick={() => setManageGroups(true)}>Edit or delete groups</button>
+            </div>
             {data.groups.length === 0 ? (
               <div className="conn-empty">No groups yet.</div>
             ) : data.groups.map(g => (
@@ -219,7 +227,8 @@ export default function WaysInColumn({ contact, refreshKey = 0 }) {
                   <span className="ways-group-name">{g.name}</span>
                   {g.kind !== 'other' && <span className="ways-kind">{kindLabel(g.kind)}</span>}
                   <span className="ways-actions">
-                    <button type="button" className="note-delete-btn" title="Take them out of this group" onClick={() => leaveGroup(g)}><X size={12} /></button>
+                    <button type="button" className="note-delete-btn" title="Rename or delete this group" onClick={() => setManageGroups(true)}><Pencil size={12} /></button>
+                    <button type="button" className="note-delete-btn" title="Take them out of this group (the group stays)" onClick={() => leaveGroup(g)}><X size={12} /></button>
                   </span>
                 </div>
                 {g.teammates.length > 0 && (

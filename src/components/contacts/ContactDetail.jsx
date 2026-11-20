@@ -84,6 +84,14 @@ export default function ContactDetail({ onClose }) {
     setEditingPhone(null);
   }, [currentContact?.id, currentContact?.offers]);
 
+  // The overlay is position: fixed over the list, and the list scrolls the page itself.
+  // Without this the page's scrollbar shows beside the overlay, and a wheel over a short
+  // contact page scrolls the hidden list instead (the bar moves, nothing visible does).
+  useEffect(() => {
+    document.documentElement.classList.add('detail-open');
+    return () => document.documentElement.classList.remove('detail-open');
+  }, []);
+
   const { saveStatus, update, updateMultiple, updateCustomField } =
     useDraftSave(draft, setDraft, setCurrentContact, saveContact, showToast);
 
