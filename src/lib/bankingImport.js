@@ -286,19 +286,27 @@ export function importFollowUp(notes, target, key, status, followUp, now = new D
 
 // First calls for a list nobody has called yet (a purchased list has no notes, so
 // importFollowUp schedules nothing, and a Target with no date never comes due).
-// Spreads the new contacts over weekdays, `perDay` a day from `start`: the company for a
-// row with one (its people show on its page), the person for a row without. Only
-// statuses in `statuses` (the cadence's), and never a contact that has a note in this
-// import — those are already scheduled from their notes.
-// → Map('company:key' | 'person:key' → 'YYYY-MM-DD'), in sheet order.
+// Spreads the new contacts over weekdays, `perDay` a day from `start`. Follow-ups live on
+// people, never companies, so a new company's first call goes to its first new person
+// (one call per company, not one per executive); a person with no company gets their own.
+// Only statuses in `statuses` (the cadence's; a company row uses the company's status),
+// and never where the company or that person has a note in this import — those are
+// already scheduled from their notes.
+// → Map('person:key' → 'YYYY-MM-DD'), in sheet order.
 export function planFirstCalls(plan, { perDay, start = new Date(), statuses = [] } = {}) {
   const out = new Map();
   if (!plan || !(perDay > 0)) return out;
   const noted = new Set(plan.notes.map(n => `${n.target}:${n.key}`));
   const linked = new Set(plan.links.map(l => l.personKey));
+  const newPeople = new Map(plan.people.filter(p => !p.existingId).map(p => [p.key, p]));
+  const firstPerson = new Map();
+  for (const l of plan.links) {
+    if (!firstPerson.has(l.companyKey) && newPeople.has(l.personKey)) firstPerson.set(l.companyKey, l.personKey);
+  }
   const due = [
-    ...plan.companies.filter(c => !c.existingId).map(c => ({ id: `company:${c.key}`, status: c.status })),
-    ...plan.people.filter(p => !p.existingId && !linked.has(p.key)).map(p => ({ id: `person:${p.key}`, status: p.status })),
+    ...plan.companies.filter(c => !c.existingId && firstPerson.has(c.key) && !noted.has(`company:${c.key}`))
+      .map(c => ({ id: `person:${firstPerson.get(c.key)}`, status: c.status })),
+    ...[...newPeople.values()].filter(p => !linked.has(p.key)).map(p => ({ id: `person:${p.key}`, status: p.status })),
   ].filter(x => statuses.includes(x.status) && !noted.has(x.id));
   const day = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const weekday = () => { while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1); };
@@ -345,7 +353,8 @@ export async function runBankingImport(plan, { userId, clientId, onProgress, fol
   // those notes had been logged by hand. Without this, a status whose only way into the
   // queue is a date (banking Target) would never come due. Pass followUp = null when the
   // importer's own auto-schedule switch is off.
-  const followUpFor = (target, key, status) =>
+  // Companies never get one: follow-ups live on people.
+  const followUpFor = (target, key, status) => target === 'company' ? null :
     importFollowUp(plan.notes, target, key, status, followUp) ?? firstCalls.get(`${target}:${key}`) ?? null;
   const created = [];
   const failures = [];

@@ -249,7 +249,8 @@ export default function ContactDetail({ onClose }) {
   function handleNotesChanged({ count, lastNoteAt, added }) {
     const fields = { noteCount: count, lastNoteAt };
     // With this person's switch off, a note is just a note: the date is theirs to set.
-    if (added && autoFollowUp) {
+    // Companies have no follow-up of their own: you call a person (2026-11-20).
+    if (added && autoFollowUp && draft.kind !== 'company') {
       const next = scheduleAfterNote(count, draft.status, draft.followUpOn, cfg.followUp);
       if (next !== undefined) fields.followUpOn = next;
     }
@@ -315,6 +316,12 @@ export default function ContactDetail({ onClose }) {
               note is logged; editable here, and a future date entered by hand outranks the
               cadence. The auto rule (Contacted + stale notes) can still mark Due without a
               date. Presets save immediately, like quick notes. */}
+          {draft.kind === 'company' ? (
+          <div style={{ marginBottom: '1rem' }}>
+            <div className="field-label">Follow-up</div>
+            <div className="followup-next">Set on each person. A note with anyone here counts as contact with the company.</div>
+          </div>
+          ) : (
           <div style={{ marginBottom: '1rem' }}>
             <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               Follow-up
@@ -353,6 +360,7 @@ export default function ContactDetail({ onClose }) {
               </div>
             )}
           </div>
+          )}
 
           {/* Lead Source */}
           {cfg.leadSourceOptions?.length > 0 && (

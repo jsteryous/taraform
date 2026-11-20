@@ -22,6 +22,13 @@ describe('stopReason', () => {
     expect(stopReason(co(0, 0, { status: 'Loan Customer', followUpOn: PAST }), FU)).toMatchObject({ due: true, points: 3 });
     expect(stopReason(co(0, 0, { status: 'Not a Fit', followUpOn: PAST }), FU)).toBeNull();
   });
+
+  it('a company is due through its people, never its own date', () => {
+    const company = { kind: 'company', status: 'In Network', followUpOn: PAST, lastNoteAt: RECENT };
+    expect(stopReason(co(0, 0, company), FU)).toBeNull();
+    expect(stopReason(co(0, 0, { ...company, peopleDue: true }), FU)).toMatchObject({ due: true, never: false, points: 3 });
+    expect(stopReason(co(0, 0, { ...company, peopleDue: true, status: 'Not a Fit' }), FU)).toBeNull();
+  });
 });
 
 describe('streetOf / areaName', () => {

@@ -176,6 +176,31 @@ export async function fetchCompanyLocations(clientId) {
   return all.map(mapDbContact);
 }
 
+// Ids of companies with at least one linked person due for follow-up. Follow-ups live on
+// people; the visit-day card uses this to call a company due. `followUp` is the resolved
+// config, with or without `mine` — the same facet the queue uses, so "due" means the same
+// thing in both places.
+export async function fetchCompaniesWithDuePeople(clientId, followUp) {
+  if (!clientId || !followUp?.days) return new Set();
+  const people = [];
+  const CHUNK = 1000;
+  for (let from = 0; ; from += CHUNK) {
+    let q = supabase.from('property_crm_contacts').select('id').eq('client_id', clientId).order('id').range(from, from + CHUNK - 1);
+    q = applyContactFilters(q, { followUp });
+    const { data, error } = await q;
+    if (error) throw error;
+    people.push(...(data || []).map(r => r.id));
+    if (!data || data.length < CHUNK) break;
+  }
+  const out = new Set();
+  for (let i = 0; i < people.length; i += 200) {
+    const { data, error } = await supabase.from('contact_links').select('company_id').in('person_id', people.slice(i, i + 200));
+    if (error) throw error;
+    for (const r of data || []) out.add(r.company_id);
+  }
+  return out;
+}
+
 // Rows that could collide with ONE candidate — for the add-contact duplicate warning,
 // where pulling the whole index would be wasteful. Coarse on purpose: it matches a
 // tax map id in any county, and the caller's findDuplicates applies the county rule.

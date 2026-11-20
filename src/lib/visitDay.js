@@ -5,7 +5,11 @@
 // with Google Maps links for the phone. Links need no API key and store nothing.
 //
 // Visits aren't logged yet (that's "log as you go"), so "never visited" can't be known;
-// "never contacted" (no notes at all) stands in for it.
+// "never contacted" stands in for it. A company's last_note_at includes its people's
+// notes (db/20261120_company_last_contact.sql), so meeting the CEO counts.
+//
+// Follow-ups live on people, not companies, so a company is "due" when one of its people
+// is: the caller sets `peopleDue` on each company (fetchCompaniesWithDuePeople).
 
 import { isFollowUpDue } from './contactFilters';
 
@@ -34,7 +38,7 @@ export function milesBetween(a, b) {
 // due 3, never contacted 1, pursued status 2.
 export function stopReason(c, followUp, pursued = VISIT_DEFAULTS.pursued) {
   if ((followUp?.excludeStatuses || []).includes(c.status)) return null;
-  const due = isFollowUpDue(c, followUp);
+  const due = !!c.peopleDue || isFollowUpDue(c, followUp);
   const isPursued = pursued.includes(c.status);
   if (!due && !isPursued) return null;
   const never = !c.lastNoteAt;

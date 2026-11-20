@@ -194,10 +194,12 @@ describe('a business list (Data Axle shape)', () => {
     expect(plan.companies.map(c => c.status)).toEqual(['Target', 'Target']);
   });
 
-  it('spreads first calls over weekdays, companies only, skipping noted and non-cadence contacts', () => {
+  it('spreads first calls over weekdays, one per company on its first person, skipping noted and non-cadence contacts', () => {
     const friday = new Date(2026, 10, 20);
     const calls = planFirstCalls(plan, { perDay: 1, start: friday, statuses: ['Target', 'Prospect'] });
-    expect([...calls]).toEqual([['company:acme plumbing', '2026-11-20'], ['company:blue ridge dental', '2026-11-23']]);
+    // Follow-ups live on people: Acme's call goes to John (not Mary too), and Blue Ridge,
+    // with nobody to call, gets none (the visit-day card still offers it as a Target).
+    expect([...calls]).toEqual([['person:john|smith', '2026-11-20']]);
 
     const loner = planBankingImport({ rows: [['', 'Solo', 'Person'], ['', 'Cy', 'Noted', 'x']],
       mapping: { firstName: 1, lastName: 2, note: 3 }, statuses: STATUSES });
@@ -208,7 +210,7 @@ describe('a business list (Data Axle shape)', () => {
 
   it('starts on Monday when imported over a weekend', () => {
     const saturday = new Date(2026, 10, 21);
-    expect([...planFirstCalls(plan, { perDay: 5, start: saturday, statuses: ['Target'] }).values()]).toEqual(['2026-11-23', '2026-11-23']);
+    expect([...planFirstCalls(plan, { perDay: 5, start: saturday, statuses: ['Target'] }).values()]).toEqual(['2026-11-23']);
   });
 
   it('joins whichever address parts exist', () => {

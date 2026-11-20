@@ -37,6 +37,8 @@ export function followUpWindow(status, followUp) {
 // last_note_at null is the most overdue).
 export function isFollowUpDue(contact, followUp) {
   if (!followUp?.days) return false;
+  // Follow-ups live on people, never companies (2026-11-20): you call a person.
+  if (contact.kind === 'company') return false;
   // excludeStatuses outranks even a manual date: a dead lead is never in the call queue.
   if ((followUp.excludeStatuses || []).includes(contact.status)) return false;
   if (contact.followUpOn) return contact.followUpOn <= todayStr();
@@ -53,7 +55,7 @@ export function isFollowUpDue(contact, followUp) {
 // rule doesn't apply (status not eligible, excluded, or a manual date is set), and when
 // it has never been noted — that contact is due now, which the Due badge already says.
 export function autoFollowUpDate(contact, followUp) {
-  if (contact.followUpOn || !contact.lastNoteAt) return null;
+  if (contact.kind === 'company' || contact.followUpOn || !contact.lastNoteAt) return null;
   if ((followUp?.excludeStatuses || []).includes(contact.status)) return null;
   const window = followUpWindow(contact.status, followUp);
   if (!window) return null;
@@ -151,6 +153,11 @@ export function applyContactFilters(q, filters = {}) {
       ? `and(follow_up_on.lte.${todayStr()},status.not.in.(${excluded.map((s) => `"${s}"`).join(',')}))`
       : `follow_up_on.lte.${todayStr()}`;
     q = q.or([manual, ...auto].join(','));
+    // People only. A follow-up is a call to a person; a company's last contact is rolled
+    // up from its people's notes (db/20261120_company_last_contact.sql), so queueing the
+    // company too would be the same call twice — or, worse, a company that looks
+    // "never contacted" after you've met its CEO.
+    q = q.eq('kind', 'person');
 
     // The queue is per person: `mine` is the signed-in user's id, added by myFollowUps
     // below. A follow-up belongs to whoever wrote the contact's latest note — a note is a

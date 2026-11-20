@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Route, ExternalLink } from 'lucide-react';
-import { fetchCompanyLocations } from '../lib/contacts';
+import { fetchCompanyLocations, fetchCompaniesWithDuePeople } from '../lib/contacts';
 import { suggestAreas, stopReason, orderStops, routeLinks } from '../lib/visitDay';
 import { displayName } from '../lib/links';
 
@@ -14,19 +14,29 @@ export default function VisitDayCard({ clientId, followUp, onViewContact }) {
   const [areaIdx, setAreaIdx]     = useState(0);
   const [skipped, setSkipped]     = useState(() => new Set());
 
+  // cfg.followUp is a fresh object every Dashboard render; key the load on its value so
+  // it doesn't refetch on every render.
+  const fuKey = JSON.stringify(followUp || null);
+  const followUpRef = useRef(followUp);
+  followUpRef.current = followUp;
+
   const load = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
     setError(null);
     try {
-      setCompanies(await fetchCompanyLocations(clientId));
+      const [rows, due] = await Promise.all([
+        fetchCompanyLocations(clientId),
+        fetchCompaniesWithDuePeople(clientId, followUpRef.current),
+      ]);
+      setCompanies(rows.map(c => ({ ...c, peopleDue: due.has(c.id) })));
     } catch (e) {
       console.error('visit day load error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, fuKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 

@@ -254,7 +254,7 @@ export default function BankingImportModal({ open, onClose }) {
               <div className="dupe-sub">
                 {unscheduled} new {unscheduled === 1 ? 'contact has' : 'contacts have'} no notes, so nothing would bring
                 {unscheduled === 1 ? ' it' : ' them'} into your follow-up queue. Spread the first calls out, in sheet
-                order: the company for a row with one, the person otherwise.
+                order: one person per company (the first listed), so each business gets one call.
               </div>
               <label className="bi-alias">
                 <span>Calls per weekday <span className="dupe-meta">0 = don’t schedule</span></span>

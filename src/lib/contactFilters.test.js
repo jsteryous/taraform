@@ -210,10 +210,20 @@ describe('applyContactFilters', () => {
     expect(Math.abs(byStatus['Hot Lead']  - (Date.now() -  7 * 86400000))).toBeLessThan(5000);
   });
 
-  it('follow-up with no eligible statuses is manual-date-only', () => {
+  it('follow-up with no eligible statuses is manual-date-only, and people only', () => {
     const q = mockQuery();
     applyContactFilters(q, { followUp: { days: 90, statuses: [] } });
-    expect(callsOf(q)).toEqual([{ method: 'or', args: [`follow_up_on.lte.${todayStr()}`] }]);
+    expect(callsOf(q)).toEqual([
+      { method: 'or', args: [`follow_up_on.lte.${todayStr()}`] },
+      { method: 'eq', args: ['kind', 'person'] },
+    ]);
+  });
+
+  it('never queues a company, even on companies: true or only (follow-ups live on people)', () => {
+    const q = mockQuery();
+    applyContactFilters(q, { companies: true, followUp: { days: 90, statuses: [] } });
+    expect(callsOf(q)).toContainEqual({ method: 'eq', args: ['kind', 'person'] });
+    expect(isFollowUpDue({ kind: 'company', status: 'Contacted', followUpOn: '2000-01-01' }, { days: 90, statuses: ['Contacted'] })).toBe(false);
   });
 
   it('narrows the queue to one person: latest note is theirs, or un-noted and last saved by them', () => {
@@ -221,12 +231,13 @@ describe('applyContactFilters', () => {
     applyContactFilters(q, { followUp: myFollowUps({ days: 90, statuses: [] }, 'u-1') });
     expect(callsOf(q)).toEqual([
       { method: 'or', args: [`follow_up_on.lte.${todayStr()}`] },
+      { method: 'eq', args: ['kind', 'person'] },
       { method: 'or', args: ['last_note_by.eq.u-1,and(last_note_by.is.null,user_id.eq.u-1)'] },
     ]);
     // No user id (not signed in yet) leaves the queue unscoped rather than emitting eq.null.
     const anon = mockQuery();
     applyContactFilters(anon, { followUp: myFollowUps({ days: 90, statuses: [] }, undefined) });
-    expect(callsOf(anon)).toHaveLength(1);
+    expect(callsOf(anon)).toHaveLength(2);
     expect(myFollowUps(null, 'u-1')).toBe(null);
   });
 
