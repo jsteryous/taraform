@@ -767,6 +767,7 @@ textarea.add-input { resize: vertical; min-height: 4.5rem; line-height: 1.5; }
 .dupe-title { display: flex; align-items: center; gap: 0.4rem; font-weight: 600; font-size: var(--text-base); color: var(--warning); }
 .dupe-item { font-size: var(--text-base); padding: 0.4rem 0.6rem; background: var(--surface); border-radius: 6px; }
 .dupe-meta { color: var(--text-muted); margin-left: 0.5rem; }
+.dupe-why { color: var(--warning); font-weight: 600; }
 .dupe-mono { font-family: var(--mono); font-size: var(--text-sm); }
 .dupe-sub { font-size: var(--text-sm); color: var(--text-muted); }
 

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { mapDbContact, mapContactToDb } from './utils';
+import { mapDbContact, mapContactToDb, normalizePhone } from './utils';
+import { companyNameKey, streetKey } from './dedup';
 import { applyContactFilters } from './contactFilters';
 
 // Data access for property_crm_contacts + contact_offers. Everything here is a plain
@@ -122,7 +123,7 @@ export async function fetchContactsByIds(ids) {
 // These two functions fetch the corpus dedup actually needs. The matching rules stay in
 // dedup.js / AddContactModal — the server is used for *recall* (rows that could collide),
 // the pure functions for *precision* (the county|taxId rule, etc.).
-const DEDUP_FIELDS = 'id,kind,first_name,last_name,email,county,tax_map_ids,property_addresses,phones';
+const DEDUP_FIELDS = 'id,kind,first_name,last_name,email,county,tax_map_ids,property_addresses,phones,address';
 
 // Strip PostgREST filter-syntax + JSON control chars before interpolation, same rule as
 // the search filter in contactFilters.js.
@@ -211,7 +212,20 @@ export async function fetchDuplicateCandidates(clientId, contact) {
   const last  = esc(contact.lastName || '');
   if (first && last) ors.push(`and(first_name.ilike.${first},last_name.ilike.${last})`);
   // A company has one name, held in first_name.
-  if (contact.kind === 'company' && first) ors.push(`and(kind.eq.company,first_name.ilike.${first})`);
+  // Probed on its first distinctive word, so "Acme Inc" finds "The Acme Co";
+  // companyNameKey decides whether they really are the same name.
+  if (contact.kind === 'company') {
+    const core = companyNameKey(contact.firstName).split(' ')[0];
+    if (core) ors.push(`and(kind.eq.company,first_name.ilike.%${core}%)`);
+    // A company's street address, probed on its house number; streetKey decides.
+    const street = streetKey(contact.address);
+    if (street) ors.push(`and(kind.eq.company,address.ilike.${street.street.split(' ')[0]}%)`);
+  }
+  // phones_digits holds every number as bare digits (db/20260622_phone_search.sql).
+  for (const p of contact.phones || []) {
+    const d = normalizePhone(String(p));
+    if (d.length === 10) ors.push(`phones_digits.ilike.%${d}%`);
+  }
   // ilike treats _ and * as wildcards, so this can over-match; findDuplicates re-checks exactly.
   const email = esc(contact.email || '');
   if (email) ors.push(`email.ilike.${email}`);
@@ -224,7 +238,7 @@ export async function fetchDuplicateCandidates(clientId, contact) {
     .select(DEDUP_FIELDS)
     .eq('client_id', clientId)
     .or(ors.join(','))
-    .limit(50);
+    .limit(200);
   if (error) throw error;
   return (data || []).map(mapDbContact);
 }

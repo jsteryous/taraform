@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { normalizeCounty } from '../../lib/utils';
 import { resolveConfig } from '../../lib/clientConfig';
 import { fetchDuplicateCandidates } from '../../lib/contacts';
+import { findAddDuplicates } from '../../lib/dedup';
 import { addNote } from '../../lib/notes';
 import { addConnection, searchByKind } from '../../lib/links';
 import { AlertTriangle, Building2, Plus, User, X } from 'lucide-react';
@@ -13,29 +14,6 @@ const cleanName = s => s.trim().replace(/\s+/g, ' ');
 
 const COUNTIES = ['Greenville','Spartanburg','Anderson','Pickens','Cherokee','Laurens','Union','York','Chester','Oconee'];
 const FORM_ID = 'add-contact-form';
-
-function findDuplicates(contact, existing) {
-  return existing.filter(c => {
-    if (c.id === contact.id) return false;
-    const personMatch = contact.firstName && contact.lastName &&
-      c.firstName?.toLowerCase() === contact.firstName.toLowerCase() &&
-      c.lastName?.toLowerCase() === contact.lastName.toLowerCase();
-    // A company has one name. Only another company can be its duplicate — a person who
-    // happens to share the first name is not.
-    const companyMatch = contact.kind === 'company' && c.kind === 'company' && contact.firstName &&
-      c.firstName?.trim().toLowerCase() === contact.firstName.trim().toLowerCase();
-    const nameMatch = personMatch || companyMatch;
-    const emailMatch = !!contact.email && c.email?.trim().toLowerCase() === contact.email.toLowerCase();
-    const addressMatch = contact.propertyAddresses?.length && c.propertyAddresses?.length &&
-      contact.propertyAddresses.some(a1 => c.propertyAddresses.some(a2 => a1.toLowerCase() === a2.toLowerCase()));
-    // Tax map IDs are only unique within a county — same parcel ID in different counties is fine.
-    const taxMatch = contact.taxMapIds?.length && c.taxMapIds?.length &&
-      contact.county && c.county &&
-      contact.county.toLowerCase() === c.county.toLowerCase() &&
-      contact.taxMapIds.some(t1 => c.taxMapIds.some(t2 => t1.toLowerCase() === t2.toLowerCase()));
-    return nameMatch || emailMatch || addressMatch || taxMatch;
-  });
-}
 
 function defaultForm(statuses) {
   return { kind: 'person', firstName:'', lastName:'', phones:[''], email:'', county:'', address:'', ownerAddress:'', propertyAddresses:[''], taxMapIds:[''], status: statuses?.[0] || 'New Lead', notes:'',
@@ -221,7 +199,7 @@ export default function AddContactModal({ open, onClose }) {
         // lookup must not block the save.
         let found = [];
         try {
-          found = findDuplicates(contact, await fetchDuplicateCandidates(currentClientId, contact));
+          found = findAddDuplicates(contact, await fetchDuplicateCandidates(currentClientId, contact));
         } catch (err) {
           console.error('Duplicate check failed:', err);
         }
@@ -300,6 +278,9 @@ export default function AddContactModal({ open, onClose }) {
             {dupes.map(d => (
               <div key={d.id} className="dupe-item">
                 <strong>{d.firstName} {d.lastName}</strong>
+                <span className="dupe-meta dupe-why">{d.why.join(' · ')}</span>
+                {d.phones?.[0] && <span className="dupe-meta">{d.phones[0]}</span>}
+                {d.address && <span className="dupe-meta">{d.address}</span>}
                 {d.email && <span className="dupe-meta">{d.email}</span>}
                 {d.county && <span className="dupe-meta">{d.county}</span>}
                 {d.taxMapIds?.[0] && <span className="dupe-meta dupe-mono">{d.taxMapIds[0]}</span>}
